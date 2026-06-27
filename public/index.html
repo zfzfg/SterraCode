@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SterraCode</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  HEADER                                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<header id="app-header">
+  <div class="header-left">
+    <button id="sidebar-toggle" class="icon-btn" title="Sessions ein-/ausblenden">☰</button>
+    <span class="logo">🌌 SterraCode</span>
+  </div>
+  <div class="header-center">
+    <span id="connection-badge" class="badge badge-disconnected">● Nicht verbunden</span>
+    <select id="model-select" title="Aktives Modell"></select>
+    <select id="language-select" title="Programmiersprache">
+      <option value="python">Python</option>
+      <option value="javascript">JavaScript</option>
+      <option value="bash">Bash</option>
+      <option value="go">Go</option>
+      <option value="rust">Rust</option>
+      <option value="cpp">C++</option>
+      <option value="csharp">C#</option>
+      <option value="lua">Lua</option>
+      <option value="java">Java</option>
+    </select>
+  </div>
+  <div class="header-right">
+    <span id="token-counter" class="token-counter" title="Geschätzte Token im Kontext">0 Tokens</span>
+    <button id="settings-btn" class="icon-btn" title="Einstellungen">⚙</button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  SESSIONS SIDEBAR                                                       -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<aside id="sessions-sidebar" class="sidebar">
+  <div class="sidebar-header">
+    <span>Sessions</span>
+    <button id="new-session-btn" class="btn btn-primary btn-sm">+ Neu</button>
+  </div>
+  <div id="sessions-list" class="sessions-list"></div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  MAIN CONTENT                                                           -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<main id="main-content">
+
+  <!-- ─── EDITOR PANEL ─────────────────────────────────────────────────── -->
+  <section id="editor-panel" class="panel">
+    <div class="panel-header">
+      <span>Code Editor</span>
+      <div class="panel-actions">
+        <button id="undo-ai-btn" class="btn btn-sm" disabled title="KI-Änderung rückgängig">↩ Rückgängig</button>
+        <button id="run-btn"     class="btn btn-success btn-sm" title="Code ausführen (Ctrl+Enter)">▶ Run</button>
+      </div>
+    </div>
+    <div id="editor-container"></div>
+  </section>
+
+  <!-- ─── TEACHER PANEL ─────────────────────────────────────────────────── -->
+  <section id="teacher-panel" class="panel">
+
+    <!-- Chat area -->
+    <div id="chat-messages" class="chat-messages"></div>
+
+    <!-- Task panel -->
+    <div id="task-panel" class="task-panel hidden">
+      <div class="task-header">
+        <span id="task-difficulty-badge" class="badge"></span>
+        <span id="task-title" class="task-title"></span>
+        <button id="task-done-btn" class="btn btn-success btn-sm">✓ Erledigt</button>
+      </div>
+      <p id="task-description" class="task-description"></p>
+      <div id="task-hints" class="task-hints hidden">
+        <button id="hint-btn" class="btn btn-sm">💡 Hinweis anzeigen</button>
+        <div id="hint-list" class="hint-list hidden"></div>
+      </div>
+    </div>
+
+    <!-- Explanation panel -->
+    <div id="explanation-panel" class="explanation-panel hidden">
+      <div class="explanation-header">
+        <span id="explanation-title"></span>
+        <button class="icon-btn close-btn" onclick="document.getElementById('explanation-panel').classList.add('hidden')">✕</button>
+      </div>
+      <div id="explanation-content" class="explanation-content"></div>
+    </div>
+
+    <!-- Input area -->
+    <div class="chat-input-area">
+      <div class="chat-input-row">
+        <textarea id="chat-input" placeholder="Stelle eine Frage oder beschreibe was du lernen möchtest..." rows="2"></textarea>
+        <div class="input-buttons">
+          <button id="send-btn"          class="btn btn-primary" title="Senden (Enter)">↵</button>
+          <button id="send-with-code-btn" class="btn btn-sm"    title="Code mitsenden (Ctrl+Shift+Enter)" style="font-size:11px">📎 Code</button>
+        </div>
+      </div>
+      <div id="tool-indicator" class="tool-indicator hidden">
+        <span id="tool-indicator-text">...</span>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  TERMINAL PANEL                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="terminal-panel" class="terminal-panel">
+  <div class="terminal-header">
+    <span>Terminal</span>
+    <button id="clear-terminal-btn" class="btn btn-sm">✕ Clear</button>
+  </div>
+  <div id="terminal-resizer" class="terminal-resizer" title="Terminalgröße ändern"></div>
+  <pre id="terminal-output" class="terminal-output">Bereit. Drücke Ctrl+Enter oder klicke ▶ Run um Code auszuführen.</pre>
+  <div class="terminal-input-row">
+    <input id="terminal-input" type="text" placeholder="Befehl eingeben oder Eingabe für laufende Programme..." />
+    <button id="terminal-run-btn" class="btn btn-primary btn-sm">▶ Run</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  DIFF MODAL                                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="diff-modal" class="modal hidden">
+  <div class="modal-backdrop" onclick="cancelDiff()"></div>
+  <div class="modal-box modal-wide">
+    <div class="modal-header">
+      <h3>KI-Änderung überprüfen</h3>
+    </div>
+    <p id="diff-reason" class="diff-reason"></p>
+    <div id="diff-modal-editor" class="diff-editor-container"></div>
+    <div class="modal-footer">
+      <button id="diff-cancel"  class="btn"            onclick="cancelDiff()">✕ Ablehnen</button>
+      <button id="diff-confirm" class="btn btn-success">✓ Übernehmen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  SETTINGS MODAL                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="settings-modal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeSettings()"></div>
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>⚙ Einstellungen</h3>
+      <button class="icon-btn close-btn" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="settings-body">
+
+      <section class="settings-section">
+        <h4>LM Studio</h4>
+        <label>URL <input id="s-lmUrl"   type="text" placeholder="http://localhost:1234"></label>
+        <label>Modell <input id="s-model" type="text" placeholder="Aus Dropdown wählen oder manuell eingeben"></label>
+        <label>Temperatur (0–1)
+          <input id="s-temp" type="range" min="0" max="1" step="0.05">
+          <span id="s-temp-val">0.4</span>
+        </label>
+        <label>Max. Antwort-Tokens
+          <input id="s-maxTokens" type="number" min="256" max="8192" step="256">
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h4>Editor</h4>
+        <label>Schriftgröße
+          <input id="s-fontSize" type="number" min="10" max="24">
+        </label>
+        <label>Auto-Apply Schwellwert (Zeilen)
+          <input id="s-diffThreshold" type="number" min="1" max="50">
+        </label>
+        <label class="checkbox-label">
+          <input id="s-autoSend" type="checkbox">
+          Code bei jeder Nachricht automatisch mitsenden
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h4>Kontext-Komprimierung</h4>
+        <label>Token-Schwellwert
+          <input id="s-tokenThreshold" type="range" min="2000" max="32000" step="500">
+          <span id="s-token-val">8000</span>
+        </label>
+        <label>Nachrichten behalten
+          <input id="s-keepRecent" type="number" min="2" max="20">
+        </label>
+        <label>Max. Tool-Calls pro Antwort
+          <input id="s-maxTools" type="number" min="1" max="20">
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h4>Sprachprofil (Cross-Chat)</h4>
+        <label class="checkbox-label">
+          <input id="s-crossChat" type="checkbox">
+          Cross-Chat-Profil aktivieren
+        </label>
+        <label class="checkbox-label">
+          <input id="s-autoProfile" type="checkbox">
+          Profil nach Aufgabe automatisch aktualisieren
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h4>Code-Ausführung</h4>
+        <label>Timeout (ms, 0 = kein Timeout)
+          <input id="s-timeout" type="range" min="0" max="60000" step="1000">
+          <span id="s-timeout-val">0</span>
+        </label>
+        <label class="checkbox-label">
+          <input id="s-streaming" type="checkbox">
+          Streaming aktivieren (SSE)
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h4>System-Prompt</h4>
+        <textarea id="s-systemPrompt" rows="12" style="width:100%;resize:vertical"></textarea>
+        <button id="reset-prompt-btn" class="btn btn-sm" style="margin-top:6px">↺ Zurücksetzen</button>
+      </section>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn"            onclick="closeSettings()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  TOAST CONTAINER                                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="toast-container"></div>
+
+<!-- Monaco Editor (served from node_modules via Express) -->
+<script src="/monaco/vs/loader.js"></script>
+<script src="/app.js" type="module"></script>
+</body>
+</html>
