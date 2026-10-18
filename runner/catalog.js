@@ -36,10 +36,11 @@ export const PROGRAMS = [
   },
   {
     id: "java",
-    name: "Java JDK 17",
+    name: "Java JDK 25",
     description: "Java mit javac und java",
     sizeMB: 400,
-    packages: ["openjdk-17-jdk-headless"],
+    packages: ["msopenjdk-25"],
+    microsoft: true,
   },
   {
     id: "go",

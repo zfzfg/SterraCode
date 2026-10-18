@@ -10,6 +10,10 @@ const labels = {
   removing: "Wird entfernt",
   error: "Fehler",
   reconciling: "Wird wiederhergestellt",
+  succeeded: "Abgeschlossen",
+  failed: "Fehlgeschlagen",
+  cancelled: "Abgebrochen",
+  interrupted: "Unterbrochen",
 };
 export async function openPrograms({ initial = false } = {}) {
   const dialog = node("dialog", "programs-dialog");
@@ -52,7 +56,8 @@ export async function openPrograms({ initial = false } = {}) {
   document.body.append(dialog);
   let timer,
     closed = false,
-    loading = false;
+    loading = false,
+    detailsOpen = false;
   function action(label, callback, className = "") {
     const button = node("button", className, label);
     button.type = "button";
@@ -70,6 +75,7 @@ export async function openPrograms({ initial = false } = {}) {
     return button;
   }
   async function run(program, command, stopRunning = false) {
+    status.textContent = `${program.name || program.id}: Auftrag wird gestartet …`;
     await api(`/api/programs/${program.id}/actions`, {
       method: "POST",
       body: { action: command, stopRunning },
@@ -82,19 +88,67 @@ export async function openPrograms({ initial = false } = {}) {
     loading = true;
     try {
       const data = await api("/api/programs");
-      status.textContent = `Runner: ${data.status}${data.cache?.packageBytes !== undefined ? ` · Paketcache: ${Math.round(data.cache.packageBytes / 1048576)} MiB · Werkzeugcache: ${Math.round(data.cache.toolBytes / 1048576)} MiB` : ""}`;
+      const runnerState = {
+        ready: "Bereit",
+        maintenance: "Programme werden geändert",
+        reconciling: "Wird wiederhergestellt",
+        starting: "Startet",
+        error: "Fehler",
+      };
+      status.textContent = `Runner: ${runnerState[data.status] || data.status}${data.cache?.packageBytes !== undefined ? ` · Paketcache: ${Math.round(data.cache.packageBytes / 1048576)} MiB · Werkzeugcache: ${Math.round(data.cache.toolBytes / 1048576)} MiB` : ""}`;
       list.replaceChildren();
       const active = data.activeJob;
+      const displayedJob = active || data.latestJob;
+      const oldDetails = jobs.querySelector("details");
+      if (oldDetails) detailsOpen = oldDetails.open;
       jobs.replaceChildren();
-      if (active) {
+      if (displayedJob) {
+        const current = displayedJob;
+        const programName =
+          data.programs.find((p) => p.id === current.programId)?.name ||
+          "Wiederherstellung";
         jobs.append(
           node(
             "p",
-            "",
-            `Paketauftrag: ${active.programId || "Wiederherstellung"} · ${active.state} · ${active.progress || ""}`,
+            "program-job-heading",
+            `${programName} · ${labels[current.state] || current.state}`,
           ),
         );
-        if (active.error) jobs.append(node("p", "form-error", active.error));
+        const progress = node("progress", "program-progress");
+        progress.max = current.stage?.total || 6;
+        progress.setAttribute("aria-label", `Fortschritt: ${programName}`);
+        if (current.state === "succeeded") progress.value = progress.max;
+        else if (current.stage)
+          progress.value = Math.max(0, current.stage.current - 1);
+        const message = node(
+          "p",
+          "program-job-status",
+          `${active && current.stage ? `Schritt ${current.stage.current} von ${current.stage.total}: ` : ""}${current.progress || labels[current.state] || "Auftrag wird vorbereitet …"}`,
+        );
+        message.setAttribute("role", "status");
+        jobs.append(progress, message);
+        if (active?.download) {
+          const { name, bytes, total } = active.download;
+          jobs.append(
+            node(
+              "p",
+              "muted",
+              `${name}: ${(bytes / 1048576).toFixed(1)}${total ? ` / ${(total / 1048576).toFixed(1)}` : ""} MiB heruntergeladen`,
+            ),
+          );
+        }
+        if (current.log) {
+          const details = node("details", "program-job-details");
+          details.open = detailsOpen;
+          details.append(
+            node("summary", "", "Installationsdetails anzeigen"),
+            node("pre", "program-job-log", current.log),
+          );
+          jobs.append(details);
+        }
+        if (current.error) jobs.append(node("p", "form-error", current.error));
+      }
+      if (active) {
         for (const blocking of active.blockingJobs || [])
           jobs.append(
             node(
@@ -103,15 +157,16 @@ export async function openPrograms({ initial = false } = {}) {
               `Wartet auf Prozess ${blocking.processId}: ${blocking.command}`,
             ),
           );
-        jobs.append(
-          action("Paketauftrag abbrechen", async () => {
-            await api(`/api/programs/jobs/${active.id}/cancel`, {
-              method: "POST",
-              body: {},
-            });
-            await refresh();
-          }),
-        );
+        if (active.state === "queued")
+          jobs.append(
+            action("Paketauftrag abbrechen", async () => {
+              await api(`/api/programs/jobs/${active.id}/cancel`, {
+                method: "POST",
+                body: {},
+              });
+              await refresh();
+            }),
+          );
         if (active.blockingJobs?.length)
           jobs.append(
             action(
@@ -123,6 +178,10 @@ export async function openPrograms({ initial = false } = {}) {
       }
       for (const program of data.programs) {
         const card = node("section", "program-card");
+        card.setAttribute(
+          "aria-busy",
+          String(active?.programId === program.id),
+        );
         const description = node("div");
         description.append(
           node("strong", "", program.name),
@@ -167,12 +226,28 @@ export async function openPrograms({ initial = false } = {}) {
         }
         if (!program.base) {
           const button = action(
-            program.installed ? "Deinstallieren" : "Installieren",
-            () => run(program, program.installed ? "remove" : "install"),
-            program.installed ? "danger" : "primary",
+            program.updateAvailable
+              ? "Auf Java 25 aktualisieren"
+              : program.installed
+                ? "Deinstallieren"
+                : "Installieren",
+            () =>
+              run(
+                program,
+                program.installed && !program.updateAvailable
+                  ? "remove"
+                  : "install",
+              ),
+            program.installed && !program.updateAvailable
+              ? "danger"
+              : "primary",
           );
           button.disabled = Boolean(active);
           controls.append(button);
+          if (program.updateAvailable)
+            controls.append(
+              action("Deinstallieren", () => run(program, "remove"), "danger"),
+            );
           if (program.state === "error") {
             controls.append(
               action("Erneut versuchen", () => run(program, "retry")),

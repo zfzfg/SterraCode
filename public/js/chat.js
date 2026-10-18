@@ -6,6 +6,7 @@ import { flush, refreshEditor } from "./editor.js";
 import { loadFiles, renderPlan, renderTabs } from "./workspace.js";
 import { loadSessions } from "./sessions.js";
 import { attachProcess } from "./terminal.js";
+import { randomUUID } from "./uuid.js";
 
 let controller;
 function usageText(usage) {
@@ -427,7 +428,7 @@ export async function sendMessage(
     );
   await flush();
   const sessionId = state.session.id,
-    turnId = crypto.randomUUID();
+    turnId = randomUUID();
   controller = new AbortController();
   state.busy = true;
   state.turnId = turnId;

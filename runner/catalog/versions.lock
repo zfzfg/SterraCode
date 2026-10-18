@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.10.18.2",
+  "version": "2026.10.19.1",
   "suite": "bookworm",
   "architecture": "amd64",
   "approvedArchitectures": [
@@ -22,12 +22,12 @@
       "sha256": "8a7221aa9614911f1236cbb1ba85401bb06f9ac66b51e5f98f31fbdeeca99fa7",
       "filename": "pool/main/l/lua5.4/lua5.4_5.4.4-3+deb12u1_amd64.deb"
     },
-    "openjdk-17-jdk-headless": {
-      "name": "openjdk-17-jdk-headless",
-      "version": "17.0.20.1+1-1~deb12u1",
+    "msopenjdk-25": {
+      "name": "msopenjdk-25",
+      "version": "25.0.3-1",
       "architecture": "amd64",
-      "sha256": "d28519dfabf0b6234bd6f3bf25de5e372524c2c93d93983f8363117e539f7b15",
-      "filename": "pool/updates/main/o/openjdk-17/openjdk-17-jdk-headless_17.0.20.1+1-1~deb12u1_amd64.deb"
+      "sha256": "b5ca5dcd04d3d190b6d22c585fe24060d24b26c7ae9bd461390a1212ac51d174",
+      "filename": "pool/main/m/msopenjdk-25/msopenjdk-25_25.0.3-1_amd64.deb"
     },
     "python3": {
       "name": "python3",

@@ -86,6 +86,59 @@ function record(extra = {}) {
   };
 }
 const python = PROGRAMS.find((p) => p.id === "python");
+it("stellt eine alte Java-Rezeptur mit ihren gespeicherten Paketwurzeln wieder her", async () => {
+  const java = PROGRAMS.find((p) => p.id === "java");
+  const legacy = {
+    name: "openjdk-17-jdk-headless",
+    version: "17",
+    architecture: "amd64",
+  };
+  const saved = record({ packages: [legacy] });
+  vi.spyOn(manager, "microsoft").mockResolvedValue();
+  vi.spyOn(manager, "apt").mockResolvedValue("");
+  vi.spyOn(manager, "downloadBudget").mockResolvedValue();
+  manager.installedPackages.mockResolvedValue(new Map([[legacy.name, legacy]]));
+  manager.run.mockImplementation(async (command) =>
+    command === "dpkg-deb" ? `${legacy.name}\n17\namd64` : "",
+  );
+  await fs.writeFile(
+    path.join(config.cacheDir, "apt", "legacy.deb"),
+    "verified-by-apt",
+  );
+  await manager.installApt(java, saved, job());
+  expect(manager.run).toHaveBeenCalledWith(
+    "apt-cache",
+    expect.arrayContaining([legacy.name]),
+    expect.anything(),
+  );
+  expect(saved.packages).toEqual([legacy]);
+  expect(saved.cache[0].name).toBe(legacy.name);
+});
+it("ersetzt bei expliziter Java-Aktualisierung die alte Java-17-Rezeptur", async () => {
+  const java = PROGRAMS.find((p) => p.id === "java");
+  manager.manifest.desired.java = true;
+  manager.manifest.installed.java = record({
+    packages: [{ name: "openjdk-17-jdk-headless", version: "17" }],
+  });
+  const remove = vi.spyOn(manager, "remove").mockResolvedValue();
+  const installed = record({
+    packages: [{ name: "msopenjdk-25", version: "25.0.3-1" }],
+    version: "javac 25.0.3",
+  });
+  const install = vi.spyOn(manager, "install").mockResolvedValue(installed);
+  const operation = {
+    id: randomUUID(),
+    action: "install",
+    state: "queued",
+    programId: "java",
+  };
+  await manager.process(operation, java);
+  expect(remove).toHaveBeenCalledWith(java, operation);
+  expect(install).toHaveBeenCalledWith(java, null, operation);
+  expect(manager.manifest.installed.java).toEqual(installed);
+  expect(operation.state).toBe("succeeded");
+  expect(operation.stage).toEqual({ current: 6, total: 6 });
+});
 const job = () => ({
   id: randomUUID(),
   programId: "python",

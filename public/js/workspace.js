@@ -3,6 +3,7 @@ import { state, emit, on } from "./state.js";
 import { $, node, formDialog, confirmDialog } from "./ui.js";
 import { createIcon, button } from "./icons.js";
 import { flush, openEditorFile, currentFile } from "./editor.js";
+import { randomUUID } from "./uuid.js";
 const expanded = new Set();
 let navigation = Promise.resolve();
 export function selectFile(file) {
@@ -353,7 +354,7 @@ async function editPlan() {
           title,
         }))
         .map((t) => ({
-          id: t.id || crypto.randomUUID(),
+          id: t.id || randomUUID(),
           title: t.title,
           done: t.done || false,
         }));

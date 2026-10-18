@@ -299,6 +299,12 @@ export class ProgramManager {
       record,
     );
   }
+  async phase(job, current, label) {
+    if (!job) return;
+    job.stage = { current, total: 6 };
+    job.progress = label;
+    await this.persist(job);
+  }
   async run(command, args, job, timeout = 15 * 60 * 1000) {
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, {
@@ -450,6 +456,12 @@ export class ProgramManager {
                 ? "installed"
                 : "not-installed",
         version: runtime?.version || stored?.version || null,
+        updateAvailable:
+          program.id === "java" &&
+          installed &&
+          !/^javac 25(?:[.\s]|$)/.test(
+            runtime?.version || stored?.version || "",
+          ),
         error: action?.error || last?.error || null,
       };
     });
@@ -460,6 +472,7 @@ export class ProgramManager {
         this.activeJob && !TERMINAL.has(this.activeJob.state)
           ? this.publicJob(this.activeJob)
           : null,
+      latestJob: this.publicJob([...this.operations.values()].at(-1)),
       catalogVersion: LOCK.version,
       ...this.identity(),
       cache: await this.cacheStatus(),
@@ -595,7 +608,7 @@ export class ProgramManager {
       if (job.state === "cancelled") return;
       job.state = job.action === "remove" ? "removing" : "installing";
       job.progress = "Paketdatenbank und Speicher werden geprüft.";
-      await this.persist(job);
+      await this.phase(job, 1, job.progress);
       const audit = await this.run("dpkg", ["--audit"]);
       if (audit.trim() && job.action !== "repair")
         throw new RunnerError(
@@ -613,9 +626,18 @@ export class ProgramManager {
           this.manifest.desired[program.id] === false);
       if (removing) await this.remove(program, job);
       else {
-        const existing = this.manifest.desired[program.id]
+        let existing = this.manifest.desired[program.id]
           ? this.manifest.installed[program.id]
           : null;
+        // Explicit installation upgrades the old Java recipe; ordinary restart
+        // recovery still restores the exact previously recorded package closure.
+        if (
+          program.id === "java" &&
+          existing?.packages.some((p) => p.name === "openjdk-17-jdk-headless")
+        ) {
+          await this.remove(program, job);
+          existing = null;
+        }
         if (job.action === "repair" && existing?.packages.length)
           await this.installApt(program, existing, job);
         const record = await this.install(program, existing, job);
@@ -626,6 +648,7 @@ export class ProgramManager {
       job.state = "succeeded";
       if (removing && job.clearCache) await this.cleanCache();
       job.progress = "Fertig.";
+      job.stage = { current: 6, total: 6 };
       this.jobs.initializationError = null;
       this.jobs.state = "ready";
     } catch (error) {
@@ -678,9 +701,16 @@ export class ProgramManager {
         "DOWNLOAD_FAILED",
       );
     let bytes = 0;
+    if (job)
+      job.download = {
+        name,
+        bytes: 0,
+        total: Number(response.headers.get("content-length")) || null,
+      };
     const stream = Readable.fromWeb(response.body);
     stream.on("data", (chunk) => {
       bytes += chunk.length;
+      if (job) job.download.bytes = bytes;
       if (bytes > MAX_DOWNLOAD)
         stream.destroy(
           new RunnerError("Download überschreitet die Größenbegrenzung."),
@@ -790,6 +820,11 @@ export class ProgramManager {
     } else if (program.packages.length)
       await this.installApt(program, record, job);
     if (program.upstream) await this.installUpstream(program, record, job);
+    await this.phase(
+      job,
+      6,
+      "Installierte Laufzeit und Version werden geprüft.",
+    );
     const runtime = (await runtimes()).find((r) => r.language === program.id);
     if (!runtime?.installed)
       throw new RunnerError(
@@ -810,9 +845,11 @@ export class ProgramManager {
   }
   async installApt(program, record, job) {
     if (program.microsoft) await this.microsoft(job);
-    job.progress =
-      "Signierte Paketlisten und festgeschriebene Versionen werden geladen.";
-    await this.persist(job);
+    await this.phase(
+      job,
+      2,
+      "Signierte Paketlisten und festgeschriebene Versionen werden geladen.",
+    );
     await this.apt(["update"], job);
     const packages = record.packages.length
       ? record.packages.map((p) => `${p.name}=${p.version}`)
@@ -820,12 +857,18 @@ export class ProgramManager {
           LOCK.apt[p] ? `${p}=${LOCK.apt[p].version}` : p,
         );
     await this.downloadBudget(packages, job);
+    await this.phase(job, 3, "Programmpakete werden heruntergeladen.");
     await this.apt(
       ["--download-only", "--reinstall", "install", ...packages],
       job,
     );
+    await this.phase(job, 4, "Pakete werden entpackt und eingerichtet.");
     await this.apt(["--no-download", "install", ...packages], job);
     const installed = await this.installedPackages();
+    // Recovery can reference an older recipe, such as Java 17.
+    const roots = record.packages.length
+      ? record.packages.map((entry) => entry.name)
+      : program.packages;
     const closure = await this.run(
       "apt-cache",
       [
@@ -837,13 +880,13 @@ export class ProgramManager {
         "--no-breaks",
         "--no-replaces",
         "--no-enhances",
-        ...program.packages,
+        ...roots,
       ],
       job,
     );
     const names = [
       ...new Set([
-        ...program.packages,
+        ...roots,
         ...closure
           .split("\n")
           .filter((line) => /^[a-z0-9][a-z0-9+.-]*(?::amd64)?$/.test(line))
@@ -851,6 +894,11 @@ export class ProgramManager {
       ]),
     ].filter((name) => installed.has(name));
     record.packages = names.map((name) => installed.get(name));
+    await this.phase(
+      job,
+      5,
+      "Abhängigkeiten und Prüfsummen werden für die Wiederherstellung gesichert.",
+    );
     job.resolvedPackages = record.packages;
     await this.persist(job);
     await this.downloadBudget(
@@ -924,6 +972,7 @@ export class ProgramManager {
       );
   }
   async installUpstream(program, record, job) {
+    await this.phase(job, 3, "Herstellerdownload wird geladen und geprüft.");
     const root = "/opt/sterracode";
     await fs.mkdir(root, { recursive: true, mode: 0o755 });
     if (program.id === "go") {
@@ -961,6 +1010,7 @@ export class ProgramManager {
           503,
           "PROVENANCE_MISMATCH",
         );
+      await this.phase(job, 4, "Programm wird entpackt und eingerichtet.");
       await this.run("tar", ["-xzf", file, "--no-same-owner", "-C", root], job);
       record.upstreamVerified = true;
     } else {
