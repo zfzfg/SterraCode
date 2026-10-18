@@ -42,10 +42,32 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <aside id="sessions-sidebar" class="sidebar">
   <div class="sidebar-header">
-    <span>Sessions</span>
-    <button id="new-session-btn" class="btn btn-primary btn-sm">+ Neu</button>
+    <div class="sidebar-tabs">
+      <button id="tab-sessions" class="sidebar-tab active">Sessions</button>
+      <button id="tab-files" class="sidebar-tab">Dateien</button>
+      <button id="tab-plan" class="sidebar-tab">Lernplan</button>
+    </div>
+    <button id="new-session-btn" class="btn btn-primary btn-sm" style="margin-left: 4px;">+ Neu</button>
   </div>
-  <div id="sessions-list" class="sessions-list"></div>
+  
+  <div id="sessions-view" class="sidebar-view">
+    <div id="sessions-list" class="sessions-list"></div>
+  </div>
+  
+  <div id="files-view" class="sidebar-view hidden">
+    <div class="files-toolbar">
+      <button id="new-file-btn" class="icon-btn" title="Neue Datei">📄</button>
+      <button id="new-folder-btn" class="icon-btn" title="Neuer Ordner">📁</button>
+    </div>
+    <div id="files-list" class="files-list"></div>
+  </div>
+
+  <div id="plan-view" class="sidebar-view hidden" style="padding: 12px; overflow-y: auto;">
+    <h3 id="plan-goal" style="font-size: 14px; margin-bottom: 8px; color: var(--accent);">Kein Lernziel gesetzt</h3>
+    <div id="plan-topics" style="display: flex; flex-direction: column; gap: 6px;"></div>
+  </div>
+  
+  <div id="sidebar-resizer" class="resizer resizer-v" title="Sidebar-Größe ändern"></div>
 </aside>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -64,6 +86,8 @@
     </div>
     <div id="editor-container"></div>
   </section>
+
+  <div id="editor-resizer" class="resizer resizer-v" title="Editor-Größe ändern"></div>
 
   <!-- ─── TEACHER PANEL ─────────────────────────────────────────────────── -->
   <section id="teacher-panel" class="panel">
@@ -96,6 +120,9 @@
 
     <!-- Input area -->
     <div class="chat-input-area">
+      <div class="chat-input-actions" style="display:flex; justify-content: flex-end; margin-bottom: 4px;">
+        <button id="delete-last-msg-btn" class="icon-btn" title="Letzte Nachricht & Antwort löschen" style="font-size:12px">🗑 Letzte löschen</button>
+      </div>
       <div class="chat-input-row">
         <textarea id="chat-input" placeholder="Stelle eine Frage oder beschreibe was du lernen möchtest..." rows="2"></textarea>
         <div class="input-buttons">
@@ -171,10 +198,22 @@
       </section>
 
       <section class="settings-section">
-        <h4>Editor</h4>
+        <h4>Darstellung</h4>
+        <label>Theme
+          <select id="s-theme">
+            <option value="dark">Dark (Standard)</option>
+            <option value="light">Light</option>
+            <option value="high-contrast">High Contrast</option>
+            <option value="solarized">Solarized</option>
+          </select>
+        </label>
         <label>Schriftgröße
           <input id="s-fontSize" type="number" min="10" max="24">
         </label>
+      </section>
+
+      <section class="settings-section">
+        <h4>Editor</h4>
         <label>Auto-Apply Schwellwert (Zeilen)
           <input id="s-diffThreshold" type="number" min="1" max="50">
         </label>

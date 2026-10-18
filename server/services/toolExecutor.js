@@ -1,7 +1,8 @@
 // server/services/toolExecutor.js
 import { executeCode } from './executor.js';
+import { startTerminalSession } from './terminal.js';
 import { getProfile, updateProfile } from './profileManager.js';
-import { getSettings, DATA_DIR } from './storage.js';
+import { getSettings, DATA_DIR, getWorkspacePath } from './storage.js';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -21,22 +22,45 @@ export async function executeTool(name, args, context) {
   const { sessionId, editorCode, language, session, settings } = context;
 
   switch (name) {
-    case 'read_editor': {
-      return {
-        content: editorCode || '',
-        language: language || 'python',
-        lines: (editorCode || '').split('\n').length
-      };
+    case 'read_file': {
+      try {
+        const wp = await getWorkspacePath(sessionId);
+        const fullPath = path.join(wp, args.path);
+        if (!fullPath.startsWith(wp)) throw new Error('Access denied');
+        const content = await fs.readFile(fullPath, 'utf-8');
+        return {
+          content,
+          lines: content.split('\n').length
+        };
+      } catch (err) {
+        return { error: 'Datei konnte nicht gelesen werden: ' + err.message };
+      }
     }
 
-    case 'write_editor': {
-      // Return the pending write — frontend applies it with diff preview
-      return {
-        type: 'write_editor',
-        code: args.code,
-        reason: args.reason,
-        status: 'pending_apply'
-      };
+    case 'write_file': {
+      try {
+        const wp = await getWorkspacePath(sessionId);
+        const fullPath = path.join(wp, args.path);
+        if (!fullPath.startsWith(wp)) throw new Error('Access denied');
+        
+        // Backup old content for undo if file exists
+        let oldContent = null;
+        try { oldContent = await fs.readFile(fullPath, 'utf-8'); } catch {}
+        
+        await fs.mkdir(path.dirname(fullPath), { recursive: true });
+        await fs.writeFile(fullPath, args.code, 'utf-8');
+        
+        return {
+          type: 'write_file',
+          path: args.path,
+          code: args.code,
+          oldContent,
+          reason: args.reason,
+          status: 'applied'
+        };
+      } catch (err) {
+        return { error: 'Datei konnte nicht geschrieben werden: ' + err.message };
+      }
     }
 
     case 'insert_at_line': {
@@ -55,17 +79,53 @@ export async function executeTool(name, args, context) {
       };
     }
 
-    case 'run_code': {
-      const codeToRun = editorCode || '';
-      if (!codeToRun.trim()) {
-        return { stdout: '', stderr: 'Editor ist leer — kein Code zum Ausführen.', exitCode: 1 };
+    case 'run_terminal_command': {
+      try {
+        const wp = await getWorkspacePath(sessionId);
+        const { exec } = await import('child_process');
+        const util = await import('util');
+        const execPromise = util.promisify(exec);
+        
+        const { stdout, stderr } = await execPromise(args.command, { cwd: wp, timeout: 15000 });
+        return {
+          type: 'run_terminal_command',
+          command: args.command,
+          stdout,
+          stderr,
+          exitCode: 0
+        };
+      } catch (err) {
+        return {
+          type: 'run_terminal_command',
+          command: args.command,
+          stdout: err.stdout || '',
+          stderr: err.stderr || err.message,
+          exitCode: err.code || 1
+        };
       }
-      const result = await executeCode({
-        code: codeToRun,
-        language: args.language || language || 'python',
-        timeoutMs: settings?.executionTimeout ?? 10000
-      });
-      return result;
+    }
+
+    case 'ask_question': {
+      return {
+        type: 'ask_question',
+        question: args.question,
+        questionType: args.type,
+        options: args.options
+      };
+    }
+
+    case 'update_learning_plan': {
+      if (session) {
+        session.learningPlan = {
+          goal: args.goal,
+          topics: args.topics
+        };
+      }
+      return {
+        type: 'update_learning_plan',
+        goal: args.goal,
+        topics: args.topics
+      };
     }
 
     case 'create_task': {

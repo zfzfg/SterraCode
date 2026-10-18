@@ -8,6 +8,7 @@ import modelsRoutes  from './routes/models.js';
 import executeRoutes from './routes/execute.js';
 import terminalRoutes from './routes/terminal.js';
 import sessionsRoutes from './routes/sessions.js';
+import workspacesRoutes from './routes/workspaces.js';
 import { ensureDataDirs } from './services/storage.js';
 
 const app     = express();
@@ -32,6 +33,7 @@ app.use('/api/models',   modelsRoutes);
 app.use('/api/execute',  executeRoutes);
 app.use('/api/terminal', terminalRoutes);
 app.use('/api/sessions', sessionsRoutes);
+app.use('/api/workspaces', workspacesRoutes);
 
 // SPA fallback
 app.get('*', (req, res) => {

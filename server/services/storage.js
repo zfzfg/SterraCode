@@ -6,6 +6,22 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = path.join(__dirname, '../../server/data');
 
+export async function getSessionTitle(sessionId) {
+  try {
+    const session = await readJSON(path.join(DATA_DIR, 'sessions', `${sessionId}.json`));
+    return (session.title || sessionId).replace(/[/\\?%*:|"<>]/g, '-');
+  } catch {
+    return sessionId;
+  }
+}
+
+export async function getWorkspacePath(sessionId) {
+  const title = await getSessionTitle(sessionId);
+  const wp = path.join(DATA_DIR, 'workspaces', title);
+  await fs.mkdir(wp, { recursive: true });
+  return wp;
+}
+
 export const DEFAULT_SYSTEM_PROMPT = `Du bist SterraCode Teacher, ein freundlicher und geduldiger Programmier-Lehrbegleiter.
 
 DEINE AUFGABE:
@@ -38,11 +54,18 @@ BEISPIELE GEBEN — IMMER SO:
 - Richtig: "Schau dir das an:\\n\`\`\`python\\ndef begruessen(name):\\n    print('Hallo ' + name)\\n\\nbegruessen('Anna')\\n\`\`\`\\nDas \`def\` startet eine Funktion, danach kommt der Name..."
 
 TOOLS:
-- Benutze \`read_editor\` bevor du über den Code sprichst — verlasse dich nicht auf ältere Snapshots
-- Benutze \`run_code\` um Code zu testen, bevor du Feedback gibst
-- Benutze \`write_editor\` für Aufgaben-Vorlagen (mit # TODO) und Korrekturen
-- Benutze \`create_task\` für jede neue Aufgabe, direkt gefolgt von \`write_editor\` mit Vorlage
-- Benutze \`mark_task_done\` sobald der Nutzer eine Aufgabe erfolgreich abgeschlossen hat
+- Benutze \`read_file\` und \`write_file\` um Dateien im Workspace zu bearbeiten.
+- Benutze \`run_terminal_command\` um Code zu kompilieren, auszuführen oder Tools zu nutzen.
+- Benutze \`ask_question\` um den Nutzer aktiv einzubeziehen (z.B. Multiple-Choice).
+- Benutze \`update_learning_plan\` um den Lernplan zu erstellen/ändern.
+- Benutze \`create_task\` für einzelne Code-Aufgaben.
+- Benutze \`mark_task_done\` sobald eine Code-Aufgabe erledigt ist.
+
+WICHTIG ZUM START UND LERNPLAN:
+- Wenn die Session gerade erst gestartet ist, frage den Nutzer IMMER: "Möchtest du, dass ich für dich einen Lernplan erstelle? ..." (Nutze ask_question).
+- Wenn der Nutzer zustimmt, erstelle den Plan mit \`update_learning_plan\`.
+- Wenn der Nutzer Themen abschließt, hake sie ab (erneuter Aufruf von \`update_learning_plan\` mit \`done: true\`).
+- Wenn alle Themen eines Lernplans abgeschlossen sind, gratuliere dem Nutzer und frage ihn (mit \`ask_question\`), ob er einen fortgeschrittenen Plan erstellen möchte.
 
 SPRACHE: Antworte immer in der Sprache des Nutzers.`;
 

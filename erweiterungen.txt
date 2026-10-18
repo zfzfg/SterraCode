@@ -1,0 +1,8 @@
+lernplan erstellung
+
+einsicht der KI in das terminal
+
+text anzeige fehler beheben
+
+mehrere datein bearbeiten koennen und der KI einsicht haben lassen
+

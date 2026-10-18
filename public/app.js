@@ -143,11 +143,183 @@ require(['vs/editor/editor.main'], function () {
   init();
 });
 
+// ── Files Sidebar ────────────────────────────────────────────────────────────
+async function loadFilesList() {
+  if (!currentSessionId) return;
+  const container = el('files-list');
+  try {
+    const files = await fetch(`/api/workspaces/${currentSessionId}/files`).then(r => r.json());
+    container.innerHTML = '';
+    if (files.error) {
+      container.innerHTML = `<div style="padding: 10px; color: var(--danger)">${files.error}</div>`;
+      return;
+    }
+    renderFileTree(files, container, 0);
+  } catch (err) {
+    container.innerHTML = `<div style="padding: 10px; color: var(--danger)">Fehler beim Laden der Dateien</div>`;
+  }
+}
+
+function renderFileTree(files, container, depth) {
+  files.forEach(f => {
+    const item = document.createElement('div');
+    item.className = 'file-tree-item';
+    item.style.paddingLeft = `${depth * 12 + 10}px`;
+    
+    const icon = f.type === 'folder' ? '📁' : '📄';
+    item.innerHTML = `
+      <span class="file-tree-icon">${icon}</span>
+      <span class="file-tree-name" title="${f.path}">${f.name}</span>
+      <div class="file-tree-actions">
+        <button class="icon-btn" onclick="renameFileOrFolder('${f.path}')" title="Umbenennen">✏️</button>
+        <button class="icon-btn" onclick="deleteFileOrFolder('${f.path}')" title="Löschen">🗑</button>
+      </div>
+    `;
+
+    if (f.type === 'file') {
+      item.onclick = (e) => {
+        if (e.target.tagName !== 'BUTTON') {
+          openFileInEditor(f.path);
+        }
+      };
+      if (window.currentFilePath === f.path) {
+        item.classList.add('active');
+      }
+    }
+
+    container.appendChild(item);
+
+    if (f.type === 'folder' && f.children) {
+      renderFileTree(f.children, container, depth + 1);
+    }
+  });
+}
+
+window.currentFilePath = null;
+
+async function openFileInEditor(filePath) {
+  if (!currentSessionId) return;
+  try {
+    const res = await fetch(`/api/workspaces/${currentSessionId}/files/content?path=${encodeURIComponent(filePath)}`).then(r => r.json());
+    if (res.error) throw new Error(res.error);
+    window.currentFilePath = filePath;
+    if (window.editor) {
+      window.editor.setValue(res.content || '');
+      // Try to guess language
+      const ext = filePath.split('.').pop().toLowerCase();
+      const langMap = { 'js': 'javascript', 'ts': 'typescript', 'py': 'python', 'java': 'java', 'html': 'html', 'css': 'css', 'json': 'json', 'md': 'markdown' };
+      if (langMap[ext]) {
+        monaco.editor.setModelLanguage(window.editor.getModel(), langMap[ext]);
+      }
+    }
+    loadFilesList(); // Update active state
+  } catch (err) {
+    showToast(`Fehler beim Öffnen: ${err.message}`, 'error');
+  }
+}
+
+async function promptCreateFileOrFolder(type) {
+  if (!currentSessionId) {
+    showToast('Bitte erst eine Session auswählen.', 'error');
+    return;
+  }
+  const name = prompt(`Neuer ${type === 'folder' ? 'Ordner' : 'Datei'} (Pfad):`);
+  if (!name) return;
+  try {
+    const res = await fetch(`/api/workspaces/${currentSessionId}/files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: name, type })
+    }).then(r => r.json());
+    if (res.error) throw new Error(res.error);
+    loadFilesList();
+    if (type === 'file') openFileInEditor(name);
+  } catch (err) {
+    showToast(`Fehler: ${err.message}`, 'error');
+  }
+}
+
+window.renameFileOrFolder = async function(oldPath) {
+  if (!currentSessionId) return;
+  const newName = prompt(`Umbenennen von "${oldPath}":`, oldPath);
+  if (!newName || newName === oldPath) return;
+  try {
+    const res = await fetch(`/api/workspaces/${currentSessionId}/files`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPath, newPath: newName })
+    }).then(r => r.json());
+    if (res.error) throw new Error(res.error);
+    if (window.currentFilePath === oldPath) {
+      window.currentFilePath = newName;
+    }
+    loadFilesList();
+  } catch (err) {
+    showToast(`Fehler: ${err.message}`, 'error');
+  }
+};
+
+window.deleteFileOrFolder = async function(filePath) {
+  if (!currentSessionId) return;
+  if (!confirm(`Möchtest du "${filePath}" wirklich löschen?`)) return;
+  try {
+    const res = await fetch(`/api/workspaces/${currentSessionId}/files?path=${encodeURIComponent(filePath)}`, {
+      method: 'DELETE'
+    }).then(r => r.json());
+    if (res.error) throw new Error(res.error);
+    if (window.currentFilePath === filePath) {
+      window.currentFilePath = null;
+      if (window.editor) window.editor.setValue('');
+    }
+    loadFilesList();
+  } catch (err) {
+    showToast(`Fehler: ${err.message}`, 'error');
+  }
+};
+
+// ── Learning Plan ──────────────────────────────────────────────────────────
+function showLearningPlan(plan) {
+  if (!plan) return;
+  el('plan-goal').textContent = plan.goal || 'Lernziel';
+  const container = el('plan-topics');
+  container.innerHTML = '';
+  if (plan.topics && plan.topics.length) {
+    plan.topics.forEach(topic => {
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.alignItems = 'center';
+      div.style.gap = '8px';
+      
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = topic.done;
+      cb.disabled = true; // KI verwaltet das Abhaken
+      
+      const span = document.createElement('span');
+      span.textContent = topic.title;
+      if (topic.done) span.style.textDecoration = 'line-through';
+      
+      div.appendChild(cb);
+      div.appendChild(span);
+      container.appendChild(div);
+    });
+  } else {
+    container.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">Noch keine Themen definiert.</span>';
+  }
+  
+  // Flash tab to indicate update
+  const tab = el('tab-plan');
+  tab.style.transition = 'color 0.3s';
+  tab.style.color = 'var(--success)';
+  setTimeout(() => tab.style.color = '', 1500);
+}
+
 // ── Init ────────────────────────────────────────────────────────────────────
 async function init() {
   await loadSettings();
   applyTheme(appSettings.theme || 'dark');
   applyFontSize(appSettings.fontSize || 14);
+  applyLayoutSizes(appSettings);
   await loadModels();
   await loadSessionsList();
   bindEvents();
@@ -163,10 +335,27 @@ async function loadSettings() {
   }
 }
 
+function applyLayoutSizes(settings) {
+  if (settings.sidebarWidth) {
+    document.documentElement.style.setProperty('--sidebar-w', settings.sidebarWidth);
+  }
+  if (settings.editorWidth) {
+    document.documentElement.style.setProperty('--editor-w', settings.editorWidth);
+  }
+  if (settings.terminalHeight) {
+    document.documentElement.style.setProperty('--terminal-h', settings.terminalHeight);
+    const terminalPanel = el('terminal-panel');
+    if (terminalPanel) terminalPanel.style.height = settings.terminalHeight;
+  }
+}
+
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  if (window.monaco && editorReady) {
-    monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
+  if (window.monaco && window.editor) {
+    let monacoTheme = 'vs-dark';
+    if (theme === 'light') monacoTheme = 'vs';
+    else if (theme === 'high-contrast') monacoTheme = 'hc-black';
+    monaco.editor.setTheme(monacoTheme);
   }
 }
 
@@ -174,26 +363,38 @@ function applyFontSize(size) {
   if (window.editor) window.editor.updateOptions({ fontSize: size });
 }
 
-async function saveSettings() {
+async function saveSettings(fromModal = true) {
   const s = appSettings;
-  const updates = {
-    lmStudioUrl:            el('s-lmUrl').value,
-    activeModel:            el('s-model').value || s.activeModel,
-    temperature:            parseFloat(el('s-temp').value),
-    maxTokensResponse:      parseInt(el('s-maxTokens').value),
-    fontSize:               parseInt(el('s-fontSize').value),
-    diffAutoApplyThreshold: parseInt(el('s-diffThreshold').value),
-    autoSendEditorOnMessage: el('s-autoSend').checked,
-    tokenThreshold:         parseInt(el('s-tokenThreshold').value),
-    keepRecentMessages:     parseInt(el('s-keepRecent').value),
-    maxToolCallsPerTurn:    parseInt(el('s-maxTools').value),
-    crossChatProfileEnabled:     el('s-crossChat').checked,
-    autoUpdateProfileOnTaskDone: el('s-autoProfile').checked,
-    executionTimeout:       parseInt(el('s-timeout').value),
-    streaming:              el('s-streaming').checked,
-    systemPrompt:           el('s-systemPrompt').value,
-    theme:                  appSettings.theme || 'dark'
-  };
+  let updates = {};
+  
+  if (fromModal) {
+    updates = {
+      lmStudioUrl:            el('s-lmUrl').value,
+      activeModel:            el('s-model').value || s.activeModel,
+      temperature:            parseFloat(el('s-temp').value),
+      maxTokensResponse:      parseInt(el('s-maxTokens').value),
+      fontSize:               parseInt(el('s-fontSize').value),
+      diffAutoApplyThreshold: parseInt(el('s-diffThreshold').value),
+      autoSendEditorOnMessage: el('s-autoSend').checked,
+      tokenThreshold:         parseInt(el('s-tokenThreshold').value),
+      keepRecentMessages:     parseInt(el('s-keepRecent').value),
+      maxToolCallsPerTurn:    parseInt(el('s-maxTools').value),
+      crossChatProfileEnabled:     el('s-crossChat').checked,
+      autoUpdateProfileOnTaskDone: el('s-autoProfile').checked,
+      executionTimeout:       parseInt(el('s-timeout').value),
+      streaming:              el('s-streaming').checked,
+      systemPrompt:           el('s-systemPrompt').value,
+      theme:                  el('s-theme').value || 'dark'
+    };
+  } else {
+    // Only update the layout sizes
+    updates = {
+      sidebarWidth: appSettings.sidebarWidth,
+      editorWidth: appSettings.editorWidth,
+      terminalHeight: appSettings.terminalHeight
+    };
+  }
+
   try {
     const res = await fetch('/api/chat/settings', {
       method: 'PATCH',
@@ -203,10 +404,12 @@ async function saveSettings() {
     appSettings = await res.json();
     applyTheme(appSettings.theme);
     applyFontSize(appSettings.fontSize);
-    closeSettings();
-    showToast('Einstellungen gespeichert.', 'success');
+    if (fromModal) {
+      closeSettings();
+      showToast('Einstellungen gespeichert.', 'success');
+    }
   } catch {
-    showToast('Fehler beim Speichern.', 'error');
+    if (fromModal) showToast('Fehler beim Speichern.', 'error');
   }
 }
 
@@ -217,6 +420,7 @@ function openSettings() {
   el('s-temp').value          = s.temperature ?? 0.4;
   el('s-temp-val').textContent = s.temperature ?? 0.4;
   el('s-maxTokens').value     = s.maxTokensResponse || 2048;
+  el('s-theme').value         = s.theme || 'dark';
   el('s-fontSize').value      = s.fontSize || 14;
   el('s-diffThreshold').value = s.diffAutoApplyThreshold ?? 5;
   el('s-autoSend').checked    = s.autoSendEditorOnMessage || false;
@@ -323,6 +527,11 @@ async function createSession() {
 
     await openSession(session.id);
     await loadSessionsList();
+    
+    // Trigger initial AI greeting & learning plan question
+    setTimeout(() => {
+      handleSendMessageText('[SYSTEM: Neue Session gestartet. Begrüße den Nutzer kurz und frage ihn, ob du einen Lernplan für ihn erstellen sollst (nutze das ask_question Tool mit type="multiple-choice" und Optionen wie "Ja, bitte" / "Nein, danke").]');
+    }, 500);
   } catch {
     showToast('Fehler beim Erstellen der Session.', 'error');
   }
@@ -354,6 +563,17 @@ async function openSession(sessionId) {
 
     // Render chat history
     renderChatHistory(session.messages || []);
+    
+    // Load Workspace Files
+    loadFilesList();
+
+    // Load Learning Plan
+    if (session.learningPlan) {
+      showLearningPlan(session.learningPlan);
+    } else {
+      el('plan-goal').textContent = 'Kein Lernziel gesetzt';
+      el('plan-topics').innerHTML = '';
+    }
 
     // Add regenerate button to the last AI message
     updateRegenerateButtons();
@@ -429,15 +649,213 @@ function renderChatHistory(messages) {
   messages.forEach((msg, i) => {
     if (msg.role === 'user') lastUserMsg = msg.content;
     if (msg.role === 'system') return;
+    
+    // Handle tool messages to render as UI components
+    if (msg.role === 'tool') {
+      try {
+        const result = JSON.parse(msg.content);
+        if (result && result.type) {
+          const toolBubble = createToolBubble(result);
+          if (toolBubble) container.appendChild(toolBubble);
+        }
+      } catch (e) {
+        // ignore parse error, just don't render raw JSON
+      }
+      return;
+    }
+    
+    // Hide raw assistant tool_calls
+    if (msg.role === 'assistant' && msg.tool_calls && !msg.content) {
+      return;
+    }
+
     const bubble = createChatBubble(msg.role, msg.content, i);
     if (msg.role === 'assistant') {
       bubble.dataset.regenerable   = '1';
       bubble.dataset.lastUserMsg   = lastUserMsg;
       bubble.dataset.includeEditor = '0';
+    } else if (msg.role === 'user') {
+      bubble.dataset.index = i;
+      addEditButton(bubble, i, msg.content);
+      
+      // If it's the last message (or we don't know yet, we can just add delete button to all user messages)
+      // Actually, deleting ANY user message could truncate from there.
+      // Let's just implement the "Letzte Nachricht löschen" as a button in the chat input area.
+    }
+    if (msg.edited) {
+      const editedSpan = document.createElement('span');
+      editedSpan.className = 'edited-mark';
+      editedSpan.textContent = ' (bearbeitet)';
+      bubble.appendChild(editedSpan);
     }
     container.appendChild(bubble);
   });
   scrollToBottom();
+}
+
+function createToolBubble(result) {
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble system tool-bubble';
+  
+  switch (result.type) {
+    case 'create_task':
+      bubble.innerHTML = `<strong>📋 Aufgabe:</strong> ${result.task?.title || 'Neue Aufgabe'}`;
+      break;
+    case 'write_editor':
+      bubble.innerHTML = `<em>[Schreibe Datei: ${result.reason || 'Code-Änderung'}]</em>`;
+      break;
+    case 'insert_at_line':
+      bubble.innerHTML = `<em>[Bearbeite Zeile ${result.line}: ${result.reason || 'Einfügen'}]</em>`;
+      break;
+    case 'mark_task_done':
+      bubble.innerHTML = `<strong>✅ Aufgabe abgeschlossen!</strong>`;
+      break;
+    case 'add_explanation':
+      bubble.innerHTML = `<strong>💡 ${result.title}</strong><br/>${md(result.content || '')}`;
+      break;
+    case 'read_file':
+      bubble.innerHTML = `<em>[Lese Datei: ${result.path || 'unbekannt'}]</em>`;
+      break;
+    case 'write_file':
+      bubble.innerHTML = `<em>[Schreibe Datei: ${result.path || 'unbekannt'}] <button class="btn btn-sm" onclick="undoFileChange('${result.path}', \`${btoa(result.oldContent || '')}\`)">↩ Rückgängig</button></em>`;
+      break;
+    case 'run_terminal_command':
+      bubble.innerHTML = `<strong>🖥 Terminal:</strong> <code>${result.command}</code>`;
+      break;
+    case 'ask_question':
+      bubble.innerHTML = `<strong>❓ Frage:</strong> ${result.question}`;
+      if (result.questionType === 'multiple-choice' && result.options) {
+        const btnContainer = document.createElement('div');
+        btnContainer.className = 'mc-options';
+        btnContainer.style.marginTop = '8px';
+        btnContainer.style.display = 'flex';
+        btnContainer.style.flexDirection = 'column';
+        btnContainer.style.gap = '4px';
+        result.options.forEach(opt => {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-sm';
+          btn.textContent = opt;
+          btn.onclick = () => {
+            btnContainer.innerHTML = `<em>Gewählt: ${opt}</em>`;
+            handleSendMessageText(opt);
+          };
+          btnContainer.appendChild(btn);
+        });
+        bubble.appendChild(btnContainer);
+      } else {
+        const btnContainer = document.createElement('div');
+        btnContainer.style.marginTop = '8px';
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.placeholder = 'Deine Antwort...';
+        inp.className = 'freitext-input';
+        inp.style.width = '100%';
+        inp.onkeydown = (e) => {
+          if (e.key === 'Enter') {
+            const val = inp.value.trim();
+            if (val) {
+              btnContainer.innerHTML = `<em>Antwort: ${val}</em>`;
+              handleSendMessageText(val);
+            }
+          }
+        };
+        btnContainer.appendChild(inp);
+        bubble.appendChild(btnContainer);
+      }
+      break;
+    case 'update_learning_plan':
+      bubble.innerHTML = `<strong>🎓 Lernplan aktualisiert:</strong> ${result.goal}`;
+      showLearningPlan(result);
+      break;
+    default:
+      return null; // Do not render unknown tools
+  }
+  return bubble;
+}
+
+function addEditButton(bubble, index, content) {
+  const btn = document.createElement('button');
+  btn.className = 'icon-btn edit-msg-btn';
+  btn.title = 'Nachricht bearbeiten';
+  btn.textContent = '✏️';
+  btn.style.position = 'absolute';
+  btn.style.right = '5px';
+  btn.style.top = '5px';
+  btn.style.opacity = '0';
+  btn.style.fontSize = '12px';
+  
+  bubble.addEventListener('mouseenter', () => btn.style.opacity = '1');
+  bubble.addEventListener('mouseleave', () => btn.style.opacity = '0');
+  
+  btn.onclick = () => {
+    const newContent = prompt('Nachricht bearbeiten:', content);
+    if (newContent && newContent !== content) {
+      editUserMessage(index, newContent);
+    }
+  };
+  bubble.appendChild(btn);
+}
+
+async function editUserMessage(index, newContent) {
+  if (!currentSessionId) return;
+  try {
+    const res = await fetch('/api/chat/edit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: currentSessionId, messageIndex: index, newContent })
+    }).then(r => r.json());
+    
+    if (res.error) throw new Error(res.error);
+    
+    // Reload session locally
+    const session = await fetch(`/api/sessions/${currentSessionId}`).then(r => r.json());
+    renderChatHistory(session.messages || []);
+    
+    // Trigger new response
+    const useStreaming = appSettings.streaming !== false;
+    const editorCode = window.editor ? window.editor.getValue() : '';
+    if (useStreaming) {
+      await sendStreaming('', false, editorCode, true);
+    } else {
+      await sendNonStreaming('', false, editorCode, true);
+    }
+  } catch (err) {
+    showToast(`Fehler beim Bearbeiten: ${err.message}`, 'error');
+  }
+}
+
+async function deleteLastMessage() {
+  if (!currentSessionId) return;
+  if (!confirm('Letzte Nachricht und KI-Antwort löschen?')) return;
+  try {
+    const res = await fetch('/api/chat/last', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: currentSessionId })
+    }).then(r => r.json());
+    
+    if (res.error) throw new Error(res.error);
+    
+    // Check if there are file changes in deleted messages
+    const hasWriteTool = res.deletedMessages?.some(m => m.role === 'tool' && m.content && m.content.includes('"write_file"'));
+    if (hasWriteTool) {
+      if (confirm('Die gelöschte Antwort enthielt Datei-Änderungen. Möchtest du die letzte Datei-Änderung ebenfalls rückgängig machen? (Falls noch möglich)')) {
+        // Find last write_file tool
+        const writeMsg = res.deletedMessages.slice().reverse().find(m => m.role === 'tool' && m.content.includes('"write_file"'));
+        if (writeMsg) {
+          const t = JSON.parse(writeMsg.content);
+          if (t && t.path) {
+            undoFileChange(t.path, btoa(t.oldContent || ''));
+          }
+        }
+      }
+    }
+
+    const session = await fetch(`/api/sessions/${currentSessionId}`).then(r => r.json());
+    renderChatHistory(session.messages || []);
+  } catch (err) {
+    showToast(`Fehler beim Löschen: ${err.message}`, 'error');
+  }
 }
 
 function createChatBubble(role, content, index) {
@@ -502,12 +920,14 @@ async function handleSendMessageText(text, { includeEditor = false } = {}) {
   const editorCode  = (includeEditor || appSettings.autoSendEditorOnMessage) && window.editor
     ? window.editor.getValue()
     : '';
+  
+  const currentFile = window.currentFilePath ? `\nAktuelle Datei im Editor: ${window.currentFilePath}` : '';
 
   try {
     if (useStreaming) {
-      await sendStreaming(text, includeEditor, editorCode);
+      await sendStreaming(text + currentFile, includeEditor, editorCode);
     } else {
-      await sendNonStreaming(text, includeEditor, editorCode);
+      await sendNonStreaming(text + currentFile, includeEditor, editorCode);
     }
   } finally {
     isSending = false;
@@ -516,7 +936,7 @@ async function handleSendMessageText(text, { includeEditor = false } = {}) {
   }
 }
 
-async function sendStreaming(userMessage, includeEditor, editorCode) {
+async function sendStreaming(userMessage, includeEditor, editorCode, skipPushUserMessage = false) {
   const container  = el('chat-messages');
   const bubble     = createChatBubble('assistant', '');
   const cursor     = document.createElement('span');
@@ -545,7 +965,8 @@ async function sendStreaming(userMessage, includeEditor, editorCode) {
         userMessage,
         includeEditor,
         editorCode,
-        language: currentLanguage
+        language: currentLanguage,
+        skipPushUserMessage
       })
     });
 
@@ -712,7 +1133,7 @@ function updateRegenerateButtons() {
   });
 }
 
-async function sendNonStreaming(userMessage, includeEditor, editorCode) {
+async function sendNonStreaming(userMessage, includeEditor, editorCode, skipPushUserMessage = false) {
   const container = el('chat-messages');
   const loadingBubble = createChatBubble('assistant', '⋯');
   container.appendChild(loadingBubble);
@@ -726,7 +1147,8 @@ async function sendNonStreaming(userMessage, includeEditor, editorCode) {
         userMessage,
         includeEditor,
         editorCode,
-        language: currentLanguage
+        language: currentLanguage,
+        skipPushUserMessage
       })
     }).then(r => r.json());
 
@@ -752,21 +1174,26 @@ async function sendNonStreaming(userMessage, includeEditor, editorCode) {
 function processToolResults(toolResults) {
   if (!toolResults || !toolResults.length) return;
 
+  const container = el('chat-messages');
+
   for (const tr of toolResults) {
     const result = tr.result;
     if (!result) continue;
 
-    switch (result.type) {
-      case 'write_editor':
-        if (result.code !== undefined) {
-          applyEditorChange(result.code, result.reason || 'KI-Änderung');
-        }
-        break;
+    // Append a UI bubble for the tool call
+    const toolBubble = createToolBubble(result);
+    if (toolBubble) {
+      container.appendChild(toolBubble);
+      scrollToBottom();
+    }
 
-      case 'insert_at_line':
-        if (result.code !== undefined) {
-          applyEditorChange(result.code, result.reason || `Zeile ${result.line} einfügen`);
+    switch (result.type) {
+      case 'write_file':
+        if (window.currentFilePath === result.path && window.editor) {
+          window.editor.setValue(result.code);
+          flashEditor('green');
         }
+        loadFilesList();
         break;
 
       case 'create_task':
@@ -795,7 +1222,7 @@ function processToolResults(toolResults) {
     }
 
     // Run code result → show in terminal
-    if (tr.tool === 'run_code' && (result.stdout !== undefined || result.stderr !== undefined)) {
+    if (tr.tool === 'run_terminal_command' && (result.stdout !== undefined || result.stderr !== undefined)) {
       displayTerminalResult(result);
     }
   }
@@ -890,7 +1317,30 @@ function closeDiff() {
   }
 }
 
-window.cancelDiff = cancelDiff; // called from HTML onclick
+window.undoFileChange = async function(filePath, oldContentBase64) {
+  if (!currentSessionId) return;
+  const oldContent = atob(oldContentBase64);
+  try {
+    if (!oldContent) {
+      // Wenn die Datei neu war, löschen
+      await fetch(`/api/workspaces/${currentSessionId}/files?path=${encodeURIComponent(filePath)}`, { method: 'DELETE' });
+    } else {
+      // Alten Inhalt wiederherstellen
+      await fetch(`/api/workspaces/${currentSessionId}/files/content`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, content: oldContent })
+      });
+    }
+    showToast(`Änderung an ${filePath} rückgängig gemacht.`, 'success');
+    if (window.currentFilePath === filePath && window.editor) {
+      window.editor.setValue(oldContent || '');
+    }
+    loadFilesList();
+  } catch (err) {
+    showToast('Fehler beim Rückgängigmachen.', 'error');
+  }
+};
 
 function flashEditor(color) {
   const editorPanel = el('editor-panel');
@@ -1204,6 +1654,38 @@ function bindEvents() {
     }
   });
 
+// ── Sidebar Tabs ────────────────────────────────────────────────────────────
+  el('tab-sessions').onclick = () => {
+    el('tab-sessions').classList.add('active');
+    el('tab-files').classList.remove('active');
+    el('tab-plan').classList.remove('active');
+    el('sessions-view').classList.remove('hidden');
+    el('files-view').classList.add('hidden');
+    el('plan-view').classList.add('hidden');
+  };
+  el('tab-files').onclick = () => {
+    el('tab-files').classList.add('active');
+    el('tab-sessions').classList.remove('active');
+    el('tab-plan').classList.remove('active');
+    el('files-view').classList.remove('hidden');
+    el('sessions-view').classList.add('hidden');
+    el('plan-view').classList.add('hidden');
+    loadFilesList();
+  };
+  el('tab-plan').onclick = () => {
+    el('tab-plan').classList.add('active');
+    el('tab-sessions').classList.remove('active');
+    el('tab-files').classList.remove('active');
+    el('plan-view').classList.remove('hidden');
+    el('sessions-view').classList.add('hidden');
+    el('files-view').classList.add('hidden');
+  };
+
+  el('new-file-btn').onclick = () => promptCreateFileOrFolder('file');
+  el('new-folder-btn').onclick = () => promptCreateFileOrFolder('folder');
+
+  el('delete-last-msg-btn').onclick = () => deleteLastMessage();
+
   // Task done button
   el('task-done-btn').onclick = () => {
     const editorCode = window.editor ? window.editor.getValue() : '';
@@ -1235,21 +1717,68 @@ function bindEvents() {
 
   const terminalPanel = el('terminal-panel');
   const terminalResizer = el('terminal-resizer');
+  const sidebarResizer = el('sidebar-resizer');
+  const editorResizer = el('editor-resizer');
+  
   let resizingTerminal = false;
+  let resizingSidebar = false;
+  let resizingEditor = false;
+
   terminalResizer.addEventListener('mousedown', (e) => {
     resizingTerminal = true;
     document.body.style.cursor = 'row-resize';
     e.preventDefault();
   });
-  document.addEventListener('mousemove', (e) => {
-    if (!resizingTerminal) return;
-    const nextHeight = Math.min(Math.max(window.innerHeight - e.clientY, 140), 480);
-    document.documentElement.style.setProperty('--terminal-h', `${nextHeight}px`);
-    terminalPanel.style.height = `${nextHeight}px`;
-    if (window.editor) window.editor.layout();
+  sidebarResizer.addEventListener('mousedown', (e) => {
+    resizingSidebar = true;
+    document.body.style.cursor = 'col-resize';
+    e.preventDefault();
   });
+  if (editorResizer) {
+    editorResizer.addEventListener('mousedown', (e) => {
+      resizingEditor = true;
+      document.body.style.cursor = 'col-resize';
+      e.preventDefault();
+    });
+  }
+
+  document.addEventListener('mousemove', (e) => {
+    if (resizingTerminal) {
+      const nextHeight = Math.min(Math.max(window.innerHeight - e.clientY, 140), 480);
+      document.documentElement.style.setProperty('--terminal-h', `${nextHeight}px`);
+      terminalPanel.style.height = `${nextHeight}px`;
+      if (window.editor) window.editor.layout();
+    }
+    if (resizingSidebar) {
+      const nextWidth = Math.min(Math.max(e.clientX, 150), 500);
+      document.documentElement.style.setProperty('--sidebar-w', `${nextWidth}px`);
+      if (window.editor) window.editor.layout();
+    }
+    if (resizingEditor) {
+      const sidebarW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) || 260;
+      const availableW = window.innerWidth - sidebarW;
+      const nextW = Math.min(Math.max(e.clientX - sidebarW, 200), availableW - 300);
+      document.documentElement.style.setProperty('--editor-w', `${nextW}px`);
+      if (window.editor) window.editor.layout();
+    }
+  });
+
   document.addEventListener('mouseup', () => {
-    resizingTerminal = false;
+    if (resizingTerminal) {
+      resizingTerminal = false;
+      appSettings.terminalHeight = terminalPanel.style.height;
+      saveSettings(false);
+    }
+    if (resizingSidebar) {
+      resizingSidebar = false;
+      appSettings.sidebarWidth = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w');
+      saveSettings(false);
+    }
+    if (resizingEditor) {
+      resizingEditor = false;
+      appSettings.editorWidth = getComputedStyle(document.documentElement).getPropertyValue('--editor-w');
+      saveSettings(false);
+    }
     document.body.style.cursor = '';
   });
 

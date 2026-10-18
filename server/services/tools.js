@@ -4,23 +4,30 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     function: {
-      name: 'read_editor',
-      description: 'Liest den aktuellen Code aus dem Editor des Nutzers.',
-      parameters: { type: 'object', properties: {}, required: [] }
+      name: 'read_file',
+      description: 'Liest eine Datei aus dem Workspace des Nutzers.',
+      parameters: { 
+        type: 'object', 
+        properties: {
+          path: { type: 'string', description: 'Pfad zur Datei relativ zum Workspace, z.B. Main.java' }
+        }, 
+        required: ['path'] 
+      }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'write_editor',
-      description: 'Ersetzt den gesamten Code im Editor. Wird mit Diff-Vorschau angezeigt (kleine Änderungen direkt, große mit Bestätigung).',
+      name: 'write_file',
+      description: 'Schreibt oder überschreibt eine Datei im Workspace. Änderungen werden sofort angewendet.',
       parameters: {
         type: 'object',
         properties: {
+          path:   { type: 'string', description: 'Pfad zur Datei, z.B. Main.java' },
           code:   { type: 'string', description: 'Der vollständige neue Code-Inhalt' },
           reason: { type: 'string', description: 'Kurze Erklärung was geändert wurde' }
         },
-        required: ['code', 'reason']
+        required: ['path', 'code', 'reason']
       }
     }
   },
@@ -43,14 +50,14 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     function: {
-      name: 'run_code',
-      description: 'Führt den aktuellen Editor-Code im Terminal aus und gibt stdout/stderr zurück.',
+      name: 'run_terminal_command',
+      description: 'Führt einen Shell-Befehl im Terminal aus und gibt die Ausgabe zurück. Verwende dies zum Kompilieren, Ausführen von Code, oder für Paketmanager.',
       parameters: {
         type: 'object',
         properties: {
-          language: { type: 'string', enum: ['python', 'javascript', 'bash', 'go'] }
+          command: { type: 'string', description: 'Der auszuführende Befehl, z.B. javac Main.java oder node script.js' }
         },
-        required: ['language']
+        required: ['command']
       }
     }
   },
@@ -86,6 +93,48 @@ export const TOOL_DEFINITIONS = [
           taskSucceeded:  { type: 'boolean', description: 'Hat der Nutzer die Aufgabe erfolgreich gelöst?' }
         },
         required: ['feedback']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ask_question',
+      description: 'Stellt dem Nutzer eine interaktive Frage (Multiple-Choice oder Freitext).',
+      parameters: {
+        type: 'object',
+        properties: {
+          question: { type: 'string', description: 'Die Frage an den Nutzer' },
+          type:     { type: 'string', enum: ['multiple-choice', 'text'], description: 'Art der Frage' },
+          options:  { type: 'array', items: { type: 'string' }, description: 'Antwortoptionen (nur bei multiple-choice)' }
+        },
+        required: ['question', 'type']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_learning_plan',
+      description: 'Erstellt oder aktualisiert den Lernplan für die aktuelle Session.',
+      parameters: {
+        type: 'object',
+        properties: {
+          goal:   { type: 'string', description: 'Das übergeordnete Lernziel' },
+          topics: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id:    { type: 'string' },
+                title: { type: 'string' },
+                done:  { type: 'boolean' }
+              },
+              required: ['id', 'title', 'done']
+            }
+          }
+        },
+        required: ['goal', 'topics']
       }
     }
   },

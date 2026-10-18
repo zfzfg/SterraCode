@@ -1,19 +1,48 @@
 // server/routes/chat.js
 import express from 'express';
-import { runTeacher, runTeacherStream, appendAssistantMessage } from '../services/teacher.js';
+import { runTeacher, runTeacherStream, appendAssistantMessage, editUserMessage, deleteLastUserMessage } from '../services/teacher.js';
 import { getSettings, updateSettings } from '../services/storage.js';
 
 const router = express.Router();
 
+// POST /api/chat/edit — edit a message and re-run
+router.post('/edit', async (req, res) => {
+  const { sessionId, messageIndex, newContent, includeEditor = false, editorCode = '', language = 'python' } = req.body;
+  if (!sessionId || messageIndex === undefined || !newContent) {
+    return res.status(400).json({ error: 'Fehlende Parameter' });
+  }
+  try {
+    await editUserMessage({ sessionId, messageIndex, newContent });
+    
+    // Wir rufen runTeacher(Stream) nicht direkt hier auf, sondern lassen den Client /api/chat/stream aufrufen
+    // mit skipPushUserMessage=true, damit das Streaming normal über SSE läuft.
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/chat/last — delete last message
+router.delete('/last', async (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId fehlt' });
+  try {
+    const result = await deleteLastUserMessage({ sessionId });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/chat — standard (non-streaming) chat
 router.post('/', async (req, res) => {
-  const { sessionId, userMessage, includeEditor = false, editorCode = '', language = 'python' } = req.body;
-  if (!sessionId || !userMessage) {
-    return res.status(400).json({ error: 'sessionId und userMessage sind erforderlich.' });
+  const { sessionId, userMessage, includeEditor = false, editorCode = '', language = 'python', skipPushUserMessage = false } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId ist erforderlich.' });
   }
 
   try {
-    const result = await runTeacher({ sessionId, userMessage, includeEditor, editorCode, language });
+    const result = await runTeacher({ sessionId, userMessage, includeEditor, editorCode, language, skipPushUserMessage });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -22,9 +51,9 @@ router.post('/', async (req, res) => {
 
 // POST /api/chat/stream — SSE streaming chat
 router.post('/stream', async (req, res) => {
-  const { sessionId, userMessage, includeEditor = false, editorCode = '', language = 'python' } = req.body;
-  if (!sessionId || !userMessage) {
-    res.status(400).json({ error: 'sessionId und userMessage sind erforderlich.' });
+  const { sessionId, userMessage, includeEditor = false, editorCode = '', language = 'python', skipPushUserMessage = false } = req.body;
+  if (!sessionId) {
+    res.status(400).json({ error: 'sessionId ist erforderlich.' });
     return;
   }
 

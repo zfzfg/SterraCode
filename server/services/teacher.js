@@ -182,7 +182,42 @@ async function buildSystemPrompt(settings, language) {
   return prompt;
 }
 
-// ─── Main Teacher loop (non-streaming) ────────────────────────────────────
+// ─── Teacher loops ─────────────────────────────────────────────────────────
+
+export async function editUserMessage({ sessionId, messageIndex, newContent }) {
+  const session = await loadSession(sessionId);
+  if (messageIndex < 0 || messageIndex >= session.messages.length) throw new Error('Ungültiger Index');
+  if (session.messages[messageIndex].role !== 'user') throw new Error('Nur User-Nachrichten können bearbeitet werden');
+
+  // Truncate history
+  session.messages = session.messages.slice(0, messageIndex + 1);
+  session.messages[messageIndex].content = newContent;
+  session.messages[messageIndex].edited = true;
+
+  await saveSession(sessionId, session);
+  return session;
+}
+
+export async function deleteLastUserMessage({ sessionId }) {
+  const session = await loadSession(sessionId);
+  
+  // Find last user message
+  let lastUserIndex = -1;
+  for (let i = session.messages.length - 1; i >= 0; i--) {
+    if (session.messages[i].role === 'user') {
+      lastUserIndex = i;
+      break;
+    }
+  }
+
+  if (lastUserIndex === -1) throw new Error('Keine Nutzer-Nachricht gefunden');
+
+  const deletedMessages = session.messages.slice(lastUserIndex);
+  session.messages = session.messages.slice(0, lastUserIndex);
+  
+  await saveSession(sessionId, session);
+  return { session, deletedMessages };
+}
 
 /**
  * Processes a user message through the Teacher agent.
@@ -191,16 +226,17 @@ async function buildSystemPrompt(settings, language) {
  * The LM uses read_editor tool when it needs to see the current code.
  * The user can explicitly include the code via includeEditor=true (Ctrl+Shift+Enter).
  */
-export async function runTeacher({ sessionId, userMessage, includeEditor = false, editorCode = '', language = 'python' }) {
+export async function runTeacher({ sessionId, userMessage, includeEditor = false, editorCode = '', language = 'python', skipPushUserMessage = false }) {
   const settings = await getSettings();
   const session  = await loadSession(sessionId);
 
-  // Only attach editor code if user explicitly requested it
-  const messageContent = (includeEditor && editorCode)
-    ? `${userMessage}\n\n[CODE]\n\`\`\`${language}\n${editorCode}\n\`\`\``
-    : userMessage;
+  if (!skipPushUserMessage) {
+    const messageContent = (includeEditor && editorCode)
+      ? `${userMessage}\n\n[CODE]\n\`\`\`${language}\n${editorCode}\n\`\`\``
+      : userMessage;
 
-  session.messages.push({ role: 'user', content: messageContent });
+    session.messages.push({ role: 'user', content: messageContent });
+  }
 
   // Auto-summarize if token threshold reached
   if (shouldSummarize(session.messages, settings.tokenThreshold)) {
@@ -281,15 +317,17 @@ export async function runTeacher({ sessionId, userMessage, includeEditor = false
  * Returns { toolResults, streamResponse } where streamResponse is the raw fetch response.
  * The route handler reads the stream and forwards SSE tokens to the client.
  */
-export async function runTeacherStream({ sessionId, userMessage, includeEditor = false, editorCode = '', language = 'python', onToolCall }) {
+export async function runTeacherStream({ sessionId, userMessage, includeEditor = false, editorCode = '', language = 'python', skipPushUserMessage = false, onToolCall }) {
   const settings = await getSettings();
   const session  = await loadSession(sessionId);
 
-  const messageContent = (includeEditor && editorCode)
-    ? `${userMessage}\n\n[CODE]\n\`\`\`${language}\n${editorCode}\n\`\`\``
-    : userMessage;
+  if (!skipPushUserMessage) {
+    const messageContent = (includeEditor && editorCode)
+      ? `${userMessage}\n\n[CODE]\n\`\`\`${language}\n${editorCode}\n\`\`\``
+      : userMessage;
 
-  session.messages.push({ role: 'user', content: messageContent });
+    session.messages.push({ role: 'user', content: messageContent });
+  }
 
   if (shouldSummarize(session.messages, settings.tokenThreshold)) {
     await summarizeSession(session, settings);

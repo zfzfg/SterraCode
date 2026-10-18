@@ -1,0 +1,35 @@
+2026-06-27 08:43:27  [INFO]
+ [glm-4.7-flash] Running chat completion on conversation with 6 messages.
+2026-06-27 08:43:27  [INFO]
+ [glm-4.7-flash] Streaming response...
+2026-06-27 08:43:27 [DEBUG]
+ LlamaV4::predict slot selection: session_id=<empty> server-selected (LCP/LRU)
+2026-06-27 08:43:27 [DEBUG]
+ 2.37.381.905 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+2.37.381.912 I srv  get_availabl: updating prompt cache
+2.37.381.916 I srv          load:  - looking for better prompt, base f_keep = -1.000, sim = 0.000
+2.37.381.921 I srv          load:  - found better prompt with f_keep = 0.338, sim = 0.571
+2026-06-27 08:43:27 [DEBUG]
+ 2.37.388.307 I srv        update:  - cache state: 0 prompts, 0.000 MiB (limits: 8192.000 MiB, 30208 tokens, 8589934592 est)
+2.37.388.312 I srv  get_availabl: prompt cache update took 6.40 ms
+2.37.388.342 I slot launch_slot_: id  0 | task 3072 | processing task, is_child = 0
+2.37.388.343 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+2026-06-27 08:43:27 [DEBUG]
+ 2.37.388.533 W srv   prompt_save:  - saving prompt with length 3893, total state size = 56.581 MiB (draft: 0.000 MiB)
+2026-06-27 08:43:27 [DEBUG]
+ 2.37.409.192 I srv        update:  - cache state: 1 prompts, 56.581 MiB (limits: 8192.000 MiB, 30208 tokens, 563638 est)
+2.37.409.197 I srv        update:    - prompt 000002EACA268300:    3893 tokens, checkpoints:  0,    56.581 MiB
+2.37.409.198 I slot prompt_clear: id  1 | task -1 | clearing prompt with 3893 tokens
+2026-06-27 08:43:27 [DEBUG]
+ 2.37.409.597 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+2.37.409.601 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+2.37.409.616 I slot process_sing: id  3 | task -1 | saving idle slot to prompt cache
+2.37.409.617 I slot prompt_clear: id  3 | task -1 | clearing prompt with 0 tokens
+2026-06-27 08:43:27 [DEBUG]
+ llm-engine\llama.cpp\ggml\src\ggml-cpu\ops.cpp:321: not implemented
+llm-engine\llama.cpp\ggml\src\ggml-cpu\ops.cpp:321: not implemented
+llm-engine\llama.cpp\ggml\src\ggml-cpu\ops.cpp:321: not implemented
+llm-engine\llama.cpp\ggml\src\ggml-cpu\ops.cpp:321: not implemented
+llm-engine\llama.cpp\ggml\src\ggml-cpu\ops.cpp:321: not implemented
+2026-06-27 08:43:27 [ERROR]
+ [glm-4.7-flash] Model reloaded.. Error Data: n/a, Additional Data: n/a
