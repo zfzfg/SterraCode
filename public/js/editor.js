@@ -180,9 +180,26 @@ export async function openEditorFile(sessionId, file) {
     status();
     return true;
   }
-  const result = await api(
-    `${workspaceURL(sessionId)}/files/content?path=${encodeURIComponent(file)}`,
-  );
+  let result;
+  try {
+    result = await api(
+      `${workspaceURL(sessionId)}/files/content?path=${encodeURIComponent(file)}`,
+    );
+  } catch (error) {
+    if (error.code !== "TEXT_REQUIRED") throw error;
+    if (state.session?.id !== sessionId || request !== navigationVersion)
+      return false;
+    const name = file.split("/").pop();
+    const isJavaClass = /\.class$/i.test(file);
+    await formDialog({
+      title: isJavaClass ? "Kompilierte Java-Datei" : "Keine Textdatei",
+      description: isJavaClass
+        ? `„${name}“ enthält Java-Bytecode, den der Compiler aus einer .java-Datei erzeugt hat. Bearbeite die zugehörige .java-Datei und führe deinen Code anschließend erneut aus. Die .class-Datei wird dabei neu erzeugt. Deine aktuell geöffnete Datei bleibt erhalten.`
+        : `„${name}“ ist eine Binärdatei oder verwendet eine andere Textkodierung als UTF-8. Sie kann hier nicht als Quelltext bearbeitet werden. Deine aktuell geöffnete Datei bleibt erhalten.`,
+      submit: "Verstanden",
+    });
+    return false;
+  }
   if (state.session?.id !== sessionId || request !== navigationVersion)
     return false;
   const key = `${sessionId}:${file}`;
