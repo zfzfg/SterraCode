@@ -607,7 +607,11 @@ export class ProgramManager {
         await this.run("dpkg", ["--configure", "-a"], job);
         await this.apt(["--fix-broken", "install"], job);
       }
-      if (job.action === "remove") await this.remove(program, job);
+      const removing =
+        job.action === "remove" ||
+        (job.action === "repair" &&
+          this.manifest.desired[program.id] === false);
+      if (removing) await this.remove(program, job);
       else {
         const existing = this.manifest.desired[program.id]
           ? this.manifest.installed[program.id]
@@ -620,7 +624,7 @@ export class ProgramManager {
         await this.save();
       }
       job.state = "succeeded";
-      if (job.action === "remove" && job.clearCache) await this.cleanCache();
+      if (removing && job.clearCache) await this.cleanCache();
       job.progress = "Fertig.";
       this.jobs.initializationError = null;
       this.jobs.state = "ready";

@@ -95,6 +95,19 @@ const job = () => ({
 });
 
 describe("Paketmanifest und Wiederherstellung", () => {
+  it("behält beim Reparieren einer unterbrochenen Deinstallation den Entfernungswunsch bei", async () => {
+    manager.manifest.desired.python = false;
+    manager.manifest.installed.python = record();
+    vi.mocked(runtimes).mockResolvedValue([]);
+    vi.spyOn(manager, "apt").mockResolvedValue("");
+    const install = vi.spyOn(manager, "install");
+    const operation = { ...job(), action: "repair", state: "queued" };
+    await manager.process(operation, python);
+    expect(operation.state).toBe("succeeded");
+    expect(manager.manifest.desired.python).toBe(false);
+    expect(manager.manifest.installed.python).toBeUndefined();
+    expect(install).not.toHaveBeenCalled();
+  });
   it("gibt nach einem Paketfehler Ausführungen durch Wartungsende nicht frei", async () => {
     vi.spyOn(manager, "install").mockRejectedValue(
       Object.assign(new Error("Download unterbrochen"), {
