@@ -46,6 +46,20 @@ Die vom Benutzer ausdrücklich angegebene LM-Studio-Adresse und das Modell wurde
 
 Vom Windows-Entwicklungsrechner als zweitem LAN-Gerät lieferten die echte Seite und `/api/health` HTTP 200; nicht angemeldete Sessionabfragen wurden mit 401 abgewiesen. Die Instanz wartet geschützt auf die erste Administrator-Passwortvergabe. Einrichtungsschlüssel und Passwörter stehen nicht in diesem Bericht. Alle temporären `sterra-smoke-*`- und `sterra-proxy-*`-Container/Volumes wurden gezielt entfernt; die dauerhafte Instanz und die vorhandenen produktiven Hostdienste blieben erhalten.
 
+## Update vom 19.10.2026: Java 25 und Installationsanzeige
+
+- Katalog `2026.10.19.1`: Java-Auswahl auf **Java JDK 25** umgestellt. Signiertes Microsoft-Debian-Paket `msopenjdk-25`, Version `25.0.3-1`, SHA-256 `b5ca5dcd04d3d190b6d22c585fe24060d24b26c7ae9bd461390a1212ac51d174`, direkt mit dem offiziellen Paketindex abgeglichen. Bestehendes Java 17 erhält eine ausdrückliche Aktualisierungsaktion; exakte Wiederherstellung älterer Manifeste bleibt erhalten.
+- Auf der dauerhaften Ubuntu-Instanz wurde Java 17 tatsächlich durch Java 25 ersetzt. Die sechs Installationsschritte wurden über die echte Runner-API beobachtet. `javac --release 25 Main.java && java Main` lieferte `JAVA25_OK:25`. Container-Neuerstellung stellte Java 25 wieder her; der abschließende Runner war `ready` mit `javac 25.0.3`.
+- Der Programmdialog zeigt einen sichtbaren Fortschrittsbalken nach Arbeitsschritten, die aktuelle Phase und aufklappbare Live-Ausgabe. Das Ergebnis bleibt nach Abschluss sichtbar. Zwei neue Browsertests prüfen Fortschrittswechsel, offene Details, Abschluss und den Chat ohne natives `crypto.randomUUID`.
+- Der im Screenshot gemeldete Chatfehler bei LAN-HTTP wurde durch einen UUID-v4-Helfer mit `crypto.getRandomValues` behoben, auch beim Wiederherstellen von Lernplaneinträgen. Ein echter Chromium-Aufruf von `http://192.168.178.104:3000` bestätigte `isSecureContext=false`, fehlendes natives `randomUUID` und erfolgreich erzeugte UUIDs über den Helfer.
+- Abschließende lokale Suite: **25 Dateien, 427 bestanden, 5 übersprungen**. Vollständige Playwright-Suite: **18/18 bestanden**. Die beiden neuen Browsertests wurden nach der letzten Anpassung zusätzlich erfolgreich wiederholt; Formatprüfung und `git diff --check` bestanden.
+- Vor dem Update wurde mit dem regulären Helfer eine konsistente Sicherung unter `/home/zfzfg/sterracode-test/backups/pre-java25-20261019-0053` erstellt. Administratorzugang, Sessions und Einstellungen wurden erhalten. Abschließende App- und Runner-Healthchecks waren erfolgreich.
+
+Die folgenden Imageidentitäten ersetzen die oben dokumentierten Identitäten der ersten Bereitstellung. Der zugehörige Commit steht auf dem Server in `SOURCE_COMMIT`:
+
+- App: `sha256:adada4e823ad04e158265768845022a01bab17b88cf23dacbf901f3372942a1c`
+- Runner: `sha256:8c44baf9d58a928a690625bbf2c99a13a378b6a9a89c00ce82bd41bebad9c14d`
+
 ## Verbleibende Umgebungsnachweise
 
 Der vollständige Ubuntu-Katalog-/Restore-/Import-Smoke ist erfolgreich abgeschlossen. Frühere Abbrüche deckten neben Testabläufen zwei echte Probleme auf: der Herstellerdownload hielt eine Streamreferenz beim Schließen der Datei fest, und .NET benötigte ein unprivilegiertes `XDG_RUNTIME_DIR` für seine NuGet-Mutexe. Beides wurde korrigiert und anschließend durch echte Go-/Rust-Downloads sowie .NET-Builds bestätigt. Frühere Teilabbrüche werden nicht als vollständige Abnahme gezählt.
