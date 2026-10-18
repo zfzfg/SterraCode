@@ -51,12 +51,12 @@ Der optionale Installerschalter `--firewall` / `-Firewall` fragt vor einer Regel
 
 `.env.example` enthält ausschließlich nicht geheime Werte. Passwörter, Einrichtungsschlüssel und LM-Studio-Token gehören nicht in `.env`. Das Compose-Basisdokument veröffentlicht keinen Port. Die Startskripte wählen genau eine Ergänzung:
 
-| `STERRACODE_PROXY_MODE` | Ergänzung | Portfreigabe |
-| --- | --- | --- |
-| `off` | `compose.lan.yaml` | Gewählte IPv4 und Hostport |
-| `caddy` | `compose.caddy.yaml` | Nur Caddy auf 80/443 |
-| `host` | `compose.host-proxy.yaml` | App ausschließlich 127.0.0.1 |
-| `docker` | `compose.docker-proxy.yaml` | App nur am konfigurierten externen Proxynetz |
+| `STERRACODE_PROXY_MODE` | Ergänzung                   | Portfreigabe                                 |
+| ----------------------- | --------------------------- | -------------------------------------------- |
+| `off`                   | `compose.lan.yaml`          | Gewählte IPv4 und Hostport                   |
+| `caddy`                 | `compose.caddy.yaml`        | Nur Caddy auf 80/443                         |
+| `host`                  | `compose.host-proxy.yaml`   | App ausschließlich 127.0.0.1                 |
+| `docker`                | `compose.docker-proxy.yaml` | App nur am konfigurierten externen Proxynetz |
 
 Direkter LAN-Aufruf:
 
@@ -73,11 +73,11 @@ Ein bestehender Proxy muss 4 MiB JSON, DELETE mit JSON-Körper und Ausführungen
 
 ## LM Studio
 
-| Standort | URL aus dem App-Container |
-| --- | --- |
-| Docker-Host | `http://host.docker.internal:1234` |
+| Standort          | URL aus dem App-Container                                   |
+| ----------------- | ----------------------------------------------------------- |
+| Docker-Host       | `http://host.docker.internal:1234`                          |
 | Anderes LAN-Gerät | Dessen tatsächliche IPv4, etwa `http://192.168.178.20:1234` |
-| HTTPS-Proxy | Etwa `https://llm.example.org` |
+| HTTPS-Proxy       | Etwa `https://llm.example.org`                              |
 
 Compose ergänzt unter Linux `host.docker.internal:host-gateway`. LM Studio muss auf einer aus dem Container erreichbaren Adresse lauschen. `localhost` bezeichnet die App selbst. Importierte lokale Adressen werden gemeldet und erhalten. Die Diagnose prüft das native SDK, Modellzugriff und Tokenisierung; `/v1/models` allein belegt den SDK-WebSocketzugriff nicht. SDK 2.1.0 ist im Dependencylock festgeschrieben.
 
@@ -89,7 +89,7 @@ Unter Einstellungen → Programme werden Java JDK, Python, Go, Rust/Cargo, C/C++
 
 Paketänderungen sperren neue Starts. Laufende Aufträge dürfen auslaufen oder werden nach ausdrücklicher Auswahl gestoppt. Wiederherstellung nach Containerneuerstellung nutzt exakte Versionen und geprüften Paketcache; fehlende Pakete oder beschädigte Downloads zeigen einen reparierbaren Fehler. Fehlerzustände werden nicht als erfolgreiche Installation angezeigt. Die Oberfläche bleibt währenddessen für Datei- und Sessionarbeit erreichbar.
 
-Die App ist eine Instanz mit 1 GiB RAM und 128 Prozessen; der Runner hat 2 GiB und 256 Prozesse. Bis zu vier aktive Ausführungen, höchstens eine je Session und zwei Kompilierungen gleichzeitig. Limits stehen in `compose.yaml`. App ist UID/GID 10001, Nutzerprogramme UID 10002/GID 10001 ohne Zusatzgruppen. Gemeinsam beschreibbare Workspaces haben Setgid und Umask 002. Steuerdateien, Journal und Runner-Schlüssel sind rootgeschützt; App-Daten sind nicht im Runner gemountet. Der Runner hat keinen veröffentlichten Port. Docker-Socket und Hostsystemverzeichnisse werden nicht gemountet.
+Die App ist eine Instanz mit 1 GiB RAM und 128 Prozessen; der Runner hat 2 GiB und 256 Prozesse. `memswap_limit` entspricht jeweils `mem_limit`, damit die Container keinen zusätzlichen Hostswap belegen. Bis zu vier aktive Ausführungen, höchstens eine je Session und zwei Kompilierungen gleichzeitig. Limits stehen in `compose.yaml`. App ist UID/GID 10001, Nutzerprogramme UID 10002/GID 10001 ohne Zusatzgruppen. Gemeinsam beschreibbare Workspaces haben Setgid und Umask 002. Steuerdateien, Journal und Runner-Schlüssel sind rootgeschützt; App-Daten sind nicht im Runner gemountet. Der Runner hat keinen veröffentlichten Port. Docker-Socket und Hostsystemverzeichnisse werden nicht gemountet.
 
 ## Import bestehender Daten
 
@@ -169,6 +169,8 @@ Unter Einstellungen kann zwischen LM Studio und der direkten OpenAI API gewechse
 Für OpenAI einen API-Schlüssel über den eigenen Zugangsdialog speichern und eine ausdrücklich gewünschte Modell-ID auswählen oder eintragen. Der Schlüssel wird serverseitig in `provider-secrets.json` auf dem privaten App-Volume mit Dateimodus `0600` gespeichert. Die allgemeine Settings-API und die Zugangsdaten-Metadaten liefern ihn nicht zurück. Er wird nicht in Browser-Localstorage, `.env`, Runner oder Compose-Umgebung geschrieben. App-Backups enthalten den gespeicherten Schlüssel und müssen entsprechend geschützt werden. Löschen im Zugangsdialog entfernt den gespeicherten Schlüssel.
 
 Als Alternative kann eine Secret-Datei verwendet werden: `.env` enthält nur `STERRACODE_OPENAI_API_KEY_PATH=/absoluter/host/pfad/openai-key`; die Startskripte ergänzen `compose.openai-secret.yaml` und mounten die Datei nur in der App. Intern liest die App `STERRACODE_OPENAI_API_KEY_FILE`. Diese Vorgabe hat Vorrang vor dem gespeicherten Schlüssel und ist in der Oberfläche schreibgeschützt. Externe Secret-Dateien werden separat gesichert.
+
+Bei Linux-Bindmounts müssen Dateirechte beziehungsweise ACLs dem App-Benutzer mit Container-UID `10001` das Lesen erlauben. Eine Hostdatei mit Modus `0600`, die einer anderen UID gehört, ist für die App normalerweise nicht lesbar. Das gilt ebenso für LM-Studio-Token und das optionale initiale Administratorpasswort. Unter Windows wird der Zugriff auf die Hostdatei durch die Host-ACL geschützt.
 
 OpenAI-Anfragen gehen ausschließlich an `https://api.openai.com/v1`; die LM-Studio-URL kann dieses Ziel nicht verändern. Die Anbindung verwendet die Responses API mit Funktionswerkzeugen, Streaming und `store: false`. Auch automatische Kontextzusammenfassungen nutzen den ausgewählten Anbieter. Chat und Zusammenfassungen können deshalb API-Kosten verursachen. Der Verbindungstest lädt nur die Modellliste und prüft die Eingabe-Tokenzählung; er erzeugt keine Modellantwort. Ein realer kostenpflichtiger OpenAI-Schlüssel wurde für die Entwicklungstests nicht verwendet.
 
