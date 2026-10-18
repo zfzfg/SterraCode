@@ -2,8 +2,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
+import { httpFixtureFactory } from "../helpers/lmStudio.js";
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "sterracode-e2e-"));
 process.env.STERRACODE_DATA_DIR = root;
+const { setLMStudioClientFactory } =
+  await import("../../server/services/lmStudio.js");
 const { ensureDataDirs, updateSettings } =
   await import("../../server/services/storage.js");
 const { createApp } = await import("../../server/app.js");
@@ -18,6 +21,25 @@ const mock = http.createServer(async (req, res) => {
   const body = JSON.parse(raw);
   const last = body.messages.at(-1),
     user = body.messages.findLast((m) => m.role === "user")?.content || "";
+  if (!body.tools?.length && user.includes("COMPRESS_SLOW")) {
+    const timer = setTimeout(() => {
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: "Zusammengefasster Lernstand.",
+              },
+            },
+          ],
+        }),
+      );
+    }, 8000);
+    res.on("close", () => clearTimeout(timer));
+    return;
+  }
   let response = {
     content:
       "Wir lernen Schritt für Schritt. Was möchtest du als Nächstes ausprobieren?",
@@ -125,6 +147,7 @@ const mock = http.createServer(async (req, res) => {
 });
 await new Promise((r) => mock.listen(0, "127.0.0.1", r));
 await ensureDataDirs();
+setLMStudioClientFactory(httpFixtureFactory({ probe: true }));
 await updateSettings({
   lmStudioUrl: `http://127.0.0.1:${mock.address().port}`,
   activeModel: "Lokaler Test-Tutor",

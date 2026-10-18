@@ -1,15 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { AppError, getSettings, validateSessionId } from "./storage.js";
 import { loadSession, mutateSession, message } from "./sessions.js";
-import { callLMStudio, completionStream } from "./lmStudio.js";
+import { connectModel, runModelPass } from "./lmStudio.js";
+import { setTimeout as delay } from "node:timers/promises";
 import { TOOL_DEFINITIONS } from "./tools.js";
 import { executeTool } from "./toolExecutor.js";
-import {
-  estimateTokens,
-  shouldSummarize,
-  summarizeSession,
-  contextHistory,
-} from "./summarizer.js";
+import { ContextManager, estimatedUsage } from "./context/index.js";
+import { contextCommand } from "./context/settings.js";
+import { isTransientEngineError } from "./context/core/retry.js";
 import { getProfile, profileToPromptText } from "./profileManager.js";
 
 const active = new Map();
@@ -56,6 +54,7 @@ export async function answerQuestion(sessionId, questionId, answer) {
 export async function runTeacher({
   sessionId,
   userMessage = "",
+  contextAction,
   turnId = randomUUID(),
   existingUserMessageId,
   retryOf,
@@ -67,6 +66,22 @@ export async function runTeacher({
   validateSessionId(turnId);
   if (typeof userMessage !== "string" || userMessage.length > 50000)
     throw new AppError("Ungültige Nachricht.");
+  if (
+    contextAction !== undefined &&
+    !["compact", "usage"].includes(contextAction)
+  )
+    throw new AppError("Ungültige Kontextaktion.");
+  const action =
+    contextAction ||
+    (!existingUserMessageId && !retryOf ? contextCommand(userMessage) : null);
+  if (
+    action &&
+    (!["compact", "usage"].includes(action) ||
+      existingUserMessageId ||
+      retryOf ||
+      (userMessage.trim() && !contextCommand(userMessage)))
+  )
+    throw new AppError("Ungültige Kontextaktion.");
   if (active.has(sessionId))
     throw new AppError(
       "Für diese Session läuft bereits eine Antwort.",
@@ -75,35 +90,83 @@ export async function runTeacher({
     );
   const controller = new AbortController();
   active.set(sessionId, controller);
-  const abort = () => controller.abort();
+  const abort = () => controller.abort(signal?.reason);
   signal?.addEventListener("abort", abort, { once: true });
   if (signal?.aborted) abort();
   let started = false,
     fullText = "",
     thinking = "",
-    toolCount = 0;
+    assistantSaved = false,
+    toolCount = 0,
+    manager,
+    settings,
+    usage;
+  const reports = [];
   const emit = (event, data) => {
+    if (event === "context-report") reports.push(data);
     onEvent(event, data);
+  };
+  const flushReports = async () => {
+    if (!reports.length) return;
+    const pending = reports.splice(0);
+    const saved = pending.map((event) =>
+      message("event", "", { turnId, event }),
+    );
+    await mutateSession(sessionId, (s) => s.messages.push(...saved));
+    for (const m of saved) emit("message", m);
+  };
+  const completeMissing = async () => {
+    return mutateSession(sessionId, (s) => {
+      const answered = new Set(
+        s.messages.filter((m) => m.role === "tool").map((m) => m.tool_call_id),
+      );
+      const missing = [];
+      for (const m of s.messages)
+        for (const call of m.tool_calls || []) {
+          if (answered.has(call.id)) continue;
+          const began =
+            s.turns?.[m.turnId]?.toolExecutions?.[call.id] === "started";
+          missing.push(
+            message(
+              "tool",
+              JSON.stringify({
+                type: "tool_error",
+                tool: call.function.name,
+                code: began ? "TOOL_RESULT_UNKNOWN" : "TOOL_NOT_EXECUTED",
+                originalCall: call,
+                error: began
+                  ? "Die Ausführung wurde unterbrochen; ihr Ergebnis ist unbekannt. Aktuellen Datei-/Prozesszustand prüfen, den Aufruf nicht automatisch wiederholen."
+                  : "Dieser Werkzeugaufruf wurde vor der Ausführung abgebrochen.",
+              }),
+              { tool_call_id: call.id, turnId: m.turnId },
+            ),
+          );
+          answered.add(call.id);
+        }
+      s.messages.push(...missing);
+    });
   };
   try {
     let session = await loadSession(sessionId);
-    if (session.turns?.[turnId]) {
-      const turn = session.turns[turnId];
+    settings = await getSettings();
+    if (session.turns?.[turnId])
       return {
         session,
-        turn,
-        tokenCount: estimateTokens(contextHistory(session)),
+        turn: session.turns[turnId],
+        contextUsage: session.contextUsage || estimatedUsage(session, settings),
+        tokenCount:
+          session.contextUsage?.promptTokens ??
+          estimatedUsage(session, settings).promptTokens,
         replayed: true,
       };
-    }
-    const settings = await getSettings();
-    if (!settings.activeModel)
+    if (!action && !settings.activeModel)
       throw new AppError(
         "Bitte in LM Studio ein Modell laden und auswählen.",
         400,
         "NO_MODEL",
       );
     session = await mutateSession(sessionId, (s) => {
+      s.turns ||= {};
       if (retryOf) {
         const previous = s.turns[retryOf];
         if (
@@ -111,7 +174,6 @@ export async function runTeacher({
           !["error", "aborted", "running"].includes(previous.status)
         )
           throw new AppError("Diese Antwort kann nicht fortgesetzt werden.");
-        // No controller existed before this request: a persisted running turn was interrupted by a server restart.
         if (previous.status === "running") {
           previous.status = "aborted";
           previous.error = "Die vorherige Serververbindung wurde unterbrochen.";
@@ -123,7 +185,7 @@ export async function runTeacher({
         if (!m || m.turnId)
           throw new AppError("Antwort bereits verarbeitet.", 409);
         m.turnId = turnId;
-      } else {
+      } else if (!action) {
         if (!userMessage.trim())
           throw new AppError("Eine Nachricht ist erforderlich.");
         s.messages.push(message("user", userMessage.trim(), { turnId }));
@@ -133,224 +195,316 @@ export async function runTeacher({
         status: "running",
         startedAt: new Date().toISOString(),
         retryOf: retryOf || null,
+        contextAction: action || null,
+        toolExecutions: {},
       };
     });
     started = true;
-    if (shouldSummarize(contextHistory(session), settings.tokenThreshold)) {
-      try {
-        const summary = await summarizeSession(
-          session,
-          settings,
-          controller.signal,
-        );
-        if (summary?.text)
-          session = await mutateSession(sessionId, (s) => {
-            s.summaries.push(summary);
-          });
-      } catch (error) {
-        if (controller.signal.aborted) throw error;
-        emit("notice", {
-          message:
-            "Kontextzusammenfassung fehlgeschlagen. Der vollständige Verlauf bleibt erhalten.",
-        });
-      }
-    }
-    let prompt = `${settings.systemPrompt}\nAktuelle Sprache: ${session.language}. Aktive Datei: ${session.activeFile || "keine"}.\nLernplan: ${JSON.stringify(session.learningPlan)}\nAufgabe: ${JSON.stringify(session.currentTask)}`;
-    if (settings.crossChatProfileEnabled)
-      prompt += profileToPromptText(await getProfile(), session.language);
-    const messages = [
-      { role: "system", content: prompt },
-      ...contextHistory(session),
-    ];
-    if (retryOf)
-      messages.push({
-        role: "system",
-        content:
-          "Setze die abgebrochene Antwort fort. Bereits gespeicherte Tool-Ergebnisse sind wirksam. Wiederhole diese Dateiänderungen und Befehle nicht.",
+    session = await completeMissing();
+    let connection;
+    try {
+      connection = await connectModel(settings, controller.signal);
+      manager = new ContextManager({
+        connection,
+        settings,
+        sessionId,
+        signal: controller.signal,
+        onEvent: emit,
       });
-    const callResults = new Map();
-    const context = {
-      sessionId,
-      turnId,
-      language: session.language,
-      learningPlan: session.learningPlan,
-      signal: controller.signal,
-      onProcess: (job) => emit("process", job),
-    };
-    while (true) {
-      controller.signal.throwIfAborted();
-      fullText = "";
-      thinking = "";
-      const response = stream
-        ? await completionStream({
-            messages,
-            tools: TOOL_DEFINITIONS,
-            model: settings.activeModel,
-            ...settings,
+      await manager.initialize();
+    } catch (error) {
+      if (action !== "usage" || controller.signal.aborted) throw error;
+      usage = estimatedUsage(session, settings, error.message);
+    }
+    const definitions =
+      connection?.model.trainedForToolUse === false ? [] : TOOL_DEFINITIONS;
+    if (connection?.model.trainedForToolUse === false && !action)
+      emit("notice", {
+        message:
+          "Dieses Modell unterstützt keine Werkzeuge. Datei- und Terminalaktionen stehen dem Tutor damit nicht zur Verfügung.",
+      });
+    const profile = settings.crossChatProfileEnabled
+      ? profileToPromptText(await getProfile(), session.language)
+      : "";
+    if (action) {
+      if (manager && !usage) {
+        try {
+          const prepared = await manager.prepare(session, definitions, {
+            force: action === "compact",
+            diagnostics: action === "usage",
+            profile,
+          });
+          usage = prepared.contextUsage;
+        } catch (error) {
+          if (action !== "usage" || controller.signal.aborted) throw error;
+          usage = estimatedUsage(session, settings, error.message);
+        }
+      }
+      if (action === "usage")
+        emit("context-report", { type: "context_usage", contextUsage: usage });
+      emit("context-usage", usage);
+      await flushReports();
+    } else {
+      const callResults = new Map();
+      const usedCallIds = new Set(
+        session.messages.flatMap((m) => (m.tool_calls || []).map((c) => c.id)),
+      );
+      const allocateCallId = () => {
+        let id;
+        do {
+          id = randomUUID().replaceAll("-", "").slice(0, 9);
+        } while (usedCallIds.has(id));
+        usedCallIds.add(id);
+        return id;
+      };
+      for (const m of session.messages)
+        if (m.role === "tool" && m.turnId === turnId)
+          callResults.set(m.tool_call_id, m);
+      let force = false,
+        retries = 0;
+      const context = {
+        sessionId,
+        turnId,
+        language: session.language,
+        learningPlan: session.learningPlan,
+        signal: controller.signal,
+        onProcess: (job) => emit("process", job),
+        requestCompaction: () => {
+          force = true;
+        },
+        getContextUsage: () => manager.usage,
+        readToolResult: async (messageId, offset) =>
+          manager.readResult(await loadSession(sessionId), messageId, offset),
+      };
+      while (true) {
+        controller.signal.throwIfAborted();
+        session = await loadSession(sessionId);
+        const prepared = await manager.prepare(session, definitions, {
+          force,
+          profile,
+          retry: !!retryOf,
+        });
+        force = false;
+        usage = prepared.contextUsage;
+        await flushReports();
+        fullText = "";
+        thinking = "";
+        assistantSaved = false;
+        const limiter = manager.newLimiter();
+        let result;
+        try {
+          result = await runModelPass({
+            allocateCallId,
+            model: manager.model,
+            chat: prepared.chat,
+            definitions,
+            maxTokens: prepared.maxTokens,
+            temperature: settings.temperature,
             signal: controller.signal,
             onToken: (token) => {
               fullText += token;
-              emit("token", { token, turnId });
+              if (stream) emit("token", { token, turnId });
             },
             onReasoning: (token) => {
               thinking += token;
-              emit("reasoning", { token, turnId });
+              if (stream) emit("reasoning", { token, turnId });
             },
-          })
-        : await callLMStudio({
-            messages,
-            tools: TOOL_DEFINITIONS,
-            model: settings.activeModel,
-            ...settings,
-            signal: controller.signal,
-          }).then((r) => r.choices?.[0]?.message);
-      if (!response)
-        throw new AppError("Das Modell hat keine Antwort geliefert.", 502);
-      if (!stream && response.content) {
-        fullText += response.content;
-        emit("token", { token: response.content, turnId });
-      }
-      if (response.tool_calls && !Array.isArray(response.tool_calls))
-        throw new AppError("Ungültige Werkzeugantwort des Modells.", 502);
-      const calls = response.tool_calls || [];
-      if (
-        calls.some(
-          (c) =>
-            typeof c.id !== "string" ||
-            !c.id ||
-            typeof c.function?.name !== "string" ||
-            typeof c.function?.arguments !== "string",
-        )
-      )
-        throw new AppError("Unvollständiger Werkzeugaufruf des Modells.", 502);
-      if (!calls.length) {
-        const assistant = message("assistant", response.content || "", {
-          turnId,
-          thinking,
-        });
-        session = await mutateSession(sessionId, (s) => {
-          s.messages.push(assistant);
-          s.turns[turnId].status = "done";
-          s.turns[turnId].completedAt = new Date().toISOString();
-        });
-        emit("message", assistant);
-        break;
-      }
-      const assistant = message("assistant", response.content || "", {
-        turnId,
-        tool_calls: calls,
-      });
-      await mutateSession(sessionId, (s) => {
-        s.messages.push(assistant);
-      });
-      messages.push({
-        role: "assistant",
-        content: response.content || "",
-        tool_calls: calls,
-      });
-      let compacted = false;
-      for (const call of calls) {
-        let result;
-        if (callResults.has(call.id)) result = callResults.get(call.id);
-        else if (toolCount++ >= settings.maxToolCallsPerTurn)
-          result = {
-            type: "tool_error",
-            tool: call.function.name,
-            error: "Tool-Limit erreicht.",
-          };
-        else if (controller.signal.aborted)
-          result = {
-            type: "tool_error",
-            tool: call.function.name,
-            error: "Abgebrochen.",
-          };
-        else {
-          emit("tool", { tool: call.function.name, turnId });
-          try {
-            result = await executeTool(
-              call.function.name,
-              JSON.parse(call.function.arguments || "{}"),
-              context,
+            onAssistant: async (response) => {
+              const m = message("assistant", response.content || "", {
+                turnId,
+                thinking: response.thinking || thinking,
+                ...(response.tool_calls.length
+                  ? { tool_calls: response.tool_calls }
+                  : {}),
+              });
+              await mutateSession(sessionId, (s) => s.messages.push(m));
+              assistantSaved = true;
+              if (!stream && m.content)
+                emit("token", { token: m.content, turnId });
+              emit("message", m);
+            },
+            onExecute: async (call, args, executionSignal) => {
+              if (callResults.has(call.id)) return callResults.get(call.id);
+              let value;
+              if (toolCount++ >= settings.maxToolCallsPerTurn)
+                value = {
+                  type: "tool_error",
+                  tool: call.function.name,
+                  error: "Tool-Limit erreicht.",
+                };
+              else {
+                controller.signal.throwIfAborted();
+                await mutateSession(sessionId, (s) => {
+                  s.turns[turnId].toolExecutions[call.id] = "started";
+                });
+                emit("tool", { tool: call.function.name, turnId });
+                value = await executeTool(call.function.name, args, {
+                  ...context,
+                  signal: executionSignal,
+                });
+                if (value.type === "update_learning_plan")
+                  context.learningPlan = {
+                    goal: value.goal,
+                    topics: value.topics,
+                  };
+              }
+              const m = message("tool", JSON.stringify(value), {
+                tool_call_id: call.id,
+                turnId,
+              });
+              await mutateSession(sessionId, (s) => {
+                s.messages.push(m);
+                s.turns[turnId].toolExecutions[call.id] = "completed";
+              });
+              callResults.set(call.id, m);
+              emit("message", m);
+              return m;
+            },
+            onInvalid: async (event, call) => {
+              if (call) toolCount++;
+              const m = call
+                ? message("tool", JSON.stringify(event), {
+                    turnId,
+                    tool_call_id: call.id,
+                  })
+                : message("event", "", { turnId, event });
+              await mutateSession(sessionId, (s) => s.messages.push(m));
+              emit("message", m);
+              if (call) callResults.set(call.id, m);
+            },
+            capResult: (content, id) => limiter.cap(content, id),
+          });
+        } catch (error) {
+          const stats = error.passStats;
+          if (
+            !controller.signal.aborted &&
+            !assistantSaved &&
+            stats?.visibleChars === 0 &&
+            stats.executedTools === 0 &&
+            retries < 3 &&
+            isTransientEngineError(error)
+          ) {
+            const wait = [1000, 5000, 15000][retries++];
+            emit("notice", {
+              message: `LM Studio wurde unterbrochen. Neuer Versuch in ${wait / 1000} Sekunden (${retries}/3) …`,
+            });
+            await delay(wait, undefined, { signal: controller.signal });
+            await manager.replaceConnection(
+              await connectModel(settings, controller.signal),
             );
-          } catch (error) {
-            result = {
-              type: "tool_error",
-              tool: call.function.name,
-              error: `Ungültiger Tool-Aufruf: ${error.message}`,
-            };
+            continue;
           }
+          throw error;
         }
-        callResults.set(call.id, result);
-        compacted ||=
-          result.type === "trigger_summarize" && result.status === "completed";
-        const m = message("tool", JSON.stringify(result), {
-          tool_call_id: call.id,
-          turnId,
-        });
-        await mutateSession(sessionId, (s) => {
-          s.messages.push(m);
-        });
-        messages.push({
-          role: "tool",
-          tool_call_id: call.id,
-          content: m.content,
-        });
-        emit("message", m);
+        controller.signal.throwIfAborted();
+        if (result.invalidUnparsed)
+          throw new AppError(
+            "Das Modell hat einen unlesbaren Werkzeugaufruf geliefert. Bitte mit einem werkzeugfähigen Modell fortsetzen.",
+            502,
+            "INVALID_TOOL_REQUEST",
+          );
+        if (!result.capped) {
+          if (
+            ["contextLengthReached", "maxPredictedTokensReached"].includes(
+              result.stopReason,
+            )
+          )
+            throw new AppError(
+              "Das Modell hat sein Antwortlimit erreicht. Die Teilantwort ist gespeichert; du kannst sie fortsetzen.",
+              400,
+              "RESPONSE_LIMIT",
+            );
+          if (result.empty)
+            throw new AppError(
+              "Das Modell hat keine sichtbare Antwort geliefert. Bitte erneut senden oder ein anderes Modell auswählen.",
+              502,
+              "EMPTY_RESPONSE",
+            );
+          break;
+        }
+        if (toolCount >= settings.maxToolCallsPerTurn) {
+          const m = message(
+            "assistant",
+            "Das Tool-Limit wurde erreicht. Die ausgeführten Schritte sind gespeichert. Du kannst die Arbeit mit einer weiteren Nachricht fortsetzen.",
+            { turnId },
+          );
+          await mutateSession(sessionId, (s) => s.messages.push(m));
+          emit("message", m);
+          break;
+        }
       }
-      if (compacted)
-        messages.splice(
-          1,
-          messages.length - 1,
-          ...contextHistory(await loadSession(sessionId)),
-        );
-      if (toolCount >= settings.maxToolCallsPerTurn) {
-        const m = message(
-          "assistant",
-          "Das Tool-Limit wurde erreicht. Die ausgeführten Schritte sind gespeichert. Du kannst die Arbeit mit einer weiteren Nachricht fortsetzen.",
-          { turnId },
-        );
-        session = await mutateSession(sessionId, (s) => {
-          s.messages.push(m);
-          s.turns[turnId].status = "done";
-        });
-        emit("message", m);
-        break;
+      session = await loadSession(sessionId);
+      try {
+        usage = (
+          await manager.prepare(session, definitions, {
+            diagnostics: true,
+            profile,
+          })
+        ).contextUsage;
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        usage = estimatedUsage(session, settings, error.message);
+        emit("context-usage", usage);
       }
     }
+    session = await mutateSession(sessionId, (s) => {
+      s.turns[turnId].status = "done";
+      s.turns[turnId].completedAt = new Date().toISOString();
+      s.contextUsage = usage;
+      s.turns[turnId].contextUsage = usage;
+    });
     return {
       session,
       turn: session.turns[turnId],
-      tokenCount: estimateTokens(contextHistory(session)),
+      contextUsage: usage,
+      tokenCount: usage.promptTokens,
     };
   } catch (error) {
+    if (!started) throw error;
     const aborted = controller.signal.aborted;
-    if (started) {
-      const session = await mutateSession(sessionId, (s) => {
-        s.turns[turnId].status = aborted ? "aborted" : "error";
-        s.turns[turnId].error = aborted
-          ? "Antwort abgebrochen."
-          : error.message;
-        if (fullText)
-          s.messages.push(
-            message("assistant", fullText, {
-              turnId,
-              incomplete: true,
-              thinking,
-            }),
-          );
-      });
-      return {
-        session,
-        turn: session.turns[turnId],
-        tokenCount: estimateTokens(contextHistory(session)),
-      };
-    }
-    throw error;
+    await flushReports();
+    await completeMissing();
+    const session = await mutateSession(sessionId, (s) => {
+      const turn = s.turns[turnId];
+      turn.status = aborted ? "aborted" : "error";
+      turn.error = aborted ? "Antwort abgebrochen." : error.message;
+      turn.code = error.code || "MODEL_ERROR";
+      if (fullText && !assistantSaved)
+        s.messages.push(
+          message("assistant", fullText, {
+            turnId,
+            incomplete: true,
+            thinking,
+          }),
+        );
+      if (error.code === "RESPONSE_LIMIT") {
+        const last = s.messages.findLast(
+          (m) => m.role === "assistant" && m.turnId === turnId,
+        );
+        if (last) last.incomplete = true;
+      }
+      usage = manager?.usage
+        ? {
+            ...manager.usage,
+            stale: true,
+            error: aborted ? "Antwort abgebrochen." : error.message,
+          }
+        : estimatedUsage(s, settings, error.message);
+      s.contextUsage = usage;
+      turn.contextUsage = usage;
+    });
+    return {
+      session,
+      turn: session.turns[turnId],
+      contextUsage: usage,
+      tokenCount: usage.promptTokens,
+    };
   } finally {
     signal?.removeEventListener("abort", abort);
     if (active.get(sessionId) === controller) active.delete(sessionId);
   }
 }
+
 function eventOf(m) {
   if (m.event) return m.event;
   if (m.role === "tool") {
@@ -361,7 +515,7 @@ function eventOf(m) {
   return null;
 }
 function rebuild(s) {
-  s.summaries = [];
+  s.contextUsage = null;
   s.currentTask = null;
   s.learningPlan = null;
   for (const m of s.messages) {
@@ -389,7 +543,9 @@ export async function editUserMessage({ sessionId, messageId, newContent }) {
     if (index < 0) throw new AppError("Nachricht nicht gefunden.", 404);
     s.messages = [
       ...s.messages.slice(0, index + 1),
-      ...s.messages.slice(index + 1).filter((m) => m.role === "event"),
+      ...s.messages
+        .slice(index + 1)
+        .filter((m) => m.role === "event" && !m.turnId),
     ];
     const m = s.messages[index];
     m.content = newContent.trim();
@@ -419,7 +575,7 @@ export async function deleteLastUserMessage({ sessionId }) {
     deletedMessages = s.messages.slice(index);
     s.messages = [
       ...s.messages.slice(0, index),
-      ...deletedMessages.filter((m) => m.role === "event"),
+      ...deletedMessages.filter((m) => m.role === "event" && !m.turnId),
     ];
     s.turns = {};
     for (const m of s.messages) {

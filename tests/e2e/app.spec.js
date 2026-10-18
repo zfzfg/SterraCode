@@ -1,5 +1,24 @@
 import { test, expect } from "@playwright/test";
 const pageErrors = new WeakMap();
+async function seedContext(page, title, marker = "Fakt") {
+  const session = (await (await page.request.get("/api/sessions")).json()).find(
+    (s) => s.title === title,
+  );
+  for (let i = 0; i < 6; i++) {
+    const response = await page.request.post("/api/chat", {
+      data: {
+        sessionId: session.id,
+        userMessage: `${marker}-${i}: ${"Bitte erhalte diese Lernerfahrung. ".repeat(90)}`,
+      },
+    });
+    const result = await response.json();
+    expect(result.turn.status, result.turn.error).toBe("done");
+  }
+  await page.reload();
+  await page.locator(".session-open").filter({ hasText: title }).click();
+  await expect(page.locator("#session-title")).toHaveText(title);
+  return session;
+}
 test.beforeEach(async ({ page }) => {
   const errors = [];
   pageErrors.set(page, errors);
@@ -349,4 +368,134 @@ test("unveränderte KI-Dateiänderung bleibt nach Neuladen rückgängig machbar"
   await expect(
     page.getByRole("treeitem", { name: "uebung.py", exact: true }),
   ).toHaveCount(0);
+});
+
+for (const streaming of [true, false]) {
+  test(`Kontextbefehle und persistente Berichte mit Streaming=${streaming}`, async ({
+    page,
+  }) => {
+    const title = `Kontextprüfung ${streaming}`;
+    await startSession(page, title);
+    await page.request.patch("/api/chat/settings", {
+      data: {
+        streaming,
+        keepRecentTokens: 0,
+        chunkTokens: 1000,
+        summarizerMaxTokens: 200,
+      },
+    });
+    try {
+      const session = await seedContext(page, title);
+      const before = await (
+        await page.request.get(`/api/sessions/${session.id}`)
+      ).json();
+      await page.locator("#chat-input").fill("/compact");
+      await page.locator("#send-btn").click();
+      await expect(
+        page.getByText("Kontext komprimiert", { exact: true }),
+      ).toBeVisible();
+      await expect(page.locator("#send-btn")).toBeEnabled();
+      await expect(page.locator("#token-counter")).toContainText("Kontext:");
+      await page.locator("#chat-input").fill("/usage");
+      await page.locator("#send-btn").click();
+      await expect(
+        page.getByText("Kontextnutzung", { exact: true }),
+      ).toBeVisible();
+      const after = await (
+        await page.request.get(`/api/sessions/${session.id}`)
+      ).json();
+      expect(after.messages.filter((m) => m.role !== "event")).toEqual(
+        before.messages.filter((m) => m.role !== "event"),
+      );
+      expect(after.contextUsage.measurementQuality).toBe("exact");
+      await page.reload();
+      await page.locator(".session-open").filter({ hasText: title }).click();
+      await expect(
+        page.getByText("Kontext komprimiert", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Kontextnutzung", { exact: true }),
+      ).toBeVisible();
+    } finally {
+      await page.request.patch("/api/chat/settings", {
+        data: {
+          streaming: true,
+          keepRecentTokens: 6000,
+          chunkTokens: 16000,
+          summarizerMaxTokens: 1500,
+        },
+      });
+    }
+  });
+}
+
+test("/usage bleibt bei ausgefallener LM-Studio-Verbindung verfügbar", async ({
+  page,
+}) => {
+  await startSession(page, "Offline-Kontext");
+  const settings = await (await page.request.get("/api/chat/settings")).json();
+  await page.request.patch("/api/chat/settings", {
+    data: { lmStudioUrl: "http://127.0.0.1:1" },
+  });
+  try {
+    await page.locator("#refresh-models").click();
+    await expect(page.locator("#connection-text")).toHaveText(
+      "LM Studio offline",
+    );
+    await page.locator("#chat-input").fill("/usage");
+    await expect(page.locator("#send-btn")).toBeEnabled();
+    await page.locator("#send-btn").click();
+    await expect(
+      page.getByText("Kontextnutzung", { exact: true }),
+    ).toBeVisible();
+    await expect(page.locator("#token-counter")).toContainText("geschätzt");
+    await expect(page.locator(".monaco-editor")).toBeVisible();
+  } finally {
+    await page.request.patch("/api/chat/settings", {
+      data: { lmStudioUrl: settings.lmStudioUrl },
+    });
+  }
+});
+
+test("laufende Komprimierung lässt sich stoppen und erhält den Verlauf", async ({
+  page,
+}) => {
+  const title = "Komprimierung stoppen";
+  await startSession(page, title);
+  await page.request.patch("/api/chat/settings", {
+    data: { keepRecentTokens: 0, chunkTokens: 1000, summarizerMaxTokens: 200 },
+  });
+  try {
+    const session = await seedContext(page, title, "COMPRESS_SLOW");
+    const before = await (
+      await page.request.get(`/api/sessions/${session.id}`)
+    ).json();
+    await page.locator("#chat-input").fill("/compress");
+    await page.locator("#send-btn").click();
+    await expect(page.locator("#chat-state")).toContainText(
+      "Kontext wird komprimiert",
+    );
+    await page.locator("#stop-chat-btn").click();
+    await expect(
+      page.getByRole("button", {
+        name: "Kontextaktion wiederholen",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const after = await (
+      await page.request.get(`/api/sessions/${session.id}`)
+    ).json();
+    expect(after.messages.filter((m) => m.role !== "event")).toEqual(
+      before.messages.filter((m) => m.role !== "event"),
+    );
+    expect(Object.values(after.turns).at(-1).status).toBe("aborted");
+  } finally {
+    await page.request.patch("/api/chat/settings", {
+      data: {
+        keepRecentTokens: 6000,
+        chunkTokens: 16000,
+        summarizerMaxTokens: 1500,
+      },
+    });
+  }
 });

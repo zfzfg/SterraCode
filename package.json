@@ -10,12 +10,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "format:check": "prettier --check public server tests *.config.js"
+    "test:context:live": "node scripts/check-context-live.mjs",
+    "format:check": "prettier --check public server tests scripts *.config.js"
   },
   "engines": {
     "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
   "dependencies": {
+    "@lmstudio/sdk": "1.5.0",
     "express": "^4.18.0",
     "monaco-editor": "^0.47.0"
   },

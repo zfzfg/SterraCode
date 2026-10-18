@@ -12,6 +12,8 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { randomUUID, createHash } from "node:crypto";
+import { httpFixtureFactory } from "./helpers/lmStudio.js";
+let setLMStudioClientFactory;
 
 let root,
   storage,
@@ -56,6 +58,8 @@ beforeAll(async () => {
   sessions = await import("../server/services/sessions.js");
   workspace = await import("../server/services/workspace.js");
   teacher = await import("../server/services/teacher.js");
+  ({ setLMStudioClientFactory } =
+    await import("../server/services/lmStudio.js"));
   processes = await import("../server/services/processes.js");
   await storage.ensureDataDirs();
   app = (await import("../server/app.js")).createApp();
@@ -95,6 +99,7 @@ beforeAll(async () => {
   mockURL = await listen(mock);
 });
 beforeEach(async () => {
+  setLMStudioClientFactory(httpFixtureFactory());
   requests.length = 0;
   responses = [];
   mockHandler = null;
@@ -352,7 +357,7 @@ describe("Chat und Kontext", () => {
           sessions.message(i % 2 ? "assistant" : "user", `Nachricht ${i}`),
         );
     });
-    await storage.updateSettings({ keepRecentMessages: 2 });
+    await storage.updateSettings({ keepRecentTokens: 0 });
     responses = [
       {
         tool_calls: [
@@ -370,8 +375,19 @@ describe("Chat und Kontext", () => {
       sessionId: s.id,
       userMessage: "Kontext zusammenfassen",
     });
-    expect(result.session.messages).toHaveLength(11);
-    expect(result.session.summaries.at(-1).text).toBe("Zusammenfassung");
+    expect(result.turn.status).toBe("done");
+    expect(
+      result.session.messages.filter((m) => m.role !== "event"),
+    ).toHaveLength(10);
+    expect(
+      JSON.parse(result.session.messages.find((m) => m.role === "tool").content)
+        .status,
+    ).toBe("scheduled");
+    expect(
+      result.session.messages.some(
+        (m) => m.event?.type === "context_compaction",
+      ),
+    ).toBe(true);
     expect(requests).toHaveLength(3);
   });
   it("erhält unabhängigen manuellen Lernfortschritt beim Löschen einer Chatantwort", async () => {
@@ -409,10 +425,11 @@ describe("Chat und Kontext", () => {
         m.event?.question?.includes("weiterführenden"),
       ),
     ).toHaveLength(1);
-    const { contextHistory } = await import("../server/services/summarizer.js");
+    const { modelHistory } =
+      await import("../server/services/context/history.js");
     expect(
-      contextHistory(done).some((m) =>
-        m.content.includes("Möchtest du einen Lernplan"),
+      modelHistory(done).some((m) =>
+        m.text.includes("Möchtest du einen Lernplan"),
       ),
     ).toBe(true);
   });
@@ -519,22 +536,25 @@ describe("Chat und Kontext", () => {
         );
     });
     await storage.updateSettings({
-      tokenThreshold: 2000,
-      keepRecentMessages: 4,
+      thresholdPercent: 10,
+      compactFloorPercent: 5,
+      keepRecentTokens: 500,
     });
     const done = await teacher.runTeacher({
       sessionId: s.id,
       userMessage: "Weiter",
     });
-    expect(done.session.messages).toHaveLength(15);
-    expect(done.session.summaries.length).toBeGreaterThan(0);
+    expect(
+      done.session.messages.filter((m) => m.role !== "event"),
+    ).toHaveLength(14);
+    expect(done.contextUsage.coveredMessages).toBeGreaterThan(0);
     const first = done.session.messages.find((m) => m.role === "user");
     const edited = await teacher.editUserMessage({
       sessionId: s.id,
       messageId: first.id,
       newContent: "Geändert",
     });
-    expect(edited.summaries).toHaveLength(0);
+    expect(edited.contextUsage).toBe(null);
     expect(edited.messages.at(-1).edited).toBe(true);
   });
   it("bricht Streaming ab und führt bereits gespeicherte Tools beim Wiederholen nicht erneut aus", async () => {

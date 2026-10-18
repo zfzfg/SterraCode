@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import { CONTEXT_DEFAULTS, CONTEXT_VERSION } from "./context/settings.js";
 
 export const DATA_DIR = path.resolve(
   process.env.STERRACODE_DATA_DIR ||
@@ -86,8 +87,7 @@ export function defaultSettings() {
     temperature: 0.4,
     maxTokensResponse: 2048,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
-    tokenThreshold: 8000,
-    keepRecentMessages: 6,
+    ...CONTEXT_DEFAULTS,
     maxToolCallsPerTurn: 10,
     crossChatProfileEnabled: false,
     autoUpdateProfileOnTaskDone: true,
@@ -112,6 +112,7 @@ export async function ensureDataDirs() {
     "backups",
     "changes",
     "runs",
+    "context",
   ])
     await fs.mkdir(path.join(DATA_DIR, dir), { recursive: true });
   const file = path.join(DATA_DIR, "settings.json");
@@ -122,38 +123,50 @@ export async function ensureDataDirs() {
   }
 }
 export async function getSettings() {
-  const saved = await readJSON(path.join(DATA_DIR, "settings.json"));
-  const legacyPrompt =
-    saved.systemPrompt?.includes("Du bist SterraCode Teacher,") &&
-    saved.systemPrompt.includes("read_editor");
-  return {
-    ...defaultSettings(),
-    ...saved,
-    allowedLanguages:
-      !saved.layoutVersion &&
-      JSON.stringify(saved.allowedLanguages) ===
-        JSON.stringify(["python", "javascript", "bash", "go"])
-        ? LANGUAGES
-        : saved.allowedLanguages || LANGUAGES,
-    systemPrompt: legacyPrompt
-      ? saved.systemPrompt
-          .replaceAll("read_editor", "read_file")
-          .replaceAll("write_editor", "write_file")
-          .replaceAll("run_code", "run_terminal_command") +
-        "\n\nAktueller Werkzeugvertrag (verbindlich):\n" +
-        DEFAULT_SYSTEM_PROMPT
-      : saved.systemPrompt || DEFAULT_SYSTEM_PROMPT,
-    sidebarWidth: Math.max(
-      220,
-      Math.min(360, parseFloat(saved.sidebarWidth) || 256),
-    ),
-    editorRatio: Math.max(
-      0.3,
-      Math.min(0.75, Number(saved.editorRatio) || 0.6),
-    ),
-    terminalHeight: Math.max(120, parseFloat(saved.terminalHeight) || 180),
-    layoutVersion: saved.layoutVersion || 0,
-  };
+  return serial("settings-read", async () => {
+    const file = path.join(DATA_DIR, "settings.json");
+    let saved = await readJSON(file);
+    if (saved.contextSettingsVersion !== CONTEXT_VERSION) {
+      await writeJSON(
+        path.join(DATA_DIR, "backups", `context-settings-${randomUUID()}.json`),
+        saved,
+      );
+      const { tokenThreshold, keepRecentMessages, ...other } = saved;
+      saved = { ...other, ...CONTEXT_DEFAULTS };
+      await writeJSON(file, saved);
+    }
+    const legacyPrompt =
+      saved.systemPrompt?.includes("Du bist SterraCode Teacher,") &&
+      saved.systemPrompt.includes("read_editor");
+    return {
+      ...defaultSettings(),
+      ...saved,
+      allowedLanguages:
+        !saved.layoutVersion &&
+        JSON.stringify(saved.allowedLanguages) ===
+          JSON.stringify(["python", "javascript", "bash", "go"])
+          ? LANGUAGES
+          : saved.allowedLanguages || LANGUAGES,
+      systemPrompt: legacyPrompt
+        ? saved.systemPrompt
+            .replaceAll("read_editor", "read_file")
+            .replaceAll("write_editor", "write_file")
+            .replaceAll("run_code", "run_terminal_command") +
+          "\n\nAktueller Werkzeugvertrag (verbindlich):\n" +
+          DEFAULT_SYSTEM_PROMPT
+        : saved.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+      sidebarWidth: Math.max(
+        220,
+        Math.min(360, parseFloat(saved.sidebarWidth) || 256),
+      ),
+      editorRatio: Math.max(
+        0.3,
+        Math.min(0.75, Number(saved.editorRatio) || 0.6),
+      ),
+      terminalHeight: Math.max(120, parseFloat(saved.terminalHeight) || 180),
+      layoutVersion: saved.layoutVersion || 0,
+    };
+  });
 }
 export async function updateSettings(updates) {
   return serial("settings", async () => {
@@ -184,15 +197,34 @@ export async function updateSettings(updates) {
       ["compilationTimeout", 1000, 600000],
       ["maxToolCallsPerTurn", 1, 20],
       ["maxTokensResponse", 256, 32768],
-      ["tokenThreshold", 2000, 128000],
-      ["keepRecentMessages", 2, 100],
+      ["thresholdPercent", 10, 95],
+      ["compactFloorPercent", 5, 90],
+      ["keepRecentTokens", 0, 50000],
+      ["chunkTokens", 1000, 64000],
+      ["summarizerMaxTokens", 200, 8000],
+      ["summaryBudgetTokens", 200, 64000],
+      ["maxToolResultTokens", 256, 64000],
+      ["maxTotalToolResultTokens", 256, 128000],
       ["sidebarWidth", 220, 360],
       ["editorRatio", 0.3, 0.75],
       ["terminalHeight", 120, 1200],
     ]) {
-      if (next[key] < min || next[key] > max)
+      if (
+        next[key] < min ||
+        next[key] > max ||
+        (Object.hasOwn(CONTEXT_DEFAULTS, key) && !Number.isInteger(next[key]))
+      )
         throw new AppError(`Ungültiger Wertebereich: ${key}`);
     }
+    if (
+      next.contextSettingsVersion !== CONTEXT_VERSION ||
+      next.compactFloorPercent >= next.thresholdPercent ||
+      next.maxTotalToolResultTokens < next.maxToolResultTokens ||
+      !["auto", "full", "compact"].includes(next.summarizerPromptMode)
+    )
+      throw new AppError(
+        "Ungültige Kontexteinstellungen: Ziel muss unter der Auslöseschwelle und das Gesamtlimit über dem Einzelresultat liegen.",
+      );
     if (
       !Array.isArray(next.allowedLanguages) ||
       next.allowedLanguages.some((l) => !LANGUAGES.includes(l))

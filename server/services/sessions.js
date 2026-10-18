@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
+import { CONTEXT_VERSION } from "./context/settings.js";
 import {
   DATA_DIR,
   LANGUAGES,
@@ -235,7 +236,22 @@ export async function loadSession(id) {
           "Session-ID und gespeicherte Daten passen nicht zusammen.",
           409,
         );
-      return await migrate(session);
+      const current = await migrate(session);
+      if (current.contextVersion !== CONTEXT_VERSION) {
+        await writeJSON(
+          path.join(
+            DATA_DIR,
+            "backups",
+            `context-session-${id}-${randomUUID()}.json`,
+          ),
+          current,
+        );
+        current.contextVersion = CONTEXT_VERSION;
+        current.contextUsage = null;
+        current.revision++;
+        await writeJSON(sessionFile(id), current);
+      }
+      return current;
     } catch (error) {
       if (error.code === "ENOENT")
         throw new AppError("Session nicht gefunden.", 404, "NOT_FOUND");
@@ -253,7 +269,25 @@ export async function mutateSession(id, change, expectedRevision) {
         409,
         "CONFLICT",
       );
+    const contextKey = (s) =>
+      JSON.stringify([
+        s.language,
+        s.activeFile,
+        s.learningPlan,
+        s.currentTask,
+        s.messages.filter(
+          (m) =>
+            !["context_usage", "context_compaction"].includes(m.event?.type),
+        ),
+      ]);
+    const previousContext = contextKey(session),
+      previousUsage = session.contextUsage;
     await change(session);
+    if (
+      session.contextUsage === previousUsage &&
+      previousContext !== contextKey(session)
+    )
+      session.contextUsage = null;
     session.revision++;
     session.updatedAt = new Date().toISOString();
     await writeJSON(sessionFile(id), session);
@@ -294,6 +328,8 @@ export async function createSession({
     openFiles: [file],
     messages: [message("event", "", { event: question })],
     summaries: [],
+    contextVersion: CONTEXT_VERSION,
+    contextUsage: null,
     turns: {},
     currentTask: null,
     learningPlan: null,
@@ -332,6 +368,22 @@ export async function removeSession(id) {
       path.join(DATA_DIR, "workspaces", id),
       path.join(backup, "workspace"),
     );
+    const contextRoot = path.resolve(DATA_DIR, "context");
+    const contextDir = path.resolve(contextRoot, validateSessionId(id));
+    if (path.dirname(contextDir) !== contextRoot)
+      throw new AppError("Ungültiger Kontextpfad.");
+    if ((await fs.lstat(contextRoot)).isSymbolicLink())
+      throw new AppError(
+        "Kontext-Verknüpfungen sind nicht erlaubt.",
+        403,
+        "PATH_DENIED",
+      );
+    try {
+      await copySafe(contextDir, path.join(backup, "context"));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
     await fs.unlink(sessionFile(id));
+    await fs.rm(contextDir, { recursive: true, force: true });
   });
 }

@@ -1,12 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { AppError, getSettings } from "./storage.js";
-import {
-  loadSession,
-  mutateSession,
-  validatePlan,
-  setLearningPlan,
-} from "./sessions.js";
-import { summarizeSession } from "./summarizer.js";
+import { mutateSession, validatePlan, setLearningPlan } from "./sessions.js";
 import { readFile, writeFile, listWorkspace } from "./workspace.js";
 import {
   startProcess,
@@ -34,7 +28,10 @@ export async function executeTool(name, args, context) {
           sessionId,
           args.path,
           args.code,
-          args.expectedVersion,
+          // Some local models serialize JSON null as the literal "null".
+          // It can never be a SHA-256 file version; the normal version guard
+          // still rejects null for every existing file.
+          args.expectedVersion === "null" ? null : args.expectedVersion,
           { actor: "ai", reason: text(args.reason, "reason"), turnId },
         );
       case "run_terminal_command": {
@@ -145,22 +142,13 @@ export async function executeTool(name, args, context) {
         };
       }
       case "trigger_summarize": {
-        const current = await loadSession(sessionId),
-          settings = await getSettings();
-        const summary = await summarizeSession(current, settings, signal);
-        if (summary?.text)
-          await mutateSession(
-            sessionId,
-            (s) => {
-              s.summaries.push(summary);
-            },
-            current.revision,
-          );
-        return {
-          type: name,
-          status: summary?.text ? "completed" : "not_needed",
-        };
+        context.requestCompaction();
+        return { type: name, status: "scheduled" };
       }
+      case "get_context_usage":
+        return { type: name, ...context.getContextUsage() };
+      case "read_tool_result":
+        return await context.readToolResult(args.messageId, args.offset ?? 0);
       default:
         throw new AppError(`Unbekanntes Tool: ${name}`);
     }

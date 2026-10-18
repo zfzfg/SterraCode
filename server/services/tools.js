@@ -21,7 +21,7 @@ export const TOOL_DEFINITIONS = [
   ),
   tool(
     "write_file",
-    "Schreibt eine echte Datei direkt. Vorhandene Dateien vorher lesen. Version aus read_file übergeben.",
+    "Schreibt eine echte Datei direkt. Vorhandene Dateien vorher lesen. Version aus read_file übergeben. Bei einer neuen Datei expectedVersion als JSON null ohne Anführungszeichen übergeben.",
     {
       path: string,
       code: string,
@@ -92,4 +92,15 @@ export const TOOL_DEFINITIONS = [
     language: string,
   }),
   tool("trigger_summarize", "Fordert eine Kontextzusammenfassung an.", {}),
+  tool(
+    "get_context_usage",
+    "Liest Kontextgröße, verbleibendes Budget, Messqualität und Komprimierungsstand.",
+    {},
+  ),
+  tool(
+    "read_tool_result",
+    "Liest ein vollständiges gespeichertes Werkzeugergebnis in begrenzten Abschnitten. nextOffset für den folgenden Abschnitt verwenden; die Nachricht muss zu dieser Session gehören.",
+    { messageId: string, offset: { type: "integer", minimum: 0 } },
+    ["messageId"],
+  ),
 ];

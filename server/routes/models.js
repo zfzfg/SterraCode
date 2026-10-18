@@ -1,18 +1,17 @@
 import express from "express";
 import { getSettings } from "../services/storage.js";
 import { route } from "./helpers.js";
+import { listLoadedModels } from "../services/lmStudio.js";
 const router = express.Router();
 router.get(
   "/",
   route(async (req, res) => {
     const settings = await getSettings();
     try {
-      const response = await fetch(`${settings.lmStudioUrl}/v1/models`, {
-        signal: AbortSignal.timeout(4000),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      const models = (data.data || []).map((m) => ({ id: m.id, name: m.id }));
+      const models = (await listLoadedModels(settings)).map((m) => ({
+        id: m.identifier,
+        name: m.displayName || m.identifier,
+      }));
       res.json({
         models,
         connected: true,

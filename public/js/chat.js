@@ -8,8 +8,31 @@ import { loadSessions } from "./sessions.js";
 import { attachProcess } from "./terminal.js";
 
 let controller;
+function usageText(usage) {
+  if (!usage) return "Kontext bereit";
+  const number = (n) =>
+    Number.isFinite(n) ? n.toLocaleString("de-DE") : "unbekannt";
+  const prefix = usage.stale
+    ? "Kontext (letzte Messung)"
+    : usage.measurementQuality === "exact"
+      ? "Kontext"
+      : "Kontext (geschätzt)";
+  return `${prefix}: ${number(usage.promptTokens)}${usage.contextLength ? ` / ${number(usage.contextLength)}` : ""} Tokens${usage.contextLength ? ` · ${Math.round((100 * usage.promptTokens) / usage.contextLength)} % · frei für weiteren Kontext: ${number(usage.remainingTokens)}` : ""}`;
+}
+function renderUsage(usage) {
+  if (usage?.model && usage.model !== state.settings.activeModel) usage = null;
+  const counter = $("token-counter");
+  counter.textContent = usageText(usage);
+  counter.title = usage
+    ? `Antwortreserve: ${usage.reservedOutputTokens.toLocaleString("de-DE")} Tokens · ${usage.coveredMessages} Nachrichten komprimiert · ${usage.chunkCount} Zusammenfassungen · zuletzt gemessen: ${new Date(usage.sampledAt).toLocaleString("de-DE")}`
+    : "/compact komprimiert ältere Abschnitte, /usage zeigt die Kontextnutzung.";
+}
 const typeInfo = {
   trigger_summarize: ["plan", "Kontextzusammenfassung"],
+  context_compaction: ["plan", "Kontext komprimiert"],
+  context_usage: ["plan", "Kontextnutzung"],
+  get_context_usage: ["plan", "Kontextnutzung gelesen"],
+  read_tool_result: ["file", "Werkzeugergebnis nachgelesen"],
   write_file: ["file", "Datei geändert"],
   read_file: ["file", "Datei gelesen"],
   list_files: ["folder", "Dateien gelesen"],
@@ -77,9 +100,42 @@ function eventCard(event, sessionId) {
         "",
         event.status === "completed"
           ? "Der Modellkontext wurde zusammengefasst. Der vollständige Verlauf bleibt erhalten."
-          : "Der Verlauf ist noch zu kurz für eine Zusammenfassung.",
+          : event.status === "scheduled"
+            ? "Komprimierung nach dieser Werkzeugrunde angefordert."
+            : "Der Verlauf ist noch zu kurz für eine Zusammenfassung.",
       ),
     );
+  if (
+    ["context_compaction", "context_usage", "get_context_usage"].includes(
+      event.type,
+    )
+  ) {
+    const usage = event.contextUsage || event;
+    if (event.type === "context_compaction")
+      card.append(
+        node(
+          "p",
+          "",
+          event.changed
+            ? `${event.beforeTokens.toLocaleString("de-DE")} → ${event.afterTokens.toLocaleString("de-DE")} Tokens im Modellkontext. Der vollständige Chat bleibt erhalten.`
+            : "Es konnten keine weiteren Abschnitte sinnvoll komprimiert werden. Der vollständige Chat bleibt erhalten.",
+        ),
+      );
+    card.append(node("p", "", usageText(usage)));
+    if (usage.error) card.append(node("p", "muted", usage.error));
+    if (usage.effectiveSettings) {
+      const details = node("details");
+      details.append(
+        node("summary", "", "Effektive Kontextbudgets"),
+        node(
+          "p",
+          "",
+          `Antwort: ${usage.reservedOutputTokens.toLocaleString("de-DE")} · Wörtlicher Kontext: ${usage.effectiveSettings.keepRecentTokens.toLocaleString("de-DE")} · Zusammenfassungen: ${usage.effectiveSettings.summaryBudgetTokens.toLocaleString("de-DE")} Tokens`,
+        ),
+      );
+      card.append(details);
+    }
+  }
   if (event.type === "tool_error") card.append(node("p", "", event.error));
   if (event.type === "create_task")
     card.append(node("p", "", event.task?.title || ""));
@@ -162,6 +218,7 @@ function eventCard(event, sessionId) {
   return card;
 }
 export function renderChat(forceBottom = false) {
+  renderUsage(state.session?.contextUsage);
   const c = $("chat-messages"),
     bottom = forceBottom || isBottom(),
     position = c.scrollTop;
@@ -262,10 +319,20 @@ export function renderChat(forceBottom = false) {
           "Die vorherige Antwort wurde unterbrochen. Bereits ausgeführte Schritte sind gespeichert.",
       ),
     );
-    const retry = button("Antwort fortsetzen", "refresh", () =>
-      sendMessage("", { retryOf: lastTurn.id }),
+    const retry = button(
+      lastTurn.contextAction
+        ? "Kontextaktion wiederholen"
+        : "Antwort fortsetzen",
+      "refresh",
+      () =>
+        sendMessage(
+          "",
+          lastTurn.contextAction
+            ? { contextAction: lastTurn.contextAction }
+            : { retryOf: lastTurn.id },
+        ),
     );
-    retry.disabled = !state.ready;
+    retry.disabled = !state.ready && lastTurn.contextAction !== "usage";
     notice.append(retry);
     c.append(notice);
   }
@@ -303,7 +370,9 @@ function renderTask() {
   container.append(done);
 }
 export function updateChatState() {
-  $("send-btn").disabled = !state.session || !state.ready || state.busy;
+  const usage = /^\/usage$/i.test($("chat-input").value.trim());
+  $("send-btn").disabled =
+    !state.session || (!state.ready && !usage) || state.busy;
   $("stop-chat-btn").hidden = !state.busy;
   $("app").classList.toggle("chat-busy", state.busy);
   $("chat-state").textContent = state.busy
@@ -331,11 +400,19 @@ async function answer(questionId, text, sessionId) {
 }
 export async function sendMessage(
   text,
-  { existingUserMessageId, retryOf } = {},
+  { existingUserMessageId, retryOf, contextAction } = {},
 ) {
   if (state.busy) return;
   if (!state.session) throw new Error("Bitte zuerst eine Session auswählen.");
-  if (!state.ready)
+  contextAction ||=
+    !existingUserMessageId && !retryOf
+      ? /^\/(compress|compact)$/i.test(text.trim())
+        ? "compact"
+        : /^\/usage$/i.test(text.trim())
+          ? "usage"
+          : undefined
+      : undefined;
+  if (!state.ready && contextAction !== "usage")
     throw new Error("Bitte LM Studio verbinden und ein Modell auswählen.");
   await flush();
   const sessionId = state.session.id,
@@ -345,14 +422,16 @@ export async function sendMessage(
   state.turnId = turnId;
   updateChatState();
   const c = $("chat-messages");
-  if (text) {
+  if (text && !contextAction) {
     c.append(node("article", "message user", text));
     $("chat-input").value = "";
   }
+  if (contextAction) $("chat-input").value = "";
   let content = "",
     thinking = "",
     frame = false;
   const bubble = node("article", "message assistant streaming");
+  bubble.hidden = Boolean(contextAction);
   c.append(bubble);
   scroll(true);
   function update() {
@@ -398,6 +477,13 @@ export async function sendMessage(
       thinking = "";
     }
     if (event === "notice") toast(value.message);
+    if (event === "context-progress")
+      $("chat-state").textContent = value.message;
+    if (event === "context-usage") renderUsage(value);
+    if (event === "message" && value.role === "event") {
+      const card = eventCard(value.event, sessionId);
+      if (card) c.insertBefore(card, bubble);
+    }
   };
   try {
     const body = {
@@ -406,6 +492,7 @@ export async function sendMessage(
       turnId,
       existingUserMessageId,
       retryOf,
+      contextAction,
     };
     const result =
       state.settings.streaming !== false
@@ -417,8 +504,7 @@ export async function sendMessage(
           });
     if (state.session?.id === sessionId) {
       state.session = result.session;
-      $("token-counter").textContent =
-        `Kontext: ca. ${result.tokenCount.toLocaleString("de-DE")} Tokens`;
+      renderUsage(result.contextUsage);
       if (result.turn.status === "error") toast(result.turn.error, "error");
     }
   } catch (error) {
@@ -550,6 +636,9 @@ async function deleteLast() {
   await loadFiles();
 }
 export function initChat() {
+  $("token-counter").setAttribute("role", "status");
+  $("token-counter").setAttribute("aria-live", "polite");
+  $("chat-input").addEventListener("input", updateChatState);
   $("chat-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const text = $("chat-input").value.trim();
@@ -570,11 +659,12 @@ export function initChat() {
   on("session-opened", () => renderChat(true));
   on("session-data", () => renderChat());
   on("summarize", () =>
-    sendMessage(
-      "Bitte fasse den bisherigen Kontext mit dem Werkzeug trigger_summarize zusammen.",
+    sendMessage("", { contextAction: "compact" }).catch((e) =>
+      toast(e.message, "error"),
     ),
   );
   on("models-changed", () => {
+    renderUsage(state.session?.contextUsage);
     updateChatState();
     renderTask();
   });
