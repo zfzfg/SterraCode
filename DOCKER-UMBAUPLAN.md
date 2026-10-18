@@ -104,7 +104,7 @@ Ablauf eines Auftrags:
 2. Der Runner schreibt den Auftrag auf sein Zustandsvolume, bevor er einen Prozess startet.
 3. Eine Wiederholung derselben ID liefert denselben Auftrag und startet keinen zweiten Prozess.
 4. Endet der Runner nach dem Journal und vor dem Start, bleibt der Auftrag unterbrochen und wird nicht nachgeholt.
-5. Nach dem Ende bleibt der Auftrag fünf Minuten abfragbar, analog zum heutigen Aufräumen in `processes.js`. Die App hält keine zweite Ausgabequelle.
+5. Nach dem Ende bleibt die Ausgabe fünf Minuten abfragbar, analog zum heutigen Aufräumen in `processes.js`. Die App hält keine zweite Ausgabequelle. Der dauerhafte Idempotenz-Nachweis bleibt unabhängig davon erhalten: Dieselbe ID darf auch nach Ablauf der Ausgabe keinen zweiten Prozess starten.
 6. Nach einem Neustart der App fragt sie laufende Aufträge beim Runner nach. Die Auftrags-ID im Browser bleibt gültig, solange der Runner sie noch führt.
 7. Ist der Runner nicht erreichbar, antwortet die App mit einem eigenen Fehlercode und startet nichts lokal.
 
@@ -260,7 +260,7 @@ Schreibende Zugriffe behalten die vorhandene JSON-Pflicht und die Origin-Prüfun
 
 Ohne Authentifizierung erreichbar sind nur `GET /api/health`, `GET /api/setup/status`, `POST /api/setup` und `POST /api/login`. Alle anderen `/api`-Pfade, einschließlich `/api/runtimes` und `/api/chat/settings`, verlangen eine Sitzung. Statische Dateien und `/monaco` bleiben ladbar, damit die Anmeldeseite erscheint. `public/app.js` fragt heute beim Start Modelle und Laufzeiten ab. Dieser Start muss bei `SETUP_REQUIRED` und `401` in Einrichtung oder Anmeldung verzweigen, bevor der übrige Ladeweg läuft. Der Healthcheck antwortet mit `{ "ok": true }` und nennt weder Hostnamen, Programmversionen noch den Einrichtungsstand, damit Compose die App auch vor dem Assistenten als lebendig sieht.
 
-Ein vergessenes Passwort setzt ein einmaliger Befehl im gestoppten App-Container zurück, der `auth.json` neu schreibt und einen neuen Einrichtungsschlüssel ausgibt. Dafür gibt es keinen zweiten Zugang in der Oberfläche.
+Ein vergessenes Passwort setzt ein einmaliger Hilfscontainer aus demselben App-Image zurück, während der reguläre App-Dienst gestoppt ist. Er mountet das App-Datenvolume, widerruft bestehende Sitzungen und erzeugt einen neuen Einrichtungsschlüssel zur erneuten Passwortvergabe. `docker compose exec` in einen gestoppten Container ist dafür kein gültiger Betriebsweg. Dafür gibt es keinen zweiten Zugang in der Oberfläche.
 
 ### Installer beim erneuten Aufruf
 
@@ -414,3 +414,126 @@ Eine reine Linux-CI kann die Windows-LAN-Freigabe nicht belegen. Dafür ist ein 
 - `npm test`: **16 Testdateien bestanden; 324 Tests bestanden, 4 übersprungen**. Dieser zweite Planungsschritt hat die Tests nicht erneut ausgeführt.
 - Docker CLI und Compose sind auf diesem Rechner vorhanden. Der Linux-Docker-Daemon war bei der Prüfung nicht erreichbar. Ein Containerbuild oder Docker-Laufzeittest wurde daher nicht ausgeführt.
 - In diesem Planungsschritt wurden der neue Branch und dieses Dokument angelegt und das Dokument anschließend vertieft. Anwendungscode, Paketversionen und Startverhalten wurden noch nicht geändert.
+
+## 12. Ergänzende technische Festlegungen
+
+Diese Ergänzungen präzisieren das Zielverhalten. Die genannten neuen Funktionen und Betriebsabläufe sind noch zu implementieren.
+
+### Healthcheck und Betriebszustand
+
+- Der lokale App-Healthcheck ruft `http://127.0.0.1:3000/api/health` auf. Dieser konkrete GET-Endpunkt wird vor der allgemeinen Host-/Origin- und Anmeldeprüfung mit der festgelegten Minimalantwort bedient. Sonst könnte eine korrekte LAN-Konfiguration ohne localhost-Freigabe den eigenen Healthcheck abweisen. Die Ausnahme öffnet keine weiteren APIs.
+- Health prüft die Erreichbarkeit des App-Prozesses. Eine getrennte, angemeldete Diagnose meldet Schreibbarkeit der Volumes, Runner-Protokollversion, Programmwiederherstellung und LM-Studio-Verbindung. Ein ausgefallenes Modell löst keine Neustartschleife aus.
+- Der Runner unterscheidet `starting`, `reconciling`, `ready`, `maintenance` und `error`. Während Paketwiederherstellung kann seine Steuerung erreichbar sein, ohne dass neue Ausführungen erlaubt sind. Dateiarbeit in der App bleibt möglich.
+- App und Runner werden als zusammengehöriges Release aktualisiert. Ein inkompatibler Protokollstand verhindert neue Aufträge mit verständlichem Fehler, statt unvollständig interpretierte Anfragen auszuführen.
+
+### Dauerhafte Auftragsidentität und Kapazität
+
+- Der Runner speichert zur Idempotenz-ID Session, Auftragsart und den Hash der kanonischen Nutzdaten. Dieselbe ID mit anderen Nutzdaten ergibt `409 IDEMPOTENCY_CONFLICT`.
+- Nach fünf Minuten darf die Ausgabe ablaufen; ein kompakter Nachweis mit Endzustand bleibt auf dem Zustandsvolume erhalten. Eine Abfrage meldet dann ausdrücklich abgelaufene Ausgabe. Eine spätere Bereinigung braucht ein versioniertes Gültigkeitsfenster, nach dessen Ablauf alte IDs abgewiesen werden. Sie darf alte Starts nicht wieder ausführbar machen.
+- Zustandsfolge: `accepted → starting → running → succeeded|failed|cancelled|timed-out|interrupted`. Bestätigte Journaländerungen müssen dauerhaft gespeichert sein. Kann der Runner nicht sicher journalisieren, startet er keinen Prozess.
+- Bei einem Netzwerkfehler zwischen Start und Antwort fragt die App unter derselben ID nach. Sie erzeugt keine Ersatz-ID. Statusabfrage und Stop erhalten begrenzte Wiederholungen und eigene kurze Netzwerkzeitlimits.
+- Die Grenze von einem Auftrag je Session und zwei gleichzeitigen Kompilierungen wird atomar im Runner reserviert. Zusätzlich gilt zunächst eine Gesamtgrenze von vier aktiven Ausführungen einschließlich Terminal. Bei voller Kapazität folgt `429 RUNNER_BUSY`; es entsteht keine unbegrenzte Warteschlange.
+- Terminalausgabe erhält einen monotonen Byte-Offset, `nextOffset`, Abschlusszustand und einen Hinweis auf abgeschnittene Ausgabe. Der Decoder gibt nur vollständige UTF-8-Zeichen weiter. Nach Erreichen von 1 MiB werden Prozesspipes weiter geleert und weitere Bytes verworfen, damit volle Pipes den Prozess nicht blockieren.
+- Stop ist wiederholbar: SIGTERM, begrenzte Wartezeit, anschließend SIGKILL. Tests umfassen Enkelprozesse und Programme mit eigenen Prozessgruppen. Eine reine PID-Liste belegt noch kein vollständiges Aufräumen.
+
+### Workspace-Rennen und Vertrauensgrenzen
+
+- Der Runner prüft Session-UUID und relative Pfade selbst. Absolute Pfade, `..`, NUL-Zeichen und Symlinks werden abgewiesen; alle Zugriffe bleiben unter dem Workspace-Wurzelverzeichnis.
+- Eine Pfadprüfung vor dem Öffnen schützt nicht gegen gleichzeitigen Austausch durch einen Nutzerprozess. Die Implementierung muss solche Wechsel beim Öffnen verhindern oder die betroffenen Zugriffe exklusiv sperren. Ein Test ersetzt Verzeichnisse während laufender Anfragen durch Symlinks.
+- Session-Löschen markiert die Session zunächst als löschend, sperrt neue Aufträge, stoppt vorhandene Prozesse und wartet auf die Runner-Bestätigung. Erst danach werden Daten und Workspace gelöscht. Bei Runner-Ausfall bleibt der Vorgang sichtbar ausstehend und nach Neustart fortsetzbar.
+- Verspätete Startanfragen dürfen einen gelöschten Workspace nicht neu anlegen. Dieselbe Sperre gilt während Import, Restore und Wartung.
+- Nutzerprogramme können die App über das Container-Netz erreichen. Alle App-APIs brauchen deshalb weiterhin ihren Zugriffsschutz. Runner-Dienstschlüssel und Administratorsitzung sind verschiedene Zugangsdaten.
+- Paketverwaltung und Nutzerprogramme teilen zunächst einen Container. Diese Grenze gilt nur für die gemeinsame Administratorinstanz. Vor Mehrbenutzerbetrieb oder Ausführung fremden Codes ist eine zusätzliche Ausführungsisolation je Auftrag einschließlich Netz- und Ressourcenregeln erforderlich.
+
+### Paketaufträge, Updates und Speicher
+
+- Paketwartung sperrt neue Starts, bevor sie auf laufende Aufträge wartet. Die Oberfläche zeigt blockierende Aufträge und bietet Abbruch der Paketaktion oder ausdrückliches Stoppen an. Ein endloses Terminal darf keinen unsichtbar hängenden Paketjob erzeugen.
+- Sollmanifest, ermittelter Istzustand und Paketjournal bleiben getrennt. Nach einem Crash wird der Paketmanager geprüft, bevor ein Programm als installiert oder entfernt gilt.
+- Programmzustand und Cache-Metadaten enthalten Architektur, Debian-Suite, Runner-Image-Digest, Katalogversion und genaue Paketabhängigkeiten. Bei Suite- oder Architekturwechsel werden alte Cachepakete nicht ungeprüft installiert.
+- Prüfsummen belegen die heruntergeladenen Bytes; die Herkunft wird zusätzlich über freigegebene signierte Quellen beziehungsweise verifizierte Hersteller-Metadaten geprüft. Der Browser übergibt keine beliebigen Paket-URLs.
+- Sicherheitsupdates erhalten einen festen Releaseweg: Basisimage-Digests und Katalogversionen aktualisieren, Laufzeit-Smokes ausführen, Manifestmigration prüfen und anschließend veröffentlichen. Versionsbindung braucht einen dauerhaften Updatepfad.
+- Vor Download, Import und Backup wird der freie Platz am jeweiligen Ziel geprüft. Workspace, Paketcache, Werkzeugcache, Journal und Logs brauchen Größenanzeigen und definierte Grenzen oder Aufräumregeln. RAM-Limits begrenzen keine Dateischreibmenge.
+- Cachebereinigung spart aktive Downloads und Builds aus. Quellcode und Backups gelten nie als Cache. Manifest und Einstellungen werden atomar ersetzt, damit ein voller Datenträger nicht den bisherigen gültigen Stand zerstört.
+- Wird temporärer Ausführungsspeicher als tmpfs umgesetzt, erhält er ein ausdrückliches Größenlimit innerhalb des Speicherbudgets. Bei einem Named Volume wird dessen Platz überwacht. Die Wahl wird vor dem Compose-Smoke dokumentiert.
+
+### Backup und kontrollierter Wiederanlauf
+
+- Wartung verhindert neue Schreibaktionen und Aufträge. Bestehende Aufträge werden beendet oder kontrolliert gestoppt. Danach werden App und Runner gestoppt und erst dann die zusammengehörigen Daten gesichert. Der Backup-Hilfscontainer startet keine Dienste parallel.
+- Eine Sicherung enthält Metadaten mit UTC-Zeitpunkt, Image-Digests, Daten-/Katalogschema, Architektur, enthaltenen Volumes und Prüfsummen. Secret-Werte stehen nicht im Metadatenmanifest.
+- Secret-Dateien außerhalb der Volumes werden getrennt geschützt gesichert oder kontrolliert neu erzeugt. App und Runner müssen denselben Dienstschlüssel erhalten. LM-Studio-Tokens werden bei Bedarf neu bereitgestellt. App-Backups enthalten Anmeldeinformationen und erhalten entsprechend enge Dateirechte.
+- Archive werden vor dem Entpacken auf absolute Pfade, `..`, Symlink-/Hardlink-Ausbrüche und übermäßige entpackte Größe geprüft. Ein Restore wird zunächst in neuen leeren Volumes mit isoliertem Projektnamen und anderem Port erprobt.
+- Abnahme bedeutet eine tatsächlich geöffnete alte Session mit Versionshistorie und einen erfolgreichen Lauf mit rekonstruierter Laufzeit. Ein vorhandenes tar-Archiv genügt nicht.
+- App-Neustart und Stack-Stopp sind getrennte Betriebsfälle: Beim App-Ausfall bleiben Runner-Aufträge auffindbar; beim kontrollierten Stack-Stopp werden sie beendet. Die interne Abbruchfrist bleibt kürzer als die 30 Sekunden Stopfrist. Ein unerreichbarer Runner führt zu begrenztem Warten und einem protokollierten ungeklärten Zustand.
+
+## 13. Ubuntu-Testserver
+
+| Eigenschaft | Festlegung |
+| --- | --- |
+| Rolle | Linux-Testserver für Docker, Persistenz, Wiederherstellung und LAN-Zugriff |
+| Betriebssystem | Ubuntu; genaue Version bei erster Bestandsaufnahme erfassen |
+| IP-Adresse | `192.168.178.104` |
+| SSH-Nutzer | `zfzfg` |
+| SSH-Verbindung | `ssh zfzfg@192.168.178.104` |
+| Docker | Laut Nutzer vorhanden; Engine, Compose und Zugriffsrechte noch prüfen |
+| Geplante Browseradresse | `http://192.168.178.104:3000` |
+| Prüfstatus | Vom Nutzer benannt; bei dieser Planergänzung nicht per SSH geprüft und nicht verändert |
+
+Dieser Server übernimmt die Linux-Abnahme. Docker Desktop unter Windows und Zugriff von einem zweiten Gerät bleiben eigene Freigabetests. Zugangsdaten und private Schlüssel werden nicht im Plan abgelegt.
+
+### Bestandsaufnahme vor dem ersten Deployment
+
+Den SSH-Hostschlüssel gegen einen vertrauenswürdigen Vergleichswert prüfen; die Hostprüfung nicht abschalten. Nach der Anmeldung zunächst ausschließlich lesend erfassen:
+
+```sh
+ssh zfzfg@192.168.178.104
+cat /etc/os-release
+uname -m
+id
+docker version
+docker compose version
+docker info --format '{{.OSType}} {{.Architecture}}'
+docker ps
+df -h
+free -h
+ss -ltn
+```
+
+Ubuntu-Version, Architektur, freie Ressourcen, Docker-/Compose-Version, vorhandene Dienste und Portbelegung dokumentieren. Bei fehlenden Docker-Rechten den bestehenden administrierten Zugangsweg klären; der Installer ändert keine Gruppenmitgliedschaften oder Socket-Rechte selbst. Vorhandene Container und Volumes bleiben unangetastet. Für dauerhafte Erreichbarkeit eine DHCP-Reservierung vorsehen.
+
+### Isolierte Testkonfiguration
+
+Geplanter Projektordner: `~/sterracode-test`. Tatsächlichen Pfad und Git-Commit im Testprotokoll erfassen. Die Werte ergänzen das Konfigurationsbeispiel aus Abschnitt 6:
+
+```dotenv
+COMPOSE_PROJECT_NAME=sterracode-test
+STERRACODE_BIND_IP=192.168.178.104
+STERRACODE_PORT=3000
+STERRACODE_PUBLIC_URL=http://192.168.178.104:3000
+STERRACODE_PROXY_MODE=off
+```
+
+Ist Port 3000 belegt, Hostport und öffentliche URL gemeinsam ändern, beispielsweise auf 3001. Projektvolumes dürfen keine global festgeschriebenen `name:`-Werte oder gemeinsam verwendeten externen Volumes haben; sonst isoliert ein anderer Compose-Projektname die Daten nicht.
+
+LM Studio wird separat lokalisiert. `host.docker.internal` bezeichnet hier den Ubuntu-Docker-Host, nicht den Windows-Entwicklungsrechner. Läuft LM Studio unter Windows, wird dessen tatsächliche LAN-Adresse eingetragen. Seine Erreichbarkeit ist keine Folge einer funktionierenden SSH-Verbindung.
+
+### Testfolge und Nachweise
+
+1. Bestandsaufnahme, Commit, Katalogversion und Image-Digests protokollieren; Compose-Konfiguration prüfen und Images bauen.
+2. Geschützten Erststart durchführen, vom zweiten LAN-Gerät anmelden und ohne Modell Sessions sowie Dateien bearbeiten.
+3. Java und Python installieren, ausführen, deaktivieren, aktivieren und entfernen. Danach denselben Nachweis für die übrigen Katalogprogramme erbringen.
+4. App und Runner einzeln neu starten, anschließend Container mit erhaltenen Volumes neu erstellen. Aufträge, Idempotenz und Programmwiederherstellung prüfen.
+5. Runner-Ausfall, Paketunterbrechung und Ressourcenlimits im Testprojekt prüfen. Belastungstests auf die freien Hostressourcen begrenzen, damit andere Dienste weiterlaufen können.
+6. Backup in ein zweites isoliertes Projekt mit anderem Port zurückspielen und Daten sowie Ausführung vergleichen.
+7. Proxy/HTTPS und tatsächliche LM-Studio-Verbindung prüfen, sobald verfügbar. Fehlende Voraussetzungen als offen dokumentieren.
+8. Für jeden Abnahmetest Datum, Commit, Plattform und Ergebnis festhalten. Nur eigene Testressourcen gezielt entfernen. `docker system prune` und `docker compose down -v` sind keine regulären Updatebefehle.
+
+## 14. Zusätzliche verbindliche Abnahmetests
+
+17. **Health:** LAN-Konfiguration ohne localhost-Freigabe bleibt gesund; Einrichtung und Paketwiederherstellung werden korrekt vom Ausführungszustand unterschieden.
+18. **Auftragsidentität:** Wiederholung nach Ausgabeablauf und Runner-Neustart startet keinen zweiten Prozess. Geänderte Nutzdaten derselben ID ergeben einen Konflikt; Journalfehler verhindern den Start.
+19. **Nebenläufigkeit:** Gleichzeitiger Start, Session-Löschen und Paketwartung hinterlassen weder Prozesse noch neu angelegte gelöschte Workspaces. Kapazitätsgrenzen gelten auch für parallele Anfragen.
+20. **Speicher und Pfade:** Vollen Datenträger, übergroße Cachedateien und Symlink-Wechsel während eines Zugriffs prüfen. Bisherige Daten bleiben erhalten; kein Zugriff verlässt die zugelassenen Wurzeln.
+21. **Restore:** Daten, Secrets, Dateirechte und Programme in einem zweiten Projekt wiederherstellen; ursprüngliche Volumes und andere Hostdienste bleiben unberührt.
+22. **Ubuntu-Server:** Linux-Abnahme auf `zfzfg@192.168.178.104` mit dokumentiertem Commit und Image-Digests durchführen. Bis zur tatsächlichen Ausführung bleibt dieser Punkt offen.
+
+Diese Planergänzung ändert ausschließlich das Dokument. Die historischen Testergebnisse aus Abschnitt 11 wurden dabei nicht erneut erhoben.
