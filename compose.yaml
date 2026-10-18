@@ -1,0 +1,143 @@
+name: ${COMPOSE_PROJECT_NAME:-sterracode}
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+x-security: &security
+  init: true
+  security_opt: [no-new-privileges:true]
+  stop_grace_period: 30s
+  logging: *logging
+services:
+  init:
+    build: { context: ., dockerfile: Dockerfile }
+    image: ${COMPOSE_PROJECT_NAME:-sterracode}-app:1.0.0
+    user: "0:0"
+    command: [node, docker/admin.mjs, init]
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    network_mode: none
+    volumes:
+      - app-data:/data
+      - workspaces:/workspaces
+      - runner-state:/runner-state
+      - package-cache:/package-cache
+      - tool-cache:/tool-cache
+      - runs:/runs
+      - app-key:/app-key
+      - runner-key:/runner-key
+    logging: *logging
+  app:
+    <<: *security
+    build: { context: ., dockerfile: Dockerfile }
+    image: ${COMPOSE_PROJECT_NAME:-sterracode}-app:1.0.0
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    tmpfs: ["/tmp:size=64m,mode=1777,noexec,nosuid,nodev"]
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 128
+    depends_on:
+      init: { condition: service_completed_successfully }
+      runner: { condition: service_started }
+    environment:
+      NODE_ENV: production
+      STERRACODE_MODE: docker
+      HOST: 0.0.0.0
+      PORT: "3000"
+      STERRACODE_DATA_DIR: /data
+      STERRACODE_WORKSPACE_DIR: /workspaces
+      STERRACODE_PUBLIC_URL: ${STERRACODE_PUBLIC_URL:-http://127.0.0.1:3000}
+      STERRACODE_EXTRA_ALLOWED_HOSTS: ${STERRACODE_EXTRA_ALLOWED_HOSTS:-}
+      STERRACODE_EXTRA_ALLOWED_ORIGINS: ${STERRACODE_EXTRA_ALLOWED_ORIGINS:-}
+      STERRACODE_TRUSTED_PROXIES: ${STERRACODE_TRUSTED_PROXIES:-}
+      STERRACODE_LM_STUDIO_URL: ${STERRACODE_LM_STUDIO_URL:-http://host.docker.internal:1234}
+      STERRACODE_RUNNER_URL: http://runner:3001
+      STERRACODE_RUNNER_SECRET_FILE: /run/secrets/runner_key
+    extra_hosts: [host.docker.internal:host-gateway]
+    volumes:
+      - app-data:/data
+      - workspaces:/workspaces
+      - app-key:/run/secrets:ro
+    networks: [backend]
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 4
+  runner:
+    <<: *security
+    build: { context: ., dockerfile: Dockerfile.runner }
+    image: ${COMPOSE_PROJECT_NAME:-sterracode}-runner:1.0.0
+    restart: unless-stopped
+    user: "0:0"
+    mem_limit: 2g
+    memswap_limit: 2g
+    pids_limit: 256
+    depends_on:
+      init: { condition: service_completed_successfully }
+    environment:
+      STERRACODE_INITIAL_PROGRAMS: ${STERRACODE_INITIAL_PROGRAMS:-}
+      RUNNER_IMAGE_DIGEST: ${STERRACODE_RUNNER_IMAGE_DIGEST:-node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5}
+    volumes:
+      - workspaces:/workspaces
+      - runner-state:/runner-state
+      - package-cache:/package-cache
+      - tool-cache:/tool-cache
+      # Exec-enabled named volume, not tmpfs: avoids double-accounting compiler RAM.
+      - runs:/runs
+      - runner-key:/run/secrets:ro
+    networks: [backend]
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "const fs=require('node:fs');fetch('http://127.0.0.1:3001/v1/health',{headers:{authorization:'Bearer '+fs.readFileSync('/run/secrets/runner_key','utf8').trim()}}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 4
+  admin:
+    profiles: [tools]
+    <<: *security
+    image: ${COMPOSE_PROJECT_NAME:-sterracode}-app:1.0.0
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    network_mode: none
+    entrypoint: [node, docker/admin.mjs]
+    volumes:
+      - app-data:/data
+      - workspaces:/workspaces
+      - runner-state:/runner-state
+      - package-cache:/package-cache
+      - app-key:/app-key
+      - runner-key:/runner-key
+    tmpfs: ["/tmp:size=64m,mode=1777,noexec,nosuid,nodev"]
+networks:
+  backend: {}
+volumes:
+  app-data: {}
+  workspaces: {}
+  runner-state: {}
+  package-cache: {}
+  tool-cache: {}
+  runs: {}
+  app-key: {}
+  runner-key: {}

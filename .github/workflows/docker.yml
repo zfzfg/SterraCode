@@ -1,0 +1,36 @@
+name: Docker und Regression
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm test
+  docker-amd64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: docker info && docker compose version
+      - run: npm run test:docker
+        env:
+          STERRACODE_DOCKER_REQUIRED: "1"
+          STERRACODE_DOCKER_FULL: "1"
+  playwright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Local server and port 3107 remain in playwright.config.js.
+      - run: npm run test:e2e -- --grep-invert 'Layout und Themes'

@@ -19,10 +19,21 @@ function display() {
   const s = entry();
   $("terminal-output").textContent = s.output;
   $("stop-process-btn").disabled = s.exited;
+  const reasons = {
+    timeout: "Zeitlimit",
+    output_limit: "Ausgabelimit",
+    stopped: "gestoppt",
+    interrupted: "durch Runner-Neustart unterbrochen",
+    runner_restarted: "durch Runner-Neustart unterbrochen",
+    output_expired: "Ausgabe abgelaufen",
+    resource_limit_or_sigkill: "Signal 9 · mögliches Ressourcenlimit",
+  };
   $("process-status").textContent = s.processId
-    ? s.exited
-      ? `Beendet · ${s.reason === "timeout" ? "Zeitlimit" : s.reason === "output_limit" ? "Ausgabelimit" : s.reason === "stopped" ? "gestoppt" : "Exit " + s.exitCode}`
-      : "Läuft"
+    ? s.unavailable
+      ? "Runner-Verbindung unterbrochen – Wiederverbindung läuft"
+      : s.exited
+        ? `Beendet · ${reasons[s.reason] || "Exit " + s.exitCode}`
+        : "Läuft"
     : "Bereit";
   $("terminal-input").placeholder = s.exited
     ? "Befehl im Session-Workspace eingeben …"
@@ -63,10 +74,14 @@ async function poll() {
           `/api/terminal/${s.processId}/output?sessionId=${id}&offset=${s.offset}`,
         );
         s.output += job.output;
-        s.offset = job.offset;
+        s.offset = job.nextOffset ?? job.offset;
+        s.unavailable = false;
         s.exited = job.exited;
         s.exitCode = job.exitCode;
-        s.reason = job.reason;
+        s.reason = job.outputExpired ? "output_expired" : job.reason;
+        if (job.outputExpired)
+          s.output +=
+            "\nDie Runner-Ausgabe ist nach fünf Minuten abgelaufen. Der Auftrag wird nicht erneut ausgeführt.\n";
         if (state.session?.id === id) {
           const output = $("terminal-output"),
             bottom =
@@ -75,15 +90,28 @@ async function poll() {
           if (bottom) output.scrollTop = output.scrollHeight;
         }
       } catch (error) {
-        s.exited = true;
-        s.output += `\n${error.message}\n`;
+        const recoverable =
+          error.status === 0 ||
+          error.status === 502 ||
+          error.status === 503 ||
+          error.status === 504;
+        s.exited = !recoverable;
+        if (!s.unavailable) s.output += `\n${error.message}\n`;
+        const firstFailure = !s.unavailable;
+        s.unavailable = recoverable;
         if (state.session?.id === id) {
           display();
-          toast(error.message, "error");
+          if (firstFailure) toast(error.message, "error");
         }
       }
     }
-    if (running) startPolling();
+    if (running) {
+      clearTimeout(timer);
+      timer = setTimeout(
+        poll,
+        [...sessions.values()].some((s) => s.unavailable) ? 2000 : 200,
+      );
+    }
   } finally {
     polling = false;
   }

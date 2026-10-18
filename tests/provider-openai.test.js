@@ -1,0 +1,458 @@
+import {
+  beforeAll,
+  beforeEach,
+  afterAll,
+  describe,
+  it,
+  expect,
+  vi,
+} from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { Chat } from "@lmstudio/sdk";
+
+let temp,
+  storage,
+  sessions,
+  teacher,
+  credentials,
+  openai,
+  lm,
+  responses,
+  requests;
+const jsonResponse = (body, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+const message = (text) => ({
+  type: "message",
+  role: "assistant",
+  content: [{ type: "output_text", text }],
+});
+function streaming(response) {
+  const text = (response.output || [])
+    .filter((item) => item.type === "message")
+    .flatMap((item) => item.content)
+    .map((item) => item.text || "")
+    .join("");
+  const frames = [
+    ...(text ? [{ type: "response.output_text.delta", delta: text }] : []),
+    {
+      type:
+        response.status === "incomplete"
+          ? "response.incomplete"
+          : "response.completed",
+      response,
+    },
+  ];
+  const encoded = new TextEncoder().encode(
+    frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join(""),
+  );
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        for (let index = 0; index < encoded.length; index += 31)
+          controller.enqueue(encoded.slice(index, index + 31));
+        controller.close();
+      },
+    }),
+    { headers: { "Content-Type": "text/event-stream" } },
+  );
+}
+beforeAll(async () => {
+  temp = await fs.mkdtemp(path.join(os.tmpdir(), "sterracode-openai-"));
+  vi.stubEnv("STERRACODE_DATA_DIR", temp);
+  vi.stubEnv("STERRACODE_OPENAI_API_KEY_FILE", "");
+  storage = await import("../server/services/storage.js");
+  sessions = await import("../server/services/sessions.js");
+  teacher = await import("../server/services/teacher.js");
+  credentials = await import("../server/services/providerCredentials.js");
+  openai = await import("../server/services/openAI.js");
+  lm = await import("../server/services/lmStudio.js");
+  await storage.ensureDataDirs();
+});
+beforeEach(async () => {
+  vi.stubEnv("STERRACODE_OPENAI_API_KEY_FILE", "");
+  await credentials.updateProviderCredentials({
+    provider: "openai",
+    apiKey: "sk-fixture-private-key",
+  });
+  await storage.updateSettings({
+    provider: "openai",
+    openAIModel: "fixture-responses-model",
+    openAIContextLength: 128000,
+  });
+  responses = [];
+  requests = [];
+  openai.setOpenAITransportForTests(async (url, options) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    requests.push({ url, options, body });
+    if (url.endsWith("/models"))
+      return jsonResponse({ data: [{ id: "fixture-responses-model" }] });
+    if (url.endsWith("/responses/input_tokens"))
+      return jsonResponse({
+        input_tokens: Math.ceil(JSON.stringify(body).length / 4),
+      });
+    const response = responses.shift() || {
+      status: "completed",
+      output: [message("Antwort Grüße 世界")],
+    };
+    return body.stream ? streaming(response) : jsonResponse(response);
+  });
+});
+afterAll(async () => {
+  openai.setOpenAITransportForTests();
+  vi.unstubAllEnvs();
+  await fs.rm(temp, { recursive: true, force: true });
+});
+describe("OpenAI key handling", () => {
+  it("returns only configured metadata and rejects general settings credentials", async () => {
+    expect(await credentials.getProviderCredentials()).toEqual({
+      openai: { configured: true, source: "saved" },
+    });
+    expect(JSON.stringify(await storage.getSettings())).not.toContain(
+      "sk-fixture-private-key",
+    );
+    await expect(
+      storage.updateSettings({ apiKey: "sk-secret" }),
+    ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    if (process.platform !== "win32")
+      expect(
+        (await fs.stat(path.join(temp, "provider-secrets.json"))).mode & 0o777,
+      ).toBe(0o600);
+    await credentials.updateProviderCredentials({
+      provider: "openai",
+      apiKey: null,
+    });
+    expect((await credentials.getProviderCredentials()).openai.configured).toBe(
+      false,
+    );
+    await expect(credentials.getOpenAIKey()).rejects.toMatchObject({
+      code: "OPENAI_KEY_REQUIRED",
+    });
+  });
+  it("prioritizes a read-only secret file and never sends keys to a configurable URL", async () => {
+    const file = path.join(temp, "openai-secret");
+    await fs.writeFile(file, "sk-file-private-key\n");
+    vi.stubEnv("STERRACODE_OPENAI_API_KEY_FILE", file);
+    expect(await credentials.getOpenAIKey()).toBe("sk-file-private-key");
+    await expect(
+      credentials.updateProviderCredentials({
+        provider: "openai",
+        apiKey: null,
+      }),
+    ).rejects.toMatchObject({ code: "EXTERNAL_SECRET" });
+    await lm.listLoadedModels({
+      provider: "openai",
+      lmStudioUrl: "http://attacker.invalid",
+    });
+    expect(requests[0].url).toBe("https://api.openai.com/v1/models");
+    expect(requests[0].options.redirect).toBe("error");
+    expect(requests[0].options.headers.Authorization).toBe(
+      "Bearer sk-file-private-key",
+    );
+  });
+});
+describe("Responses provider", () => {
+  it("isolates token memos and context namespaces by provider and effective LM Studio origin", async () => {
+    const { ContextManager, contextProviderIdentity } =
+      await import("../server/services/context/index.js");
+    const session = await sessions.createSession();
+    const make = (provider, count) =>
+      new ContextManager({
+        connection: {
+          identity: "identical-model-metadata",
+          model: { countTokens: async () => count },
+        },
+        settings: { provider, lmStudioUrl: "http://original.example" },
+        sessionId: session.id,
+        signal: new AbortController().signal,
+      });
+    expect(await make("lmstudio", 10).count("identical-token-input")).toBe(10);
+    expect(await make("openai", 20).count("identical-token-input")).toBe(20);
+    const original = contextProviderIdentity({
+      provider: "lmstudio",
+      lmStudioUrl: "http://original.example",
+    });
+    vi.stubEnv("STERRACODE_LM_STUDIO_OVERRIDE_URL", "https://other-lm.example");
+    try {
+      expect(await make("lmstudio", 30).count("identical-token-input")).toBe(
+        30,
+      );
+      expect(
+        contextProviderIdentity({
+          provider: "lmstudio",
+          lmStudioUrl: "http://original.example",
+        }),
+      ).not.toBe(original);
+    } finally {
+      vi.stubEnv("STERRACODE_LM_STUDIO_OVERRIDE_URL", "");
+    }
+  });
+  it("tests model access and exact remote input counts without generating a response", async () => {
+    const result = await openai.testOpenAIConnection(
+      await storage.getSettings(),
+    );
+    expect(result).toMatchObject({
+      provider: "openai",
+      status: "ready",
+      tokenization: true,
+    });
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://api.openai.com/v1/models",
+      "https://api.openai.com/v1/responses/input_tokens",
+    ]);
+  });
+  it("measures full message and function schemas with the Responses count endpoint", async () => {
+    const { model } = await lm.connectModel(await storage.getSettings());
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "read_file",
+          description: "Read",
+          parameters: {
+            type: "object",
+            properties: { path: { type: "string" } },
+          },
+        },
+      },
+    ];
+    const rendered = await model.applyPromptTemplate(
+      Chat.from([
+        { role: "system", content: "Root" },
+        { role: "user", content: "Hello" },
+      ]),
+      { toolDefinitions: tools },
+    );
+    await model.countTokens(rendered);
+    expect(requests.at(-1).body).toMatchObject({
+      model: "fixture-responses-model",
+      input: [
+        { role: "developer", content: "Root" },
+        { role: "user", content: "Hello" },
+      ],
+      tools: [{ type: "function", name: "read_file", strict: false }],
+    });
+  });
+  it("streams and persists one final assistant response through the existing teacher", async () => {
+    const session = await sessions.createSession();
+    const events = [];
+    const result = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Hallo",
+      stream: true,
+      onEvent: (type, data) => events.push({ type, data }),
+    });
+    expect(result.turn.status).toBe("done");
+    expect(
+      result.session.messages
+        .filter((m) => m.role === "assistant")
+        .map((m) => m.content),
+    ).toEqual(["Antwort Grüße 世界"]);
+    expect(
+      events.some(
+        (event) => event.type === "token" && event.data.token.includes("世界"),
+      ),
+    ).toBe(true);
+    const generation = requests.find((request) =>
+      request.url.endsWith("/responses"),
+    );
+    expect(generation.body).toMatchObject({
+      store: false,
+      stream: true,
+      parallel_tool_calls: false,
+      truncation: "disabled",
+      include: ["reasoning.encrypted_content"],
+    });
+  });
+  it("persists a tool request before execution and carries encrypted reasoning to the next pass", async () => {
+    const session = await sessions.createSession();
+    responses.push({
+      status: "completed",
+      output: [
+        {
+          id: "rs_fixture",
+          type: "reasoning",
+          summary: [],
+          encrypted_content: "opaque-fixture-reasoning",
+        },
+        {
+          type: "function_call",
+          call_id: "call_fixture",
+          name: "list_files",
+          arguments: "{}",
+        },
+      ],
+    });
+    responses.push({
+      status: "completed",
+      output: [message("Die Dateien sind gelesen.")],
+    });
+    const result = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Welche Dateien?",
+    });
+    expect(result.turn.status).toBe("done");
+    const generations = requests.filter((request) =>
+      request.url.endsWith("/responses"),
+    );
+    expect(generations).toHaveLength(2);
+    const input = generations[1].body.input;
+    expect(
+      input.some(
+        (item) =>
+          item.type === "reasoning" &&
+          item.encrypted_content === "opaque-fixture-reasoning",
+      ),
+    ).toBe(true);
+    expect(
+      input.some(
+        (item) =>
+          item.type === "function_call" && item.call_id === "call_fixture",
+      ),
+    ).toBe(true);
+    expect(
+      input.some(
+        (item) =>
+          item.type === "function_call_output" &&
+          item.call_id === "call_fixture",
+      ),
+    ).toBe(true);
+    const assistant = result.session.messages.find((m) => m.tool_calls?.length);
+    expect(assistant.providerItems[0].type).toBe("reasoning");
+    expect(
+      result.session.messages.findIndex((m) => m === assistant),
+    ).toBeLessThan(result.session.messages.findIndex((m) => m.role === "tool"));
+  });
+  it("supports internal summarization using the same budgeted provider", async () => {
+    const { model } = await lm.connectModel(await storage.getSettings());
+    const { predictInternal } =
+      await import("../server/services/context/core/internalPrediction.js");
+    const result = await predictInternal(
+      model,
+      Chat.from([
+        { role: "system", content: "Summarize" },
+        { role: "user", content: "Known context" },
+      ]),
+      { maxTokens: 500 },
+      { abortSignal: new AbortController().signal },
+    );
+    expect(result.content).toContain("Antwort");
+    expect(
+      requests.find((request) => request.url.endsWith("/responses")).body,
+    ).toMatchObject({ max_output_tokens: 500, tools: [], store: false });
+  });
+  it("does not execute incomplete calls and preserves an interrupted stream without replay", async () => {
+    const { model } = await lm.connectModel(await storage.getSettings()),
+      execute = vi.fn();
+    responses.push({
+      status: "incomplete",
+      output: [
+        {
+          type: "function_call",
+          call_id: "unfinished",
+          name: "list_files",
+          arguments: "{}",
+        },
+      ],
+    });
+    const result = await openai.runOpenAIModelPass({
+      model,
+      chat: Chat.from("Hello"),
+      definitions: [],
+      maxTokens: 32,
+      signal: new AbortController().signal,
+      onAssistant: vi.fn(),
+      onExecute: execute,
+      capResult: vi.fn(),
+    });
+    expect(result.stopReason).toBe("maxPredictedTokensReached");
+    expect(execute).not.toHaveBeenCalled();
+    openai.setOpenAITransportForTests(
+      async () =>
+        new Response(
+          'data: {"type":"response.output_text.delta","delta":"Part"}\n\n',
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+    );
+    await expect(
+      openai.runOpenAIModelPass({
+        model,
+        chat: Chat.from("Hello"),
+        definitions: [],
+        maxTokens: 32,
+        signal: new AbortController().signal,
+        onAssistant: vi.fn(),
+        onExecute: execute,
+        capResult: vi.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: "OPENAI_STREAM_INTERRUPTED",
+      passStats: { visibleChars: 4, executedTools: 0 },
+    });
+  });
+  it("never returns a remote error body containing secrets", async () => {
+    openai.setOpenAITransportForTests(async () =>
+      jsonResponse(
+        {
+          error: {
+            message: "sk-fixture-private-key source text",
+            code: "invalid_api_key",
+          },
+        },
+        401,
+      ),
+    );
+    const result = await openai.testOpenAIConnection(
+      await storage.getSettings(),
+    );
+    expect(result.code).toBe("OPENAI_AUTH_FAILED");
+    expect(JSON.stringify(result)).not.toContain("sk-fixture-private-key");
+  });
+  it("records malformed tool arguments safely without executing them", async () => {
+    const { model } = await lm.connectModel(await storage.getSettings());
+    responses.push({
+      status: "completed",
+      output: [
+        {
+          type: "function_call",
+          call_id: "bad_arguments",
+          name: "list_files",
+          arguments: "{broken",
+        },
+      ],
+    });
+    const execute = vi.fn(),
+      invalid = vi.fn(),
+      assistant = vi.fn();
+    await openai.runOpenAIModelPass({
+      model,
+      chat: Chat.from("Hello"),
+      definitions: [
+        { type: "function", function: { name: "list_files", parameters: {} } },
+      ],
+      maxTokens: 32,
+      signal: new AbortController().signal,
+      onAssistant: assistant,
+      onExecute: execute,
+      onInvalid: invalid,
+      capResult: vi.fn(),
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(invalid).toHaveBeenCalledOnce();
+    expect(assistant.mock.calls[0][0].tool_calls[0].function.arguments).toBe(
+      "{}",
+    );
+  });
+  it("cancels before sending an OpenAI request", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("user cancelled"));
+    await expect(openai.listOpenAIModels(controller.signal)).rejects.toThrow(
+      "user cancelled",
+    );
+    expect(requests).toHaveLength(0);
+  });
+});

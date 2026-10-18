@@ -12,6 +12,13 @@ import { createSession, loadSessions, languageOptions } from "./js/sessions.js";
 import { initWorkspace } from "./js/workspace.js";
 import { initChat, updateChatState, showChanges } from "./js/chat.js";
 import { initTerminal, updateRunState } from "./js/terminal.js";
+import {
+  ensureAccess,
+  changePassword,
+  configureModel,
+  openCredentials,
+} from "./js/setup.js";
+import { openPrograms } from "./js/programs.js";
 
 let modelsLoading = false,
   layoutTimer;
@@ -23,6 +30,10 @@ async function refreshModels() {
     const data = await api("/api/models");
     state.connected = data.connected;
     state.models = data.models;
+    const modelKey =
+      state.settings.provider === "openai" ? "openAIModel" : "activeModel";
+    const providerName =
+      state.settings.provider === "openai" ? "OpenAI" : "LM Studio";
     const select = $("model-select");
     select.replaceChildren();
     for (const model of data.models) {
@@ -30,43 +41,70 @@ async function refreshModels() {
       option.value = model.id;
       select.append(option);
     }
-    if (data.models.length) {
-      if (!data.models.some((m) => m.id === state.settings.activeModel))
+    if (
+      modelKey === "openAIModel" &&
+      state.settings[modelKey] &&
+      !data.models.some((model) => model.id === state.settings[modelKey])
+    ) {
+      const configured = node(
+        "option",
+        "",
+        `${state.settings[modelKey]} (eigene Modell-ID)`,
+      );
+      configured.value = state.settings[modelKey];
+      select.append(configured);
+    }
+    if (select.options.length) {
+      if (
+        modelKey === "activeModel" &&
+        !data.models.some((m) => m.id === state.settings[modelKey])
+      )
         state.settings = await api("/api/chat/settings", {
           method: "PATCH",
           body: { activeModel: data.models[0].id },
         });
-      select.value = state.settings.activeModel;
+      if (modelKey === "openAIModel" && !state.settings[modelKey]) {
+        const placeholder = node("option", "", "OpenAI-Modell auswählen");
+        placeholder.value = "";
+        select.prepend(placeholder);
+      }
+      select.value = state.settings[modelKey];
     } else {
       const option = node(
         "option",
         "",
-        data.connected ? "Kein Modell geladen" : "LM Studio offline",
+        data.connected ? "Kein Modell verfügbar" : `${providerName} offline`,
       );
       option.value = "";
       select.append(option);
     }
-    select.disabled = !data.models.length;
+    select.disabled = !data.connected || !select.options.length;
     state.ready =
       data.connected &&
-      data.models.some((m) => m.id === state.settings.activeModel);
+      (modelKey === "openAIModel"
+        ? Boolean(state.settings[modelKey])
+        : data.models.some((m) => m.id === state.settings[modelKey]));
     const text = state.ready
-      ? "LM Studio verbunden"
+      ? `${providerName} verbunden`
       : data.connected
-        ? "Bitte in LM Studio ein Modell laden."
-        : data.error || "LM Studio starten und den lokalen Server aktivieren.";
+        ? modelKey === "openAIModel"
+          ? "Bitte ein OpenAI-Modell in den Einstellungen oder in einer Session auswählen."
+          : "Bitte in LM Studio ein Modell laden."
+        : data.error || `${providerName}-Adresse und Zugangsdaten prüfen.`;
     $("connection-badge").className =
       `status-dot ${state.ready ? "ready" : "offline"}`;
     $("connection-badge").setAttribute("aria-label", text);
     $("connection-badge").title = text;
     $("connection-text").textContent = state.ready
-      ? "LM Studio verbunden"
+      ? `${providerName} verbunden`
       : data.connected
-        ? "Kein Modell geladen"
-        : "LM Studio offline";
+        ? modelKey === "openAIModel"
+          ? "Kein Modell ausgewählt"
+          : "Kein Modell geladen"
+        : `${providerName} offline`;
     $("connection-help").textContent = state.ready ? "" : text;
     $("welcome-status").textContent = state.ready
-      ? "Dein lokaler KI-Tutor ist bereit."
+      ? "Dein KI-Tutor ist bereit."
       : `${text} Du kannst Sessions und Dateien bereits offline bearbeiten.`;
   } finally {
     modelsLoading = false;
@@ -276,14 +314,47 @@ function initLayout() {
 }
 async function openSettings() {
   const s = state.settings;
+  let nextAction;
   const fields = [
+    {
+      name: "provider",
+      label: "KI-Anbieter",
+      type: "select",
+      value: s.provider || "lmstudio",
+      options: [
+        {
+          value: "lmstudio",
+          label: "LM Studio (Host, LAN oder externe Adresse)",
+        },
+        { value: "openai", label: "OpenAI API" },
+      ],
+    },
     {
       name: "lmStudioUrl",
       label: "LM-Studio-URL",
       value: s.lmStudioUrl,
       required: true,
     },
-    { name: "activeModel", label: "Modell-ID", value: s.activeModel || "" },
+    {
+      name: "activeModel",
+      label: "LM-Studio-Modell-ID",
+      value: s.activeModel || "",
+    },
+    {
+      name: "openAIModel",
+      label: "OpenAI-Modell-ID",
+      value: s.openAIModel || "",
+      help: "Ein verfügbares Textmodell mit Funktionsaufrufen auswählen. Der API-Schlüssel wird unter KI-Zugangsdaten gespeichert.",
+    },
+    {
+      name: "openAIContextLength",
+      label: "OpenAI-Kontextbudget (Tokens)",
+      type: "number",
+      min: 4096,
+      max: 2000000,
+      value: s.openAIContextLength || 128000,
+      help: "Höchstens das Kontextfenster des gewählten Modells eintragen.",
+    },
     {
       name: "theme",
       label: "Darstellung",
@@ -458,6 +529,49 @@ async function openSettings() {
   ];
   const result = await formDialog({
     title: "Einstellungen",
+    actions: [
+      {
+        label: "KI-Zugangsdaten",
+        onClick: () => {
+          nextAction = async () => {
+            await openCredentials();
+            await refreshModels();
+          };
+        },
+      },
+      ...(state.server.mode === "docker" || state.server.authRequired
+        ? [
+            {
+              label: "Programme",
+              onClick: () => {
+                nextAction = () => openPrograms();
+              },
+            },
+            {
+              label: "Server",
+              onClick: () => {
+                nextAction = showServer;
+              },
+            },
+            {
+              label: "Passwort ändern",
+              onClick: () => {
+                nextAction = changePassword;
+              },
+            },
+            {
+              label: "Abmelden",
+              onClick: () => {
+                nextAction = async () => {
+                  await flush();
+                  await api("/api/logout", { method: "POST", body: {} });
+                  location.reload();
+                };
+              },
+            },
+          ]
+        : []),
+    ],
     fields,
     onPreview: (values) => applyTheme(values.theme),
     onSave: async (values) => {
@@ -485,8 +599,50 @@ async function openSettings() {
     await Promise.all([refreshModels(), refreshRuntimes()]);
     toast("Einstellungen gespeichert.");
   }
+  if (nextAction) await nextAction();
+}
+async function showServer() {
+  const server = await api("/api/server");
+  let diagnosis;
+  try {
+    diagnosis = await api("/api/diagnostics");
+  } catch (error) {
+    diagnosis = { error: error.message };
+  }
+  await formDialog({
+    title: "Server",
+    description:
+      "Netzwerkwerte werden in der Serverkonfiguration geändert. Anschließend den Stack mit den Docker-Startskripten neu erstellen.",
+    fields: [
+      {
+        name: "address",
+        label: "Öffentliche Adresse",
+        value: server.publicUrl || location.origin,
+        readOnly: true,
+      },
+      {
+        name: "source",
+        label: "Konfigurationsquelle",
+        value: server.source || ".env / Compose",
+        readOnly: true,
+      },
+      {
+        name: "diagnostics",
+        label: "Diagnose",
+        type: "textarea",
+        rows: 12,
+        value: JSON.stringify(diagnosis, null, 2),
+        readOnly: true,
+      },
+    ],
+  });
 }
 async function init() {
+  const access = await ensureAccess();
+  state.server = await api("/api/server");
+  if (state.server.mode === "docker" || access.authRequired)
+    $("workspace-status").textContent =
+      `Serverbetrieb · ${state.server.publicUrl || location.origin}`;
   state.settings = await api("/api/chat/settings");
   applyTheme(state.settings.theme);
   for (const l of languageOptions) {
@@ -526,7 +682,11 @@ async function init() {
     try {
       state.settings = await api("/api/chat/settings", {
         method: "PATCH",
-        body: { activeModel: $("model-select").value },
+        body: {
+          [state.settings.provider === "openai"
+            ? "openAIModel"
+            : "activeModel"]: $("model-select").value,
+        },
       });
       await refreshModels();
     } catch (e) {
@@ -570,7 +730,16 @@ async function init() {
     persistLayout();
   }
   applyLayout();
+  if (access.created) {
+    await openPrograms({ initial: true });
+    await configureModel();
+    state.settings = await api("/api/chat/settings");
+    await Promise.allSettled([refreshModels(), refreshRuntimes()]);
+  }
 }
+window.addEventListener("auth-required", () => {
+  ensureAccess().catch((error) => toast(error.message, "error"));
+});
 init().catch((error) =>
   toast(
     `SterraCode konnte nicht vollständig starten: ${error.message}`,

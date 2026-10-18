@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { AppError, getSettings, validateSessionId } from "./storage.js";
+import {
+  AppError,
+  getSettings,
+  validateSessionId,
+  serial,
+  assertSessionWritable,
+} from "./storage.js";
 import { loadSession, mutateSession, message } from "./sessions.js";
 import { connectModel, runModelPass } from "./lmStudio.js";
 import { setTimeout as delay } from "node:timers/promises";
@@ -11,6 +17,12 @@ import { isTransientEngineError } from "./context/core/retry.js";
 import { getProfile, profileToPromptText } from "./profileManager.js";
 
 const active = new Map();
+export function abortAllTurns() {
+  for (const controller of active.values())
+    controller.abort(
+      new DOMException("Server wird heruntergefahren.", "AbortError"),
+    );
+}
 export function abortTurn(sessionId) {
   active.get(sessionId)?.abort();
   return { ok: true };
@@ -82,14 +94,17 @@ export async function runTeacher({
       (userMessage.trim() && !contextCommand(userMessage)))
   )
     throw new AppError("Ungültige Kontextaktion.");
-  if (active.has(sessionId))
-    throw new AppError(
-      "Für diese Session läuft bereits eine Antwort.",
-      409,
-      "TURN_BUSY",
-    );
   const controller = new AbortController();
-  active.set(sessionId, controller);
+  await serial(`lifecycle:${sessionId}`, async () => {
+    await assertSessionWritable(sessionId);
+    if (active.has(sessionId))
+      throw new AppError(
+        "Für diese Session läuft bereits eine Antwort.",
+        409,
+        "TURN_BUSY",
+      );
+    active.set(sessionId, controller);
+  });
   const abort = () => controller.abort(signal?.reason);
   signal?.addEventListener("abort", abort, { once: true });
   if (signal?.aborted) abort();
@@ -159,9 +174,16 @@ export async function runTeacher({
           estimatedUsage(session, settings).promptTokens,
         replayed: true,
       };
-    if (!action && !settings.activeModel)
+    if (
+      !action &&
+      !(settings.provider === "openai"
+        ? settings.openAIModel
+        : settings.activeModel)
+    )
       throw new AppError(
-        "Bitte in LM Studio ein Modell laden und auswählen.",
+        settings.provider === "openai"
+          ? "Bitte eine OpenAI-Modell-ID auswählen."
+          : "Bitte in LM Studio ein Modell laden und auswählen.",
         400,
         "NO_MODEL",
       );
@@ -313,6 +335,9 @@ export async function runTeacher({
               const m = message("assistant", response.content || "", {
                 turnId,
                 thinking: response.thinking || thinking,
+                ...(response.providerItems?.length
+                  ? { providerItems: response.providerItems }
+                  : {}),
                 ...(response.tool_calls.length
                   ? { tool_calls: response.tool_calls }
                   : {}),

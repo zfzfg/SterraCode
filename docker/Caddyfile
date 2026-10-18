@@ -1,0 +1,19 @@
+(internal) {
+    tls internal
+}
+(public) {
+}
+{$STERRACODE_DOMAIN} {
+    import {$STERRACODE_TLS_MODE}
+    request_body {
+        max_size 4MB
+    }
+    reverse_proxy app:3000 {
+        flush_interval -1
+        transport http {
+            response_header_timeout 25m
+            read_timeout 25m
+            write_timeout 25m
+        }
+    }
+}

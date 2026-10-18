@@ -2,7 +2,9 @@
 
 Stand: 18.10.2026, vertieft nach Durchsicht von Serverstart, Prozessdienst, Routen, Datenpfaden und Oberfläche. Planungsbranch: `feature/docker-deployment`, ausgehend von `main` bei `d5d0f3d`.
 
-Dieses Dokument beschreibt den geplanten Umbau. Die Docker-Funktionen sind noch nicht implementiert. `npm start`, `start.ps1` und `start.bat` bleiben der lokale Entwicklungsweg.
+Dieses Dokument hält die Anforderungen des Umbaus fest. Die Implementierung und ihre tatsächlichen Prüfungen werden in [docker/ABNAHME.md](docker/ABNAHME.md) dokumentiert; Bedienung und Betrieb stehen in [DOCKER-BETRIEB.md](DOCKER-BETRIEB.md). `npm start`, `start.ps1` und `start.bat` bleiben der lokale Entwicklungsweg. Historische Planungsstände und damalige Testergebnisse unten sind keine aktuellen Freigaben.
+
+Ergänzung während der Umsetzung: Auf Nutzerwunsch unterstützt die KI-Verbindung zusätzlich die direkte OpenAI Responses API mit geschützter Schlüsselablage. LM Studio kann auf dem Dockerhost, einem anderen LAN-Rechner oder einer externen erreichbaren Adresse laufen. Die Windows-Docker-Abnahme wird auf ausdrücklichen Nutzerwunsch zunächst offengelassen.
 
 ## 1. Gewünschtes Ergebnis
 

@@ -1,15 +1,32 @@
 import { LMStudioClient, rawFunctionTool } from "@lmstudio/sdk";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
+import fs from "node:fs/promises";
 import { AppError } from "./storage.js";
 import { createPassCap } from "./context/core/passCap.js";
 import { stripReasoningMarkers } from "./context/core/reasoning.js";
+import {
+  connectOpenAIModel,
+  listOpenAIModels,
+  runOpenAIModelPass,
+} from "./openAI.js";
 
 const clients = new Map();
-let clientFactory = (options) => new LMStudioClient(options);
+let previousIdentity;
+const privateLogger = Object.fromEntries(
+  ["info", "error", "warn", "debug"].map((name) => [name, () => {}]),
+);
+const defaultClientFactory = (options) =>
+  new LMStudioClient({
+    ...options,
+    verboseErrorMessages: false,
+    logger: privateLogger,
+  });
+let clientFactory = defaultClientFactory;
 // Module dependency injection for contract tests and the isolated browser fixture.
 export function setLMStudioClientFactory(factory) {
   clients.clear();
-  clientFactory = factory || ((options) => new LMStudioClient(options));
+  previousIdentity = undefined;
+  clientFactory = factory || defaultClientFactory;
 }
 export function rpc(promise, signal, timeout = 10000) {
   return new Promise((resolve, reject) => {
@@ -44,22 +61,130 @@ export function rpc(promise, signal, timeout = 10000) {
     );
   });
 }
-function clientFor(settings) {
-  const url = new URL(settings.lmStudioUrl);
+function validatedUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new AppError("Ungültige LM-Studio-URL.");
+  }
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  )
+    throw new AppError("Ungültige LM-Studio-URL.");
+  return url;
+}
+export function lmStudioWarning(
+  value,
+  docker = process.env.STERRACODE_MODE === "docker",
+) {
+  if (!docker) return null;
+  const url = validatedUrl(value);
+  if (["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname))
+    return "Die gespeicherte LM-Studio-Adresse zeigt im Container auf die App selbst. Bitte host.docker.internal oder die LAN-Adresse des Modellservers verwenden.";
+  return null;
+}
+async function clientFor(settings) {
+  const url = validatedUrl(
+    process.env.STERRACODE_LM_STUDIO_OVERRIDE_URL || settings.lmStudioUrl,
+  );
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   const baseUrl = url.href.replace(/\/$/, "");
-  let client = clients.get(baseUrl);
+  let token = "";
+  if (process.env.STERRACODE_LM_STUDIO_TOKEN_FILE) {
+    try {
+      token = (
+        await fs.readFile(process.env.STERRACODE_LM_STUDIO_TOKEN_FILE, "utf8")
+      ).trim();
+    } catch {
+      throw new AppError(
+        "LM-Studio-Secret-Datei ist nicht lesbar.",
+        503,
+        "LM_SECRET_UNAVAILABLE",
+      );
+    }
+  }
+  const identity = `${baseUrl}:${createHash("sha256").update(token).digest("hex")}`;
+  if (identity !== previousIdentity) {
+    clients.clear();
+    previousIdentity = identity;
+  }
+  let client = clients.get(identity);
   if (!client) {
-    client = clientFactory({ baseUrl }, settings);
-    clients.set(baseUrl, client);
-    if (clients.size > 4) clients.delete(clients.keys().next().value);
+    client = clientFactory(
+      { baseUrl, ...(token ? { apiToken: token } : {}) },
+      settings,
+    );
+    clients.set(identity, client);
   }
   return client;
 }
 export async function listLoadedModels(settings, signal) {
-  return rpc(clientFor(settings).llm.listLoaded(), signal, 4000);
+  if (settings.provider === "openai") return listOpenAIModels(signal);
+  return rpc((await clientFor(settings)).llm.listLoaded(), signal, 4000);
+}
+export async function testLMStudioConnection(settings, signal) {
+  const effectiveUrl =
+    process.env.STERRACODE_LM_STUDIO_OVERRIDE_URL || settings.lmStudioUrl;
+  const warning = lmStudioWarning(effectiveUrl);
+  if (warning)
+    return {
+      connected: false,
+      status: "invalid-container-address",
+      native: true,
+      warning,
+    };
+  try {
+    const models = await listLoadedModels(
+      { ...settings, provider: "lmstudio" },
+      signal,
+    );
+    if (!models.length)
+      return {
+        connected: true,
+        status: "no-model",
+        native: true,
+        tokenization: false,
+        models: [],
+      };
+    const selected =
+      models.find((model) => model.identifier === settings.activeModel) ||
+      models[0];
+    const [contextLength, tokenCount] = await Promise.all([
+      rpc(selected.getContextLength(), signal, 4000),
+      rpc(selected.countTokens("SterraCode Verbindungstest"), signal, 4000),
+    ]);
+    return {
+      connected: true,
+      status: "ready",
+      native: true,
+      tokenization: true,
+      contextLength,
+      tokenCount,
+      models: models.map((model) => ({
+        id: model.identifier,
+        name: model.displayName || model.identifier,
+      })),
+    };
+  } catch (error) {
+    return {
+      connected: false,
+      status: "offline",
+      native: true,
+      tokenization: false,
+      code: error.code || "LM_STUDIO_UNAVAILABLE",
+      error:
+        "LM Studio ist über das native SDK nicht erreichbar. Adresse, Netzwerkfreigabe und Secret-Datei prüfen.",
+    };
+  }
 }
 export async function connectModel(settings, signal) {
+  if (settings.provider === "openai")
+    return connectOpenAIModel(settings, signal);
   signal?.throwIfAborted();
   if (!settings.activeModel)
     throw new AppError(
@@ -123,6 +248,22 @@ export async function runModelPass({
   capResult,
   allocateCallId = () => randomUUID().replaceAll("-", "").slice(0, 9),
 }) {
+  if (model.provider === "openai")
+    return runOpenAIModelPass({
+      model,
+      chat,
+      definitions,
+      maxTokens,
+      temperature,
+      signal,
+      onToken,
+      onReasoning,
+      onAssistant,
+      onExecute,
+      onInvalid,
+      capResult,
+      allocateCallId,
+    });
   const passController = new AbortController();
   const mirror = () => passController.abort(signal.reason);
   if (signal.aborted) mirror();

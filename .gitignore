@@ -8,5 +8,10 @@ server/data/settings.json
 *.tmp
 *.log
 .env
+.env.*
+!.env.example
+.secrets/
+secrets/
+docker-backups/
 .vscode/
 .DS_Store

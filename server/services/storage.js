@@ -6,7 +6,15 @@ import { CONTEXT_DEFAULTS, CONTEXT_VERSION } from "./context/settings.js";
 
 export const DATA_DIR = path.resolve(
   process.env.STERRACODE_DATA_DIR ||
-    path.join(path.dirname(fileURLToPath(import.meta.url)), "../data"),
+    (process.env.STERRACODE_MODE === "docker"
+      ? "/data"
+      : path.join(path.dirname(fileURLToPath(import.meta.url)), "../data")),
+);
+export const WORKSPACE_DIR = path.resolve(
+  process.env.STERRACODE_WORKSPACE_DIR ||
+    (process.env.STERRACODE_MODE === "docker"
+      ? "/workspaces"
+      : path.join(DATA_DIR, "workspaces")),
 );
 const queues = new Map();
 export class AppError extends Error {
@@ -43,8 +51,22 @@ export async function writeJSON(file, data) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${randomUUID()}.tmp`;
   try {
-    await fs.writeFile(temp, JSON.stringify(data, null, 2), "utf8");
+    const handle = await fs.open(temp, "wx", 0o600);
+    try {
+      await handle.writeFile(JSON.stringify(data, null, 2), "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
     await fs.rename(temp, file);
+    if (process.platform !== "win32") {
+      const directory = await fs.open(path.dirname(file), "r");
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
+    }
   } finally {
     await fs.rm(temp, { force: true }).catch(() => {});
   }
@@ -82,7 +104,14 @@ export const LANGUAGES = [
 ];
 export function defaultSettings() {
   return {
-    lmStudioUrl: "http://localhost:1234",
+    provider: "lmstudio",
+    openAIModel: "",
+    openAIContextLength: 128000,
+    lmStudioUrl:
+      process.env.STERRACODE_LM_STUDIO_URL ||
+      (process.env.STERRACODE_MODE === "docker"
+        ? "http://host.docker.internal:1234"
+        : "http://localhost:1234"),
     activeModel: null,
     temperature: 0.4,
     maxTokensResponse: 2048,
@@ -108,13 +137,18 @@ export async function ensureDataDirs() {
   for (const dir of [
     "sessions",
     "profiles",
-    "workspaces",
     "backups",
     "changes",
     "runs",
     "context",
+    "deletions",
   ])
     await fs.mkdir(path.join(DATA_DIR, dir), { recursive: true });
+  await fs.mkdir(WORKSPACE_DIR, { recursive: true, mode: 0o2770 });
+  if (process.env.STERRACODE_MODE === "docker") {
+    await fs.chmod(DATA_DIR, 0o700);
+    await fs.chmod(WORKSPACE_DIR, 0o2770);
+  }
   const file = path.join(DATA_DIR, "settings.json");
   try {
     await fs.access(file);
@@ -138,6 +172,12 @@ export async function getSettings() {
     const legacyPrompt =
       saved.systemPrompt?.includes("Du bist SterraCode Teacher,") &&
       saved.systemPrompt.includes("read_editor");
+    saved = Object.fromEntries(
+      Object.entries(saved).filter(
+        ([key]) =>
+          Object.hasOwn(defaultSettings(), key) || key === "editorWidth",
+      ),
+    );
     return {
       ...defaultSettings(),
       ...saved,
@@ -188,10 +228,18 @@ export async function updateSettings(updates) {
         throw new AppError(`Ungültige Einstellung: ${key}`);
     }
     const next = { ...current, ...updates };
+    if (
+      !["lmstudio", "openai"].includes(next.provider) ||
+      !/^[A-Za-z0-9._:-]{0,200}$/.test(next.openAIModel)
+    )
+      throw new AppError("Ungültiger KI-Anbieter oder ungültige Modell-ID.");
+    if (!Number.isInteger(next.openAIContextLength))
+      throw new AppError("Das Kontextbudget muss eine ganze Zahl sein.");
     if (!["dark", "light", "high-contrast", "solarized"].includes(next.theme))
       throw new AppError("Ungültiges Theme.");
     for (const [key, min, max] of [
       ["temperature", 0, 1],
+      ["openAIContextLength", 4096, 2000000],
       ["fontSize", 10, 24],
       ["executionTimeout", 0, 600000],
       ["compilationTimeout", 1000, 600000],
@@ -263,9 +311,10 @@ export async function getSessionTitle(id) {
 }
 export async function getWorkspacePath(id) {
   validateSessionId(id);
+  await assertSessionWritable(id);
   const { loadSession } = await import("./sessions.js");
   await loadSession(id);
-  const parent = path.join(DATA_DIR, "workspaces"),
+  const parent = WORKSPACE_DIR,
     root = path.join(parent, id);
   for (const directory of [parent, root])
     if ((await fs.lstat(directory)).isSymbolicLink())
@@ -275,4 +324,19 @@ export async function getWorkspacePath(id) {
         "PATH_DENIED",
       );
   return root;
+}
+
+export async function assertSessionWritable(id) {
+  validateSessionId(id);
+  try {
+    await fs.access(path.join(DATA_DIR, "deletions", `${id}.json`));
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  throw new AppError(
+    "Session wird gelöscht. Bei unterbrochener Verbindung das Löschen erneut ausführen.",
+    409,
+    "SESSION_DELETING",
+  );
 }

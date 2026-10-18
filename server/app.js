@@ -9,10 +9,31 @@ import terminal from "./routes/terminal.js";
 import execute from "./routes/execute.js";
 import { route } from "./routes/helpers.js";
 import { getRuntimes } from "./services/processes.js";
+import { loadConfig, normalizeHost } from "./config.js";
+import { createAuthService } from "./services/auth.js";
+import {
+  createAuthRouter,
+  requireAuthentication,
+  createAccountRouter,
+} from "./routes/auth.js";
+import { createServerRouter } from "./routes/server.js";
+import programs from "./routes/programs.js";
+import provider from "./routes/provider.js";
 
-export function createApp() {
+export function createApp({
+  config = loadConfig(),
+  auth = createAuthService({ dataDir: config.dataDir }),
+} = {}) {
   const app = express();
   app.disable("x-powered-by");
+  let maintenance = false;
+  app.locals.beginMaintenance = () => {
+    maintenance = true;
+  };
+  app.set("trust proxy", config.trustedProxies);
+  app.get("/api/health", (req, res, next) =>
+    req.method === "GET" ? res.json({ ok: true }) : next(),
+  );
   app.use((req, res, next) => {
     res.set({
       "X-Content-Type-Options": "nosniff",
@@ -20,13 +41,23 @@ export function createApp() {
       "Content-Security-Policy":
         "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'",
     });
-    const host = req.hostname;
-    if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(host))
+    const host = normalizeHost(req.hostname);
+    if (!config.allowedHosts.has(host))
       return res
         .status(403)
         .json({ error: "Unzulässiger Host.", code: "HOST_DENIED" });
     const origin = req.get("origin");
-    if (origin && origin !== `${req.protocol}://${req.get("host")}`)
+    const proxyTrusted = app.get("trust proxy fn")(req.socket.remoteAddress, 0);
+    const requestHost =
+      proxyTrusted && req.get("x-forwarded-host")
+        ? req.get("x-forwarded-host").split(",")[0].trim()
+        : req.get("host");
+    const requestOrigin = `${req.protocol}://${requestHost}`;
+    if (
+      origin &&
+      (origin !== requestOrigin ||
+        (config.authRequired && !config.allowedOrigins.has(origin)))
+    )
       return res.status(403).json({
         error: "Zugriff nur vom Ursprung der Anwendung erlaubt.",
         code: "ORIGIN_DENIED",
@@ -45,6 +76,22 @@ export function createApp() {
     next();
   });
   app.use(express.json({ limit: "4mb" }));
+  app.use("/api", (req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    if (maintenance)
+      return res.status(503).json({
+        error:
+          "Der Server wird kontrolliert heruntergefahren. Bitte nach dem Neustart erneut versuchen.",
+        code: "SERVER_MAINTENANCE",
+      });
+    next();
+  });
+  app.use("/api", createAuthRouter(config, auth));
+  app.use("/api", requireAuthentication(config, auth));
+  app.use("/api", createAccountRouter(config, auth));
+  app.use("/api", createServerRouter(config));
+  app.use("/api/programs", programs);
+  app.use("/api/provider", provider);
   app.use("/api/chat", chat);
   app.use("/api/models", models);
   app.use("/api/sessions", sessions);
@@ -79,7 +126,10 @@ export function createApp() {
           : error.message,
       code: error.code || "SERVER_ERROR",
     });
-    if (status === 500) console.error(error);
+    if (status === 500)
+      console.error("Interner Serverfehler", {
+        code: error.code || "SERVER_ERROR",
+      });
   });
   return app;
 }

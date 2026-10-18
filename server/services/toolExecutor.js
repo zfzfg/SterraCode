@@ -56,7 +56,10 @@ export async function executeTool(name, args, context) {
         }
       }
       case "read_terminal_output":
-        return { type: name, ...readProcess(args.processId, sessionId) };
+        return {
+          type: name,
+          ...(await readProcess(args.processId, sessionId)),
+        };
       case "ask_question": {
         const question = text(args.question, "question");
         if (

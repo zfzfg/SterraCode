@@ -1,4 +1,5 @@
 import express from "express";
+import path from "node:path";
 import { route } from "./helpers.js";
 import {
   createSession,
@@ -11,7 +12,14 @@ import {
 } from "../services/sessions.js";
 import { isActive } from "../services/teacher.js";
 import { stopSessionProcesses } from "../services/processes.js";
-import { AppError, LANGUAGES } from "../services/storage.js";
+import {
+  AppError,
+  LANGUAGES,
+  DATA_DIR,
+  writeJSON,
+  serial,
+  readJSON,
+} from "../services/storage.js";
 import { normalizePath } from "../services/workspace.js";
 const router = express.Router();
 router.get(
@@ -91,10 +99,52 @@ router.patch(
 router.delete(
   "/:id",
   route(async (req, res) => {
-    if (isActive(req.params.id))
-      throw new AppError("Bitte die laufende Antwort zuerst stoppen.", 409);
-    await stopSessionProcesses(req.params.id);
-    await removeSession(req.params.id);
+    const id = req.params.id;
+    await serial(`delete:${id}`, async () => {
+      const marker = path.join(DATA_DIR, "deletions", `${id}.json`);
+      let previous = {};
+      await serial(`lifecycle:${id}`, async () => {
+        if (isActive(id))
+          throw new AppError("Bitte die laufende Antwort zuerst stoppen.", 409);
+        await loadSession(id);
+        await serial(`session:${id}`, async () => {
+          try {
+            previous = await readJSON(marker);
+          } catch (error) {
+            if (error.code !== "ENOENT") throw error;
+          }
+          await writeJSON(marker, {
+            ...previous,
+            sessionId: id,
+            status: "pending",
+            requestedAt: new Date().toISOString(),
+          });
+        });
+      });
+      if (
+        process.env.STERRACODE_MODE === "docker" ||
+        process.env.STERRACODE_RUNNER_URL
+      ) {
+        try {
+          const { blockSession } = await import("../services/runnerClient.js");
+          await blockSession(id);
+          await stopSessionProcesses(id);
+        } catch (error) {
+          await writeJSON(marker, {
+            ...previous,
+            sessionId: id,
+            status: "pending",
+            code: error.code || "RUNNER_UNAVAILABLE",
+          });
+          throw new AppError(
+            "Löschen wartet auf den Runner. Die Session bleibt gesperrt; den Vorgang nach Wiederherstellung erneut ausführen.",
+            503,
+            "DELETION_PENDING",
+          );
+        }
+      } else await stopSessionProcesses(id);
+      await serial(`workspace:${id}`, () => removeSession(id));
+    });
     res.json({ ok: true });
   }),
 );

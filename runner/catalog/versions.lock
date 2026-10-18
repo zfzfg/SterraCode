@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "version": "2026.10.18.2",
+  "suite": "bookworm",
+  "architecture": "amd64",
+  "approvedArchitectures": [
+    "amd64"
+  ],
+  "image": "node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5",
+  "apt": {
+    "g++": {
+      "name": "g++",
+      "version": "4:12.2.0-3",
+      "architecture": "amd64",
+      "sha256": "26c451a660728cf7c15548a281e17eef2f36fab28499371e83fc2d3accb499d7",
+      "filename": "pool/main/g/gcc-defaults/g++_12.2.0-3_amd64.deb"
+    },
+    "lua5.4": {
+      "name": "lua5.4",
+      "version": "5.4.4-3+deb12u1",
+      "architecture": "amd64",
+      "sha256": "8a7221aa9614911f1236cbb1ba85401bb06f9ac66b51e5f98f31fbdeeca99fa7",
+      "filename": "pool/main/l/lua5.4/lua5.4_5.4.4-3+deb12u1_amd64.deb"
+    },
+    "openjdk-17-jdk-headless": {
+      "name": "openjdk-17-jdk-headless",
+      "version": "17.0.20.1+1-1~deb12u1",
+      "architecture": "amd64",
+      "sha256": "d28519dfabf0b6234bd6f3bf25de5e372524c2c93d93983f8363117e539f7b15",
+      "filename": "pool/updates/main/o/openjdk-17/openjdk-17-jdk-headless_17.0.20.1+1-1~deb12u1_amd64.deb"
+    },
+    "python3": {
+      "name": "python3",
+      "version": "3.11.2-1+b1",
+      "architecture": "amd64",
+      "sha256": "33f6dafbd1a6902d9063172ec7dbd4b2225e12009e0d7ec5c933a72c2f5f3b74",
+      "filename": "pool/main/p/python3-defaults/python3_3.11.2-1+b1_amd64.deb"
+    },
+    "dotnet-sdk-8.0": {
+      "name": "dotnet-sdk-8.0",
+      "version": "8.0.426-1",
+      "architecture": "amd64",
+      "sha256": "d40b4d7dd5201d26f0d88e334a37ef6187401f7225b158d4143cde13bb5b9d1c",
+      "filename": "pool/main/d/dotnet-sdk-8.0/dotnet-sdk-8.0_8.0.426-1_amd64.deb"
+    }
+  },
+  "go": {
+    "version": "1.27.2",
+    "url": "https://go.dev/dl/go1.27.2.linux-amd64.tar.gz",
+    "sha256": "ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5",
+    "provenance": "https://go.dev/dl/?mode=json&include=all"
+  },
+  "rust": {
+    "version": "1.90.0",
+    "manifestURL": "https://static.rust-lang.org/dist/channel-rust-1.90.0.toml",
+    "manifestSHA256": "489c19f20d331765ab2835661eb546de90f6446a107a8db83045e7371e45cae2",
+    "artifacts": [
+      {
+        "name": "rustc",
+        "url": "https://static.rust-lang.org/dist/2025-09-18/rustc-1.90.0-x86_64-unknown-linux-gnu.tar.xz",
+        "sha256": "48c2a42de9e92fcae8c24568f5fe40d5734696a6f80e83cc6d46eef1a78f13c9"
+      },
+      {
+        "name": "cargo",
+        "url": "https://static.rust-lang.org/dist/2025-09-18/cargo-1.90.0-x86_64-unknown-linux-gnu.tar.xz",
+        "sha256": "9853db03d68578a30972e2755c89c66aec035fec641cf8f3a7117c81eec2578d"
+      },
+      {
+        "name": "rust-std",
+        "url": "https://static.rust-lang.org/dist/2025-09-18/rust-std-1.90.0-x86_64-unknown-linux-gnu.tar.xz",
+        "sha256": "663f4ab7945b392d5e5294dec1b050a66820a20e86f084ec37eeb0f2f7ff5569"
+      }
+    ]
+  }
+}

@@ -5,7 +5,7 @@ const unresolved = (record) =>
   ["running", "open", "unavailable", "unknown"].includes(record.status);
 
 // Kept independently of model-generated prose. Updates replace older status.
-export function workflowState(session) {
+export async function workflowState(session) {
   const records = new Map();
   for (const m of session.messages || []) {
     const e = eventOf(m);
@@ -58,28 +58,30 @@ export function workflowState(session) {
       records.set(key, record);
     }
   }
-  return [...records.values()].map((record) => {
-    if (!record.processId) return record;
-    try {
-      const current = readProcess(
-        record.processId,
-        session.id,
-        Number.MAX_SAFE_INTEGER,
-      );
-      return {
-        ...record,
-        status: current.exited ? "exited" : "running",
-        exitCode: current.exitCode,
-        reason: current.reason,
-      };
-    } catch {
-      return {
-        ...record,
-        status: "unavailable",
-        note: "Prozesszustand nach Neustart oder Ablauf nicht mehr verfügbar; historische Ausgabe über messageId nachlesen, nicht automatisch erneut ausführen.",
-      };
-    }
-  });
+  return Promise.all(
+    [...records.values()].map(async (record) => {
+      if (!record.processId) return record;
+      try {
+        const current = await readProcess(
+          record.processId,
+          session.id,
+          Number.MAX_SAFE_INTEGER,
+        );
+        return {
+          ...record,
+          status: current.exited ? "exited" : "running",
+          exitCode: current.exitCode,
+          reason: current.reason,
+        };
+      } catch {
+        return {
+          ...record,
+          status: "unavailable",
+          note: "Prozesszustand nach Neustart oder Ablauf nicht mehr verfügbar; historische Ausgabe über messageId nachlesen, nicht automatisch erneut ausführen.",
+        };
+      }
+    }),
+  );
 }
 
 export async function fitWorkflow(records, budget, count) {

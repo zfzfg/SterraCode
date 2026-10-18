@@ -38,6 +38,7 @@ export function formDialog({
   danger = false,
   onPreview,
   onSave,
+  actions = [],
 }) {
   const dialog = $("app-dialog");
   if (dialog.open)
@@ -57,6 +58,17 @@ export function formDialog({
     );
     form.append(head);
     if (description) form.append(node("p", "muted", description));
+    if (actions.length) {
+      const navigation = node("div", "settings-navigation");
+      for (const action of actions)
+        navigation.append(
+          button(action.label, null, () => {
+            action.onClick();
+            dialog.close();
+          }),
+        );
+      form.append(navigation);
+    }
     const controls = new Map(),
       advanced = node("details", "advanced"),
       advancedBody = node("div", "form-fields");
@@ -100,6 +112,8 @@ export function formDialog({
         "maxLength",
         "required",
         "readOnly",
+        "disabled",
+        "autocomplete",
         "placeholder",
       ])
         if (field[key] !== undefined) input[key] = field[key];
@@ -161,6 +175,8 @@ export function formDialog({
     dialog.addEventListener(
       "close",
       () => {
+        for (const { input, field } of controls.values())
+          if (field.type === "password") input.value = "";
         dialog.removeEventListener("cancel", preventCancel);
         resolve(result);
       },

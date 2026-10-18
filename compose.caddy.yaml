@@ -1,0 +1,36 @@
+services:
+  app:
+    environment:
+      STERRACODE_TRUSTED_PROXIES: ${STERRACODE_TRUSTED_PROXIES:-172.30.123.2}
+  caddy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    init: true
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    ports:
+      [
+        "${STERRACODE_BIND_IP:-127.0.0.1}:80:80",
+        "${STERRACODE_BIND_IP:-127.0.0.1}:443:443",
+      ]
+    environment:
+      STERRACODE_DOMAIN: ${STERRACODE_DOMAIN:?Set STERRACODE_DOMAIN}
+      STERRACODE_TLS_MODE: ${STERRACODE_TLS_MODE:-public}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      backend:
+        ipv4_address: ${STERRACODE_CADDY_IP:-172.30.123.2}
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
+volumes:
+  caddy-data: {}
+  caddy-config: {}
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: ${STERRACODE_BACKEND_SUBNET:-172.30.123.0/24}

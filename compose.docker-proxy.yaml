@@ -1,0 +1,7 @@
+services:
+  app:
+    networks: [backend, proxy]
+networks:
+  proxy:
+    external: true
+    name: ${STERRACODE_PROXY_NETWORK:-proxy}

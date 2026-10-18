@@ -20,7 +20,16 @@ function usageText(usage) {
   return `${prefix}: ${number(usage.promptTokens)}${usage.contextLength ? ` / ${number(usage.contextLength)}` : ""} Tokens${usage.contextLength ? ` · ${Math.round((100 * usage.promptTokens) / usage.contextLength)} % · frei für weiteren Kontext: ${number(usage.remainingTokens)}` : ""}`;
 }
 function renderUsage(usage) {
-  if (usage?.model && usage.model !== state.settings.activeModel) usage = null;
+  if (
+    (usage?.provider &&
+      usage.provider !== (state.settings.provider || "lmstudio")) ||
+    (usage?.model &&
+      usage.model !==
+        (state.settings.provider === "openai"
+          ? state.settings.openAIModel
+          : state.settings.activeModel))
+  )
+    usage = null;
   const counter = $("token-counter");
   counter.textContent = usageText(usage);
   counter.title = usage
@@ -413,7 +422,9 @@ export async function sendMessage(
           : undefined
       : undefined;
   if (!state.ready && contextAction !== "usage")
-    throw new Error("Bitte LM Studio verbinden und ein Modell auswählen.");
+    throw new Error(
+      "Bitte den KI-Anbieter verbinden und ein Modell auswählen.",
+    );
   await flush();
   const sessionId = state.session.id,
     turnId = crypto.randomUUID();

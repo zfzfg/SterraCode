@@ -21,7 +21,7 @@ export async function api(
   } catch (error) {
     if (error.name === "AbortError") throw error;
     throw new APIError(
-      "Der lokale Server ist nicht erreichbar. Bitte SterraCode starten.",
+      "Der SterraCode-Server ist nicht erreichbar. Bitte Serveradresse und Verbindung prüfen.",
       0,
       "NETWORK",
     );
@@ -29,12 +29,18 @@ export async function api(
   const data = await response
     .json()
     .catch(() => ({ error: "Ungültige Serverantwort." }));
-  if (!response.ok)
+  if (!response.ok) {
+    if (
+      (response.status === 401 || data.code === "SETUP_REQUIRED") &&
+      !["/api/login", "/api/setup"].includes(url)
+    )
+      window.dispatchEvent(new CustomEvent("auth-required"));
     throw new APIError(
       data.error || response.statusText,
       response.status,
       data.code,
     );
+  }
   return data;
 }
 export const sessionURL = (id) => `/api/sessions/${encodeURIComponent(id)}`;

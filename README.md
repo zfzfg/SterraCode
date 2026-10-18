@@ -1,6 +1,22 @@
 # SterraCode
 
-Lokale Coding-Lernumgebung mit Monaco-Editor, Dateiverwaltung, Lernplan, Terminal und einem KI-Tutor über LM Studio. Die Oberfläche verwendet lokale SVG-Icons und vier Themes.
+Coding-Lernumgebung mit Monaco-Editor, Dateiverwaltung, Lernplan, Terminal und einem KI-Tutor über LM Studio oder die OpenAI API. Lokal per npm oder als geschützter Docker-Server im LAN. Die Oberfläche verwendet lokale SVG-Icons und vier Themes.
+
+## Docker-Server unter Windows und Linux
+
+Voraussetzung: Docker Engine mit Compose oder Docker Desktop mit **Linux-Containern**. Node, Compiler und zusätzliche Sprachlaufzeiten werden im Container verwaltet. Die erste unterstützte Architektur ist `linux/amd64`.
+
+```powershell
+.\install.ps1
+```
+
+```sh
+bash install.sh
+```
+
+Der Installer ermittelt eine LAN-Adresse, erzeugt `.env`, baut die Images und zeigt einen einmaligen Einrichtungsschlüssel. Im Browser ein Administratorpasswort setzen und unter **Einstellungen → Programme** zusätzliche Laufzeiten installieren. Ein erneuter Installer-Aufruf erhält Konfiguration, Volumes und Passwort. Ohne LM Studio funktionieren Sessions, Dateien und Programmausführung.
+
+Starten und Stoppen: `start-docker.ps1` / `stop-docker.ps1` beziehungsweise `bash start-docker.sh` / `bash stop-docker.sh`. [DOCKER-BETRIEB.md](DOCKER-BETRIEB.md) beschreibt Konfiguration, Domains, LM Studio, Import, Sicherung und Wiederherstellung sowie die noch offenen Plattformnachweise. Der bisherige lokale Start bleibt erhalten.
 
 ## Starten
 
@@ -13,7 +29,7 @@ npm start
 
 Anschließend `http://localhost:3000` öffnen. Alternativ `start.bat` oder `start.ps1` verwenden. Der Server bindet ausschließlich an `127.0.0.1`. `npm run dev` startet den Node-Watchmodus.
 
-In LM Studio einen lokalen Server starten und ein Modell mit Tool-Unterstützung laden. URL und Modell lassen sich in den Einstellungen auswählen. Sessions, Dateien und Lernpläne funktionieren auch offline.
+In LM Studio einen erreichbaren Server starten und ein Modell mit Tool-Unterstützung laden. Es kann auf diesem Rechner, einem anderen LAN-Rechner oder hinter einer externen HTTPS-Adresse laufen. Alternativ unter Einstellungen die OpenAI API auswählen, den Schlüssel unter **KI-Zugangsdaten** hinterlegen und die gewünschte Modell-ID wählen. Sessions, Dateien und Lernpläne funktionieren auch offline.
 
 ## Bedienung
 
@@ -30,7 +46,7 @@ In LM Studio einen lokalen Server starten und ein Modell mit Tool-Unterstützung
 
 Der integrierte Kern von context-compressor 0.8.3 arbeitet direkt im SterraCode-Backend. Das separate LM-Studio-Plugin muss nicht installiert werden. Herkunft und Anpassungen stehen in [ORIGIN.md](server/services/context/ORIGIN.md).
 
-SterraCode verbindet sich über das native LM-Studio-SDK 1.5.0 mit der eingestellten Serveradresse. Die Modellauswahl zeigt geladene Modelle. Vor jedem Modellaufruf wird der tatsächliche Prompt mit dem Modelltemplate einschließlich Werkzeugdefinitionen tokenisiert. Das Antwortlimit wird als Reserve freigehalten. Fehlen genaue Messwerte oder passt der minimale Auftrag nicht, stoppt die Antwort mit einem Lösungshinweis; Datei- und Sessionarbeit bleiben verfügbar.
+SterraCode verbindet sich über das native LM-Studio-SDK 2.1.0 mit der eingestellten Serveradresse. Die Modellauswahl zeigt geladene Modelle. Vor jedem Modellaufruf wird der tatsächliche Prompt mit dem Modelltemplate einschließlich Werkzeugdefinitionen tokenisiert. Das Antwortlimit wird als Reserve freigehalten. Fehlen genaue Messwerte oder passt der minimale Auftrag nicht, stoppt die Antwort mit einem Lösungshinweis; Datei- und Sessionarbeit bleiben verfügbar.
 
 Automatische Komprimierung startet standardmäßig bei 75 % und verkleinert den Kontext möglichst auf 55 %. Das gilt auch zwischen Werkzeugrunden. Neuere Inhalte bleiben möglichst wörtlich; die aktuelle Nutzeranweisung bleibt immer wörtlich erhalten. Der ursprüngliche Nutzerauftrag wird zusätzlich direkt als historischer Beleg bewahrt, soweit das Budget reicht (höchstens 1.024 Tokens); Onboarding-Antworten sind davon ausgenommen. Standardbudgets: 6.000 Tokens neuester Kontext, 16.000 je Quellabschnitt, 1.500 je Zusammenfassung und 12.000 insgesamt. Werkzeugausgaben erhalten 4.000 Tokens je Ergebnis und 20.000 insgesamt pro Runde. Kleine Kontextfenster verwenden entsprechend verkleinerte Budgets; `/usage` zeigt die effektiven Werte. Einstellungen stehen unter „Erweiterte Einstellungen“.
 

@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+ARG NODE_IMAGE=node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+FROM ${NODE_IMAGE} AS launcher
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
+COPY runner/launch.c /tmp/launch.c
+RUN gcc -O2 -Wall -Wextra -o /usr/local/bin/sterra-launch /tmp/launch.c
+
+FROM ${NODE_IMAGE} AS runner
+ENV NODE_ENV=production STERRACODE_MODE=docker STERRACODE_WORKSPACE_DIR=/workspaces RUNNER_STATE_DIR=/runner-state RUNNER_CACHE_DIR=/package-cache RUNNER_TOOL_CACHE_DIR=/tool-cache RUNNER_TEMP_DIR=/runs RUNNER_LAUNCHER=/usr/local/bin/sterra-launch STERRACODE_RUNNER_SECRET_FILE=/run/secrets/runner_key DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certificates gpg curl xz-utils procps tar git findutils && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 sterracode && useradd --uid 10002 --gid 10001 --no-create-home sterra-run \
+    && mkdir -p /opt/sterracode
+WORKDIR /app
+COPY --from=launcher /usr/local/bin/sterra-launch /usr/local/bin/sterra-launch
+COPY runner ./runner
+COPY server ./server
+COPY package.json ./
+EXPOSE 3001
+CMD ["node", "runner/index.js"]

@@ -1090,3 +1090,54 @@ dialog::backdrop {
     scroll-behavior: auto !important;
   }
 }
+
+.access-dialog {
+  width: min(480px, calc(100vw - 32px));
+}
+.programs-dialog {
+  width: min(860px, calc(100vw - 32px));
+  max-height: 90vh;
+  overflow: auto;
+}
+.settings-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.program-list {
+  display: grid;
+  gap: 12px;
+}
+.program-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.program-card p {
+  margin: 6px 0;
+}
+.program-controls {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+.program-jobs:empty {
+  display: none;
+}
+.program-jobs {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+@media (max-width: 600px) {
+  .program-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

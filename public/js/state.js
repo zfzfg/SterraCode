@@ -9,6 +9,7 @@ export const state = {
   busy: false,
   turnId: null,
   terminal: null,
+  server: {},
 };
 const events = new EventTarget();
 export function emit(name, detail) {

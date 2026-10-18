@@ -15,7 +15,7 @@ router.get(
   "/:processId/output",
   route(async (req, res) =>
     res.json(
-      readProcess(
+      await readProcess(
         req.params.processId,
         req.query.sessionId,
         Number(req.query.offset || 0),
@@ -27,7 +27,11 @@ router.post(
   "/:processId/input",
   route(async (req, res) =>
     res.json(
-      inputProcess(req.params.processId, req.body.sessionId, req.body.input),
+      await inputProcess(
+        req.params.processId,
+        req.body.sessionId,
+        req.body.input,
+      ),
     ),
   ),
 );

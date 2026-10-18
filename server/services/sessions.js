@@ -1,9 +1,17 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
+import {
+  copySafe,
+  removeSafe,
+  treeBytesSafe,
+  requireSpace,
+} from "./safeFiles.js";
 import { CONTEXT_VERSION } from "./context/settings.js";
 import {
   DATA_DIR,
+  WORKSPACE_DIR,
+  assertSessionWritable,
   LANGUAGES,
   AppError,
   readJSON,
@@ -84,26 +92,13 @@ export function setLearningPlan(session, plan) {
     }),
   );
 }
-async function copySafe(source, target) {
-  const stat = await fs.lstat(source);
-  if (stat.isSymbolicLink())
-    throw new AppError(
-      "Verzeichnisverknüpfung im alten Workspace. Bitte vor der Migration entfernen.",
-      409,
-    );
-  if (stat.isDirectory()) {
-    await fs.mkdir(target, { recursive: true });
-    for (const name of await fs.readdir(source))
-      await copySafe(path.join(source, name), path.join(target, name));
-  } else if (stat.isFile())
-    await fs.copyFile(source, target, fs.constants.COPYFILE_EXCL);
-}
+export { copySafe } from "./safeFiles.js";
 async function migrate(session) {
   if (session.schemaVersion === 2) return session;
   const originalDigest = createHash("sha256")
     .update(JSON.stringify(session))
     .digest("hex");
-  const root = path.join(DATA_DIR, "workspaces", session.id);
+  const root = path.join(WORKSPACE_DIR, session.id);
   const marker = path.join(DATA_DIR, "migrations", `${session.id}.json`);
   let pending;
   try {
@@ -145,7 +140,7 @@ async function migrate(session) {
   await fs.mkdir(backup, { recursive: true });
   await writeJSON(path.join(backup, "session.json"), session);
   const name = String(session.title || "").replace(/[/\\?%*:|"<>]/g, "-");
-  const legacy = path.join(DATA_DIR, "workspaces", name);
+  const legacy = path.join(WORKSPACE_DIR, name);
   const staging = `${root}.migration-${randomUUID()}`;
   await fs.mkdir(staging, { recursive: true });
   try {
@@ -236,6 +231,18 @@ export async function loadSession(id) {
           "Session-ID und gespeicherte Daten passen nicht zusammen.",
           409,
         );
+      // Pending deletion owns the persisted snapshot. GET must not perform a
+      // lazy migration after its backup was committed or its workspace removed.
+      if (
+        await fs.access(path.join(DATA_DIR, "deletions", `${id}.json`)).then(
+          () => true,
+          (error) => {
+            if (error.code === "ENOENT") return false;
+            throw error;
+          },
+        )
+      )
+        return session;
       const current = await migrate(session);
       if (current.contextVersion !== CONTEXT_VERSION) {
         await writeJSON(
@@ -260,8 +267,10 @@ export async function loadSession(id) {
   });
 }
 export async function mutateSession(id, change, expectedRevision) {
+  await assertSessionWritable(id);
   await loadSession(id);
   return serial(`session:${id}`, async () => {
+    await assertSessionWritable(id);
     const session = await readJSON(sessionFile(id));
     if (expectedRevision !== undefined && expectedRevision !== session.revision)
       throw new AppError(
@@ -335,8 +344,13 @@ export async function createSession({
     learningPlan: null,
     onboardingAsked: true,
   };
-  await fs.mkdir(path.join(DATA_DIR, "workspaces", id), { recursive: true });
-  await fs.writeFile(path.join(DATA_DIR, "workspaces", id, file), "", "utf8");
+  await fs.mkdir(path.join(WORKSPACE_DIR, id), {
+    recursive: true,
+    mode: 0o2770,
+  });
+  if (process.platform !== "win32")
+    await fs.chmod(path.join(WORKSPACE_DIR, id), 0o2770);
+  await fs.writeFile(path.join(WORKSPACE_DIR, id, file), "", { mode: 0o660 });
   await writeJSON(sessionFile(id), session);
   return session;
 }
@@ -350,6 +364,12 @@ export async function listSessions() {
       language: s.language,
       updatedAt: s.updatedAt,
       createdAt: s.createdAt,
+      deleting: await fs
+        .access(path.join(DATA_DIR, "deletions", `${s.id}.json`))
+        .then(
+          () => true,
+          () => false,
+        ),
     });
   }
   return result.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -357,33 +377,63 @@ export async function listSessions() {
 export async function removeSession(id) {
   const session = await loadSession(id);
   await serial(`session:${id}`, async () => {
-    const backup = path.join(
-      DATA_DIR,
-      "backups",
-      `deleted-${id}-${randomUUID()}`,
-    );
-    await fs.mkdir(backup, { recursive: true });
-    await writeJSON(path.join(backup, "session.json"), session);
-    await copySafe(
-      path.join(DATA_DIR, "workspaces", id),
-      path.join(backup, "workspace"),
-    );
+    const marker = path.join(DATA_DIR, "deletions", `${id}.json`);
+    let deletion;
+    try {
+      deletion = await readJSON(marker);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      deletion = { sessionId: id };
+    }
     const contextRoot = path.resolve(DATA_DIR, "context");
-    const contextDir = path.resolve(contextRoot, validateSessionId(id));
-    if (path.dirname(contextDir) !== contextRoot)
-      throw new AppError("Ungültiger Kontextpfad.");
+    const contextDir = path.join(contextRoot, validateSessionId(id));
     if ((await fs.lstat(contextRoot)).isSymbolicLink())
       throw new AppError(
         "Kontext-Verknüpfungen sind nicht erlaubt.",
         403,
         "PATH_DENIED",
       );
+    if (deletion.phase !== "backed-up") {
+      const backup = path.join(
+        DATA_DIR,
+        "backups",
+        `deleted-${id}-${randomUUID()}`,
+      );
+      const source = path.join(WORKSPACE_DIR, id);
+      await requireSpace(DATA_DIR, await treeBytesSafe(source));
+      deletion = {
+        ...deletion,
+        phase: "backing-up",
+        backup: path.basename(backup),
+      };
+      await writeJSON(marker, deletion);
+      await fs.mkdir(backup, { recursive: true });
+      await writeJSON(path.join(backup, "session.json"), session);
+      await copySafe(source, path.join(backup, "workspace"));
+      for (const [origin, target] of [
+        [contextDir, "context"],
+        [path.join(DATA_DIR, "changes", id), "changes"],
+      ]) {
+        try {
+          await copySafe(origin, path.join(backup, target));
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+        }
+      }
+      deletion.phase = "backed-up";
+      await writeJSON(marker, deletion);
+    }
     try {
-      await copySafe(contextDir, path.join(backup, "context"));
+      await removeSafe(path.join(WORKSPACE_DIR, id));
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
-    await fs.unlink(sessionFile(id));
+    await fs.rm(path.join(DATA_DIR, "changes", id), {
+      recursive: true,
+      force: true,
+    });
     await fs.rm(contextDir, { recursive: true, force: true });
+    await fs.unlink(sessionFile(id));
+    await fs.rm(marker, { force: true });
   });
 }

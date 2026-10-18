@@ -39,6 +39,14 @@ const fitError = () =>
     "CONTEXT_TOO_LARGE",
   );
 const tokenMemos = new Map();
+export function contextProviderIdentity(settings) {
+  const provider = settings.provider || "lmstudio";
+  const origin =
+    provider === "openai"
+      ? "https://api.openai.com/v1"
+      : process.env.STERRACODE_LM_STUDIO_OVERRIDE_URL || settings.lmStudioUrl;
+  return JSON.stringify([provider, origin]);
+}
 function tokenMemo(key) {
   const memo = tokenMemos.get(key) || new Map();
   tokenMemos.delete(key);
@@ -63,6 +71,11 @@ export function estimatedUsage(session, settings, error) {
     lastMode: null,
     ...(error ? { error } : {}),
     sampledAt: new Date().toISOString(),
+    provider: settings.provider || "lmstudio",
+    model:
+      settings.provider === "openai"
+        ? settings.openAIModel
+        : settings.activeModel,
   };
 }
 
@@ -77,7 +90,7 @@ export class ContextManager {
     this.strategy = "system";
     this.counter = new TokenCounter((text) => this.count(text));
     this.tokenMemo = tokenMemo(
-      `${settings.lmStudioUrl}:${connection.identity}`,
+      `${contextProviderIdentity(settings)}:${connection.identity}`,
     );
     this.ctl = { abortSignal: signal, onAborted: () => {} };
     this.state = {
@@ -158,7 +171,7 @@ export class ContextManager {
     this.connection = connection;
     this.model = connection.model;
     this.tokenMemo = tokenMemo(
-      `${this.settings.lmStudioUrl}:${connection.identity}`,
+      `${contextProviderIdentity(this.settings)}:${connection.identity}`,
     );
     this.counter = new TokenCounter((text) => this.count(text));
   }
@@ -346,6 +359,7 @@ export class ContextManager {
       ),
       threshold,
     );
+    this.model.setProviderHistory?.(session.messages);
     const source = modelHistory(session);
     const namespace = hashNamespace({
       schema: 2,
@@ -353,7 +367,7 @@ export class ContextManager {
       model: this.connection.info.path,
       identifier: this.model.identifier,
       context: this.contextLength,
-      origin: this.settings.lmStudioUrl,
+      origin: contextProviderIdentity(this.settings),
       system: this.settings.systemPrompt,
       shape: this.strategy,
       prompt: summarySystemPrompt({ variant: this.variant, agentic: false }),
@@ -374,7 +388,7 @@ export class ContextManager {
     const tail = await this.capHistory(source);
     const tokens = await this.counter.countMessages(tail);
     const workflow = await fitWorkflow(
-      workflowState(session),
+      await workflowState(session),
       Math.max(256, Math.floor(this.contextLength * 0.15)),
       (text) => this.count(text),
     );
@@ -598,6 +612,7 @@ export class ContextManager {
       floorTokens: floor,
       sampledAt: new Date().toISOString(),
       model: this.model.identifier,
+      provider: this.settings.provider || "lmstudio",
     };
     this.usage = usage;
     this.emit("context-usage", usage);

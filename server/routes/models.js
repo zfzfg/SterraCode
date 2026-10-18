@@ -22,7 +22,10 @@ router.get(
         models: [],
         connected: false,
         status: "offline",
-        error: `LM Studio ist nicht erreichbar (${error.message}). Server in LM Studio starten und URL prüfen.`,
+        error:
+          settings.provider === "openai"
+            ? "OpenAI ist nicht erreichbar. API-Schlüssel, Internetzugang und Berechtigung prüfen."
+            : "LM Studio ist nicht erreichbar. Server in LM Studio starten, URL und Secret-Datei prüfen.",
       });
     }
   }),

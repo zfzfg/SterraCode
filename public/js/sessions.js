@@ -36,6 +36,16 @@ export function renderSessions() {
         `${languageOptions.find((l) => l.value === s.language)?.label || s.language} · ${new Date(s.updatedAt).toLocaleDateString("de-DE")}`,
       ),
     );
+    if (s.deleting) {
+      open.disabled = true;
+      open.append(
+        node(
+          "span",
+          "session-meta",
+          "Löschen ausstehend · zum Fortsetzen verwalten",
+        ),
+      );
+    }
     row.append(
       open,
       button(
@@ -66,8 +76,9 @@ export async function createSession() {
   await flush();
   await formDialog({
     title: "Neue Session",
-    description:
-      "Dateien und Lernfortschritt werden lokal auf deinem Rechner gespeichert.",
+    description: state.server.authRequired
+      ? "Dateien und Lernfortschritt werden auf dem SterraCode-Server gespeichert."
+      : "Dateien und Lernfortschritt werden lokal auf deinem Rechner gespeichert.",
     fields: [
       {
         name: "title",
@@ -151,7 +162,11 @@ async function manageSession(session) {
     )
       return;
     if (state.session?.id === session.id) await flush();
-    await api(sessionURL(session.id), { method: "DELETE", body: {} });
+    try {
+      await api(sessionURL(session.id), { method: "DELETE", body: {} });
+    } finally {
+      await loadSessions();
+    }
     if (state.session?.id === session.id) {
       state.session = null;
       await openEditorFile(null, null);
