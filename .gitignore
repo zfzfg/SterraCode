@@ -1,4 +1,7 @@
 node_modules/
+server/data/
+test-results/
+playwright-report/
 server/data/sessions/
 server/data/profiles/
 server/data/settings.json

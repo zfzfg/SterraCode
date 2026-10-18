@@ -1,200 +1,175 @@
-// server/services/toolExecutor.js
-import { executeCode } from './executor.js';
-import { startTerminalSession } from './terminal.js';
-import { getProfile, updateProfile } from './profileManager.js';
-import { getSettings, DATA_DIR, getWorkspacePath } from './storage.js';
-import path from 'path';
-import fs from 'fs/promises';
-
-const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
-
-/**
- * Executes a tool call from the Teacher agent.
- *
- * context shape:
- *   { sessionId, editorCode, language, session, settings }
- *
- * Returns an object with:
- *   - The tool result for the LM (always present)
- *   - Optional UI action fields (type, code, task, etc.) processed by the frontend
- */
+import { randomUUID } from "node:crypto";
+import { AppError, getSettings } from "./storage.js";
+import {
+  loadSession,
+  mutateSession,
+  validatePlan,
+  setLearningPlan,
+} from "./sessions.js";
+import { summarizeSession } from "./summarizer.js";
+import { readFile, writeFile, listWorkspace } from "./workspace.js";
+import {
+  startProcess,
+  readProcess,
+  stopProcess,
+  waitProcess,
+} from "./processes.js";
+import { getProfile, updateProfile } from "./profileManager.js";
+const text = (v, name) => {
+  if (typeof v !== "string" || !v.trim() || v.length > 100000)
+    throw new AppError(`Ungültiges Tool-Feld: ${name}`);
+  return v;
+};
 export async function executeTool(name, args, context) {
-  const { sessionId, editorCode, language, session, settings } = context;
-
-  switch (name) {
-    case 'read_file': {
-      try {
-        const wp = await getWorkspacePath(sessionId);
-        const fullPath = path.join(wp, args.path);
-        if (!fullPath.startsWith(wp)) throw new Error('Access denied');
-        const content = await fs.readFile(fullPath, 'utf-8');
-        return {
-          content,
-          lines: content.split('\n').length
+  const { sessionId, turnId, signal } = context;
+  try {
+    if (signal?.aborted) throw new AppError("Abgebrochen.");
+    switch (name) {
+      case "list_files":
+        return { type: name, files: await listWorkspace(sessionId) };
+      case "read_file":
+        return { type: name, ...(await readFile(sessionId, args.path)) };
+      case "write_file":
+        return await writeFile(
+          sessionId,
+          args.path,
+          args.code,
+          args.expectedVersion,
+          { actor: "ai", reason: text(args.reason, "reason"), turnId },
+        );
+      case "run_terminal_command": {
+        const job = await startProcess({
+          sessionId,
+          command: text(args.command, "command"),
+          actor: "ai",
+        });
+        context.onProcess?.(job);
+        const stop = () => {
+          stopProcess(job.processId, sessionId).catch(() => {});
         };
-      } catch (err) {
-        return { error: 'Datei konnte nicht gelesen werden: ' + err.message };
-      }
-    }
-
-    case 'write_file': {
-      try {
-        const wp = await getWorkspacePath(sessionId);
-        const fullPath = path.join(wp, args.path);
-        if (!fullPath.startsWith(wp)) throw new Error('Access denied');
-        
-        // Backup old content for undo if file exists
-        let oldContent = null;
-        try { oldContent = await fs.readFile(fullPath, 'utf-8'); } catch {}
-        
-        await fs.mkdir(path.dirname(fullPath), { recursive: true });
-        await fs.writeFile(fullPath, args.code, 'utf-8');
-        
-        return {
-          type: 'write_file',
-          path: args.path,
-          code: args.code,
-          oldContent,
-          reason: args.reason,
-          status: 'applied'
-        };
-      } catch (err) {
-        return { error: 'Datei konnte nicht geschrieben werden: ' + err.message };
-      }
-    }
-
-    case 'insert_at_line': {
-      // Build the modified code server-side so the LM can see the result
-      const lines = (editorCode || '').split('\n');
-      const insertAt = Math.max(0, (args.line || 1) - 1);
-      const insertLines = args.code.split('\n');
-      lines.splice(insertAt, 0, ...insertLines);
-      const newCode = lines.join('\n');
-      return {
-        type: 'insert_at_line',
-        code: newCode,
-        line: args.line,
-        reason: args.reason,
-        status: 'pending_apply'
-      };
-    }
-
-    case 'run_terminal_command': {
-      try {
-        const wp = await getWorkspacePath(sessionId);
-        const { exec } = await import('child_process');
-        const util = await import('util');
-        const execPromise = util.promisify(exec);
-        
-        const { stdout, stderr } = await execPromise(args.command, { cwd: wp, timeout: 15000 });
-        return {
-          type: 'run_terminal_command',
-          command: args.command,
-          stdout,
-          stderr,
-          exitCode: 0
-        };
-      } catch (err) {
-        return {
-          type: 'run_terminal_command',
-          command: args.command,
-          stdout: err.stdout || '',
-          stderr: err.stderr || err.message,
-          exitCode: err.code || 1
-        };
-      }
-    }
-
-    case 'ask_question': {
-      return {
-        type: 'ask_question',
-        question: args.question,
-        questionType: args.type,
-        options: args.options
-      };
-    }
-
-    case 'update_learning_plan': {
-      if (session) {
-        session.learningPlan = {
-          goal: args.goal,
-          topics: args.topics
-        };
-      }
-      return {
-        type: 'update_learning_plan',
-        goal: args.goal,
-        topics: args.topics
-      };
-    }
-
-    case 'create_task': {
-      const task = {
-        title:       args.title,
-        description: args.description,
-        difficulty:  args.difficulty,
-        hints:       args.hints || [],
-        done:        false,
-        createdAt:   new Date().toISOString()
-      };
-      // Update the session's currentTask
-      if (session) session.currentTask = task;
-      return { type: 'create_task', task };
-    }
-
-    case 'mark_task_done': {
-      if (session && session.currentTask) {
-        session.currentTask.done = true;
-        session.currentTask.completedAt = new Date().toISOString();
-        session.currentTask.feedback = args.feedback;
-      }
-      // Update language profile if enabled
-      if (settings?.crossChatProfileEnabled && settings?.autoUpdateProfileOnTaskDone) {
+        signal?.addEventListener("abort", stop, { once: true });
+        if (signal?.aborted) stop();
         try {
-          await updateProfile({
-            language: language || 'python',
-            newConcepts: args.newConcepts || [],
-            strengths:   args.strengths   || [],
-            weaknesses:  args.weaknesses  || [],
-            taskSucceeded: args.taskSucceeded !== false
-          });
-        } catch (err) {
-          console.warn('[SterraCode] Profil-Update fehlgeschlagen:', err.message);
+          return {
+            type: name,
+            ...(await waitProcess(job.processId, sessionId)),
+          };
+        } finally {
+          signal?.removeEventListener("abort", stop);
         }
       }
-      return {
-        type: 'mark_task_done',
-        feedback: args.feedback,
-        taskSucceeded: args.taskSucceeded !== false
-      };
-    }
-
-    case 'add_explanation': {
-      return {
-        type: 'add_explanation',
-        title:   args.title,
-        content: args.content
-      };
-    }
-
-    case 'get_language_profile': {
-      if (!settings?.crossChatProfileEnabled) {
-        return { error: 'Cross-Chat-Profil ist deaktiviert. Kann in den Einstellungen aktiviert werden.' };
+      case "read_terminal_output":
+        return { type: name, ...readProcess(args.processId, sessionId) };
+      case "ask_question": {
+        const question = text(args.question, "question");
+        if (
+          !["multiple-choice", "text"].includes(args.type) ||
+          (args.options &&
+            (!Array.isArray(args.options) ||
+              args.options.length > 5 ||
+              args.options.some((v) => typeof v !== "string")))
+        )
+          throw new AppError("Ungültige Frageoptionen.");
+        return {
+          type: name,
+          question,
+          questionId: randomUUID(),
+          questionType: args.type,
+          options: args.options || [],
+        };
       }
-      const profile = await getProfile();
-      const langData = profile.languages?.[args.language];
-      if (!langData) {
-        return { language: args.language, known: false, message: 'Noch keine Daten für diese Sprache.' };
+      case "update_learning_plan": {
+        const plan = validatePlan({ goal: args.goal, topics: args.topics });
+        await mutateSession(sessionId, (s) => {
+          if (
+            JSON.stringify(s.learningPlan) !==
+            JSON.stringify(context.learningPlan)
+          )
+            throw new AppError(
+              "Der Lernplan wurde inzwischen verändert. Bitte erneut lesen.",
+              409,
+            );
+          setLearningPlan(s, plan);
+        });
+        context.learningPlan = plan;
+        return { type: name, ...plan };
       }
-      return { language: args.language, ...langData };
+      case "create_task": {
+        const task = {
+          id: randomUUID(),
+          title: text(args.title, "title"),
+          description: text(args.description, "description"),
+          difficulty: args.difficulty,
+          hints: Array.isArray(args.hints)
+            ? args.hints.filter((h) => typeof h === "string")
+            : [],
+          done: false,
+        };
+        await mutateSession(sessionId, (s) => {
+          s.currentTask = task;
+        });
+        return { type: name, task };
+      }
+      case "mark_task_done": {
+        await mutateSession(sessionId, (s) => {
+          if (!s.currentTask) throw new AppError("Keine aktive Aufgabe.");
+          s.currentTask.done = true;
+          s.currentTask.feedback = args.feedback;
+        });
+        const settings = await getSettings();
+        if (
+          settings.crossChatProfileEnabled &&
+          settings.autoUpdateProfileOnTaskDone
+        )
+          await updateProfile({
+            language: context.language,
+            newConcepts: [],
+            strengths: [],
+            weaknesses: [],
+            taskSucceeded: true,
+          });
+        return { type: name, feedback: args.feedback || "" };
+      }
+      case "add_explanation":
+        return {
+          type: name,
+          title: text(args.title, "title"),
+          content: text(args.content, "content"),
+        };
+      case "get_language_profile": {
+        if (!(await getSettings()).crossChatProfileEnabled)
+          throw new AppError("Sprachprofil ist deaktiviert.");
+        return {
+          type: name,
+          profile: (await getProfile()).languages?.[args.language] || null,
+        };
+      }
+      case "trigger_summarize": {
+        const current = await loadSession(sessionId),
+          settings = await getSettings();
+        const summary = await summarizeSession(current, settings, signal);
+        if (summary?.text)
+          await mutateSession(
+            sessionId,
+            (s) => {
+              s.summaries.push(summary);
+            },
+            current.revision,
+          );
+        return {
+          type: name,
+          status: summary?.text ? "completed" : "not_needed",
+        };
+      }
+      default:
+        throw new AppError(`Unbekanntes Tool: ${name}`);
     }
-
-    case 'trigger_summarize': {
-      // Signal to teacher loop that summarization should happen
-      return { type: 'trigger_summarize', status: 'requested' };
-    }
-
-    default:
-      return { error: `Unbekanntes Tool: ${name}` };
+  } catch (error) {
+    return {
+      type: "tool_error",
+      tool: name,
+      error: error.message,
+      code: error.code || "TOOL_ERROR",
+    };
   }
 }

@@ -1,5 +1,7 @@
 # SterraCode als zuverlässigen Lernarbeitsplatz verbessern
 
+> Umsetzungsstand: Die Überarbeitung mit SVG-Icons, modularer Oberfläche, UUID-Workspaces, versioniertem Speichern, dauerhafter KI-Rücknahme, persistenten Fragen und Lernplänen sowie gemeinsamem Prozessdienst ist implementiert. Einrichtung, Datenmigration und Testbefehle stehen in der README. Die folgenden Abschnitte dokumentieren die ursprüngliche Planung.
+
 ## Zusammenfassung
 
 SterraCode wird in drei aufeinander aufbauenden Etappen verbessert: zuerst Datenhaltung und Ausführung stabilisieren, dann die Oberfläche für Einsteiger neu ordnen, anschließend Lernplan, Chat und Dateiarbeit vervollständigen. Express, Monaco und Vanilla JavaScript bleiben bestehen. Vorhandene Sessions und Dateien werden übernommen.

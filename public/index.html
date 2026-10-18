@@ -1,287 +1,343 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de" data-theme="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SterraCode</title>
-  <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  HEADER                                                                 -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<header id="app-header">
-  <div class="header-left">
-    <button id="sidebar-toggle" class="icon-btn" title="Sessions ein-/ausblenden">☰</button>
-    <span class="logo">🌌 SterraCode</span>
-  </div>
-  <div class="header-center">
-    <span id="connection-badge" class="badge badge-disconnected">● Nicht verbunden</span>
-    <select id="model-select" title="Aktives Modell"></select>
-    <select id="language-select" title="Programmiersprache">
-      <option value="python">Python</option>
-      <option value="javascript">JavaScript</option>
-      <option value="bash">Bash</option>
-      <option value="go">Go</option>
-      <option value="rust">Rust</option>
-      <option value="cpp">C++</option>
-      <option value="csharp">C#</option>
-      <option value="lua">Lua</option>
-      <option value="java">Java</option>
-    </select>
-  </div>
-  <div class="header-right">
-    <span id="token-counter" class="token-counter" title="Geschätzte Token im Kontext">0 Tokens</span>
-    <button id="settings-btn" class="icon-btn" title="Einstellungen">⚙</button>
-  </div>
-</header>
-
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  SESSIONS SIDEBAR                                                       -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<aside id="sessions-sidebar" class="sidebar">
-  <div class="sidebar-header">
-    <div class="sidebar-tabs">
-      <button id="tab-sessions" class="sidebar-tab active">Sessions</button>
-      <button id="tab-files" class="sidebar-tab">Dateien</button>
-      <button id="tab-plan" class="sidebar-tab">Lernplan</button>
-    </div>
-    <button id="new-session-btn" class="btn btn-primary btn-sm" style="margin-left: 4px;">+ Neu</button>
-  </div>
-  
-  <div id="sessions-view" class="sidebar-view">
-    <div id="sessions-list" class="sessions-list"></div>
-  </div>
-  
-  <div id="files-view" class="sidebar-view hidden">
-    <div class="files-toolbar">
-      <button id="new-file-btn" class="icon-btn" title="Neue Datei">📄</button>
-      <button id="new-folder-btn" class="icon-btn" title="Neuer Ordner">📁</button>
-    </div>
-    <div id="files-list" class="files-list"></div>
-  </div>
-
-  <div id="plan-view" class="sidebar-view hidden" style="padding: 12px; overflow-y: auto;">
-    <h3 id="plan-goal" style="font-size: 14px; margin-bottom: 8px; color: var(--accent);">Kein Lernziel gesetzt</h3>
-    <div id="plan-topics" style="display: flex; flex-direction: column; gap: 6px;"></div>
-  </div>
-  
-  <div id="sidebar-resizer" class="resizer resizer-v" title="Sidebar-Größe ändern"></div>
-</aside>
-
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  MAIN CONTENT                                                           -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<main id="main-content">
-
-  <!-- ─── EDITOR PANEL ─────────────────────────────────────────────────── -->
-  <section id="editor-panel" class="panel">
-    <div class="panel-header">
-      <span>Code Editor</span>
-      <div class="panel-actions">
-        <button id="undo-ai-btn" class="btn btn-sm" disabled title="KI-Änderung rückgängig">↩ Rückgängig</button>
-        <button id="run-btn"     class="btn btn-success btn-sm" title="Code ausführen (Ctrl+Enter)">▶ Run</button>
-      </div>
-    </div>
-    <div id="editor-container"></div>
-  </section>
-
-  <div id="editor-resizer" class="resizer resizer-v" title="Editor-Größe ändern"></div>
-
-  <!-- ─── TEACHER PANEL ─────────────────────────────────────────────────── -->
-  <section id="teacher-panel" class="panel">
-
-    <!-- Chat area -->
-    <div id="chat-messages" class="chat-messages"></div>
-
-    <!-- Task panel -->
-    <div id="task-panel" class="task-panel hidden">
-      <div class="task-header">
-        <span id="task-difficulty-badge" class="badge"></span>
-        <span id="task-title" class="task-title"></span>
-        <button id="task-done-btn" class="btn btn-success btn-sm">✓ Erledigt</button>
-      </div>
-      <p id="task-description" class="task-description"></p>
-      <div id="task-hints" class="task-hints hidden">
-        <button id="hint-btn" class="btn btn-sm">💡 Hinweis anzeigen</button>
-        <div id="hint-list" class="hint-list hidden"></div>
-      </div>
-    </div>
-
-    <!-- Explanation panel -->
-    <div id="explanation-panel" class="explanation-panel hidden">
-      <div class="explanation-header">
-        <span id="explanation-title"></span>
-        <button class="icon-btn close-btn" onclick="document.getElementById('explanation-panel').classList.add('hidden')">✕</button>
-      </div>
-      <div id="explanation-content" class="explanation-content"></div>
-    </div>
-
-    <!-- Input area -->
-    <div class="chat-input-area">
-      <div class="chat-input-actions" style="display:flex; justify-content: flex-end; margin-bottom: 4px;">
-        <button id="delete-last-msg-btn" class="icon-btn" title="Letzte Nachricht & Antwort löschen" style="font-size:12px">🗑 Letzte löschen</button>
-      </div>
-      <div class="chat-input-row">
-        <textarea id="chat-input" placeholder="Stelle eine Frage oder beschreibe was du lernen möchtest..." rows="2"></textarea>
-        <div class="input-buttons">
-          <button id="send-btn"          class="btn btn-primary" title="Senden (Enter)">↵</button>
-          <button id="send-with-code-btn" class="btn btn-sm"    title="Code mitsenden (Ctrl+Shift+Enter)" style="font-size:11px">📎 Code</button>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SterraCode</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div id="app" class="app" data-view="editor">
+      <header class="app-header">
+        <button
+          id="sidebar-toggle"
+          class="icon-only"
+          title="Seitenleiste umschalten"
+          aria-label="Seitenleiste umschalten"
+          aria-expanded="true"
+        >
+          <svg class="icon" aria-hidden="true">
+            <use href="/assets/icons.svg#menu"></use>
+          </svg>
+        </button>
+        <a class="brand" href="/" aria-label="SterraCode Startseite"
+          ><svg class="icon brand-icon" aria-hidden="true">
+            <use href="/assets/icons.svg#orbit"></use></svg
+          >SterraCode</a
+        >
+        <span class="header-divider"></span
+        ><span id="session-title" class="session-title"
+          >Dein Lernarbeitsplatz</span
+        >
+        <div class="header-actions">
+          <button
+            id="terminal-toggle"
+            title="Terminal umschalten"
+            aria-controls="terminal-panel"
+            aria-expanded="false"
+          >
+            <svg class="icon" aria-hidden="true">
+              <use href="/assets/icons.svg#terminal"></use></svg
+            ><span class="optional-label">Terminal</span></button
+          ><button
+            id="settings-btn"
+            class="icon-only"
+            title="Einstellungen"
+            aria-label="Einstellungen"
+          >
+            <svg class="icon" aria-hidden="true">
+              <use href="/assets/icons.svg#settings"></use>
+            </svg>
+          </button>
         </div>
-      </div>
-      <div id="tool-indicator" class="tool-indicator hidden">
-        <span id="tool-indicator-text">...</span>
-      </div>
+      </header>
+      <aside id="sidebar" aria-label="Sessionnavigation">
+        <div class="sidebar-top">
+          <span class="eyebrow">Arbeitsplatz</span
+          ><button id="new-session-btn" class="primary" disabled>
+            <svg class="icon" aria-hidden="true">
+              <use href="/assets/icons.svg#plus"></use></svg
+            >Neue Session
+          </button>
+        </div>
+        <div class="sidebar-tabs" role="tablist" aria-label="Seitenleiste">
+          <button
+            id="tab-sessions"
+            role="tab"
+            aria-selected="true"
+            aria-controls="sessions-view"
+          >
+            Sessions</button
+          ><button
+            id="tab-files"
+            role="tab"
+            aria-selected="false"
+            aria-controls="files-view"
+          >
+            Dateien</button
+          ><button
+            id="tab-plan"
+            role="tab"
+            aria-selected="false"
+            aria-controls="plan-view"
+          >
+            Lernplan
+          </button>
+        </div>
+        <section
+          id="sessions-view"
+          role="tabpanel"
+          aria-labelledby="tab-sessions"
+        >
+          <div id="sessions-list"></div>
+        </section>
+        <section
+          id="files-view"
+          role="tabpanel"
+          aria-labelledby="tab-files"
+          hidden
+        >
+          <div class="side-toolbar">
+            <span class="eyebrow">Workspace</span>
+            <div id="file-actions"></div>
+          </div>
+          <div id="file-tree" role="tree" aria-label="Dateien und Ordner"></div>
+        </section>
+        <section
+          id="plan-view"
+          role="tabpanel"
+          aria-labelledby="tab-plan"
+          hidden
+        >
+          <div id="learning-plan"></div>
+        </section>
+        <div
+          id="sidebar-resizer"
+          class="resizer vertical"
+          role="separator"
+          aria-label="Breite der Seitenleiste"
+          aria-orientation="vertical"
+          tabindex="0"
+        ></div>
+      </aside>
+      <button
+        id="sidebar-backdrop"
+        class="sidebar-backdrop"
+        aria-label="Seitenleiste schließen"
+        hidden
+      ></button>
+      <main id="workbench">
+        <section id="welcome" class="welcome">
+          <div class="welcome-content">
+            <svg class="icon welcome-orbit" aria-hidden="true">
+              <use href="/assets/icons.svg#orbit"></use></svg
+            ><span class="eyebrow">Lernen. Ausprobieren. Verstehen.</span>
+            <h1>Raum für deinen nächsten Schritt.</h1>
+            <p>
+              Schreibe Code, stelle Fragen und arbeite mit deinem lokalen
+              KI-Tutor an einem eigenen Lernziel.
+            </p>
+            <button id="welcome-new" class="primary" disabled>
+              <svg class="icon" aria-hidden="true">
+                <use href="/assets/icons.svg#plus"></use></svg
+              >Neue Session starten
+            </button>
+            <div id="welcome-status" class="connection-help"></div>
+            <div id="recent-sessions" class="recent-sessions"></div>
+          </div>
+        </section>
+        <nav
+          id="compact-tabs"
+          class="compact-tabs"
+          aria-label="Arbeitsansicht"
+          hidden
+        >
+          <button id="view-editor" aria-pressed="true">Editor</button
+          ><button id="view-chat" aria-pressed="false">KI-Tutor</button>
+        </nav>
+        <div id="panes" class="panes" hidden>
+          <section id="editor-panel" class="panel" aria-label="Code-Editor">
+            <div class="panel-heading">
+              <span class="eyebrow">Editor</span>
+              <div class="panel-actions">
+                <select
+                  id="language-select"
+                  aria-label="Programmiersprache"
+                ></select
+                ><button
+                  id="save-btn"
+                  class="icon-only"
+                  title="Speichern (Strg+S)"
+                  aria-label="Speichern"
+                >
+                  <svg class="icon" aria-hidden="true">
+                    <use href="/assets/icons.svg#save"></use>
+                  </svg></button
+                ><button id="run-btn" class="primary">
+                  <svg class="icon" aria-hidden="true">
+                    <use href="/assets/icons.svg#play"></use></svg
+                  >Ausführen
+                </button>
+              </div>
+            </div>
+            <div
+              id="file-tabs"
+              class="file-tabs"
+              role="tablist"
+              aria-label="Geöffnete Dateien"
+            ></div>
+            <div class="file-info">
+              <span id="file-path">Keine Datei geöffnet</span
+              ><button id="save-status" class="text-button" aria-live="polite">
+                Gespeichert
+              </button>
+              <button
+                id="changes-btn"
+                class="icon-only"
+                title="KI-Dateiänderungen"
+                aria-label="KI-Dateiänderungen"
+              >
+                <svg class="icon" aria-hidden="true">
+                  <use href="/assets/icons.svg#undo"></use>
+                </svg>
+              </button>
+            </div>
+            <div id="editor-container"></div>
+            <div id="runtime-hint" class="runtime-hint"></div>
+          </section>
+          <div
+            id="editor-resizer"
+            class="resizer vertical"
+            role="separator"
+            aria-label="Verhältnis von Editor und Chat"
+            aria-orientation="vertical"
+            tabindex="0"
+          ></div>
+          <section id="teacher-panel" class="panel" aria-label="KI-Tutor">
+            <div class="panel-heading">
+              <div class="tutor-title">
+                <svg class="icon" aria-hidden="true">
+                  <use href="/assets/icons.svg#chat"></use></svg
+                ><strong>KI-Tutor</strong
+                ><span
+                  id="connection-badge"
+                  class="status-dot offline"
+                  role="status"
+                  aria-label="Verbindung wird geprüft"
+                ></span>
+              </div>
+              <select id="model-select" aria-label="KI-Modell"></select
+              ><button
+                id="refresh-models"
+                class="icon-only"
+                title="Verbindung prüfen"
+                aria-label="Verbindung prüfen"
+              >
+                <svg class="icon" aria-hidden="true">
+                  <use href="/assets/icons.svg#refresh"></use>
+                </svg>
+              </button>
+            </div>
+            <div
+              id="connection-help"
+              class="connection-help"
+              role="status"
+            ></div>
+            <div
+              id="chat-messages"
+              class="chat-messages"
+              aria-label="Chatverlauf"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
+            ></div>
+            <div id="task-panel" class="task-panel" hidden></div>
+            <form id="chat-form" class="chat-input-area">
+              <label for="chat-input" class="sr-only"
+                >Nachricht an den KI-Tutor</label
+              ><textarea
+                id="chat-input"
+                rows="3"
+                placeholder="Was möchtest du verstehen oder ausprobieren?"
+              ></textarea>
+              <div class="composer-footer">
+                <span id="chat-state" class="muted" role="status"
+                  >Enter sendet, Umschalt+Enter fügt eine Zeile ein</span
+                ><button id="stop-chat-btn" type="button" hidden>
+                  <svg class="icon" aria-hidden="true">
+                    <use href="/assets/icons.svg#stop"></use></svg
+                  >Stoppen</button
+                ><button id="send-btn" class="primary" type="submit">
+                  <svg class="icon" aria-hidden="true">
+                    <use href="/assets/icons.svg#send"></use></svg
+                  >Senden
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+        <section
+          id="terminal-panel"
+          class="terminal-panel"
+          aria-label="Terminal"
+          hidden
+        >
+          <div
+            id="terminal-resizer"
+            class="resizer horizontal"
+            role="separator"
+            aria-label="Terminalhöhe"
+            aria-orientation="horizontal"
+            tabindex="0"
+          ></div>
+          <div class="terminal-heading">
+            <span class="eyebrow">Terminal</span
+            ><span id="process-status" class="muted">Bereit</span>
+            <div class="panel-actions">
+              <button id="stop-process-btn" disabled>
+                <svg class="icon" aria-hidden="true">
+                  <use href="/assets/icons.svg#stop"></use></svg
+                >Stoppen</button
+              ><button id="clear-terminal-btn">Ausgabe leeren</button
+              ><button
+                id="close-terminal-btn"
+                class="icon-only"
+                aria-label="Terminal schließen"
+                title="Terminal schließen"
+              >
+                <svg class="icon" aria-hidden="true">
+                  <use href="/assets/icons.svg#close"></use>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <pre
+            id="terminal-output"
+            class="terminal-output"
+            tabindex="0"
+            aria-label="Terminalausgabe"
+          ></pre>
+          <form id="terminal-form">
+            <label for="terminal-input" class="sr-only"
+              >Befehl oder Programmeingabe</label
+            ><input
+              id="terminal-input"
+              placeholder="Befehl im Session-Workspace eingeben …"
+              autocomplete="off"
+            /><button type="submit">Senden</button>
+          </form>
+        </section>
+      </main>
+      <footer class="statusbar">
+        <span id="workspace-status">Lokal auf deinem Rechner</span
+        ><span id="token-counter">Kontext bereit</span
+        ><span id="connection-text">Verbindung wird geprüft</span>
+      </footer>
     </div>
-
-  </section>
-</main>
-
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  TERMINAL PANEL                                                         -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<div id="terminal-panel" class="terminal-panel">
-  <div class="terminal-header">
-    <span>Terminal</span>
-    <button id="clear-terminal-btn" class="btn btn-sm">✕ Clear</button>
-  </div>
-  <div id="terminal-resizer" class="terminal-resizer" title="Terminalgröße ändern"></div>
-  <pre id="terminal-output" class="terminal-output">Bereit. Drücke Ctrl+Enter oder klicke ▶ Run um Code auszuführen.</pre>
-  <div class="terminal-input-row">
-    <input id="terminal-input" type="text" placeholder="Befehl eingeben oder Eingabe für laufende Programme..." />
-    <button id="terminal-run-btn" class="btn btn-primary btn-sm">▶ Run</button>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  DIFF MODAL                                                             -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<div id="diff-modal" class="modal hidden">
-  <div class="modal-backdrop" onclick="cancelDiff()"></div>
-  <div class="modal-box modal-wide">
-    <div class="modal-header">
-      <h3>KI-Änderung überprüfen</h3>
-    </div>
-    <p id="diff-reason" class="diff-reason"></p>
-    <div id="diff-modal-editor" class="diff-editor-container"></div>
-    <div class="modal-footer">
-      <button id="diff-cancel"  class="btn"            onclick="cancelDiff()">✕ Ablehnen</button>
-      <button id="diff-confirm" class="btn btn-success">✓ Übernehmen</button>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  SETTINGS MODAL                                                         -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<div id="settings-modal" class="modal hidden">
-  <div class="modal-backdrop" onclick="closeSettings()"></div>
-  <div class="modal-box">
-    <div class="modal-header">
-      <h3>⚙ Einstellungen</h3>
-      <button class="icon-btn close-btn" onclick="closeSettings()">✕</button>
-    </div>
-    <div class="settings-body">
-
-      <section class="settings-section">
-        <h4>LM Studio</h4>
-        <label>URL <input id="s-lmUrl"   type="text" placeholder="http://localhost:1234"></label>
-        <label>Modell <input id="s-model" type="text" placeholder="Aus Dropdown wählen oder manuell eingeben"></label>
-        <label>Temperatur (0–1)
-          <input id="s-temp" type="range" min="0" max="1" step="0.05">
-          <span id="s-temp-val">0.4</span>
-        </label>
-        <label>Max. Antwort-Tokens
-          <input id="s-maxTokens" type="number" min="256" max="8192" step="256">
-        </label>
-      </section>
-
-      <section class="settings-section">
-        <h4>Darstellung</h4>
-        <label>Theme
-          <select id="s-theme">
-            <option value="dark">Dark (Standard)</option>
-            <option value="light">Light</option>
-            <option value="high-contrast">High Contrast</option>
-            <option value="solarized">Solarized</option>
-          </select>
-        </label>
-        <label>Schriftgröße
-          <input id="s-fontSize" type="number" min="10" max="24">
-        </label>
-      </section>
-
-      <section class="settings-section">
-        <h4>Editor</h4>
-        <label>Auto-Apply Schwellwert (Zeilen)
-          <input id="s-diffThreshold" type="number" min="1" max="50">
-        </label>
-        <label class="checkbox-label">
-          <input id="s-autoSend" type="checkbox">
-          Code bei jeder Nachricht automatisch mitsenden
-        </label>
-      </section>
-
-      <section class="settings-section">
-        <h4>Kontext-Komprimierung</h4>
-        <label>Token-Schwellwert
-          <input id="s-tokenThreshold" type="range" min="2000" max="32000" step="500">
-          <span id="s-token-val">8000</span>
-        </label>
-        <label>Nachrichten behalten
-          <input id="s-keepRecent" type="number" min="2" max="20">
-        </label>
-        <label>Max. Tool-Calls pro Antwort
-          <input id="s-maxTools" type="number" min="1" max="20">
-        </label>
-      </section>
-
-      <section class="settings-section">
-        <h4>Sprachprofil (Cross-Chat)</h4>
-        <label class="checkbox-label">
-          <input id="s-crossChat" type="checkbox">
-          Cross-Chat-Profil aktivieren
-        </label>
-        <label class="checkbox-label">
-          <input id="s-autoProfile" type="checkbox">
-          Profil nach Aufgabe automatisch aktualisieren
-        </label>
-      </section>
-
-      <section class="settings-section">
-        <h4>Code-Ausführung</h4>
-        <label>Timeout (ms, 0 = kein Timeout)
-          <input id="s-timeout" type="range" min="0" max="60000" step="1000">
-          <span id="s-timeout-val">0</span>
-        </label>
-        <label class="checkbox-label">
-          <input id="s-streaming" type="checkbox">
-          Streaming aktivieren (SSE)
-        </label>
-      </section>
-
-      <section class="settings-section">
-        <h4>System-Prompt</h4>
-        <textarea id="s-systemPrompt" rows="12" style="width:100%;resize:vertical"></textarea>
-        <button id="reset-prompt-btn" class="btn btn-sm" style="margin-top:6px">↺ Zurücksetzen</button>
-      </section>
-
-    </div>
-    <div class="modal-footer">
-      <button class="btn"            onclick="closeSettings()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveSettings()">Speichern</button>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  TOAST CONTAINER                                                        -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<div id="toast-container"></div>
-
-<!-- Monaco Editor (served from node_modules via Express) -->
-<script src="/monaco/vs/loader.js"></script>
-<script src="/app.js" type="module"></script>
-</body>
+    <dialog id="app-dialog"></dialog>
+    <div id="toasts" class="toasts"></div>
+    <script src="/monaco/vs/loader.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
 </html>

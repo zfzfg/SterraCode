@@ -1,87 +1,101 @@
-// server/routes/sessions.js
-import express from 'express';
-import fs from 'fs/promises';
-import path from 'path';
-import { v4 as uuid } from 'uuid';
-import { readJSON, writeJSON, listFiles, DATA_DIR } from '../services/storage.js';
-
+import express from "express";
+import { route } from "./helpers.js";
+import {
+  createSession,
+  listSessions,
+  loadSession,
+  mutateSession,
+  removeSession,
+  setLearningPlan,
+  message,
+} from "../services/sessions.js";
+import { isActive } from "../services/teacher.js";
+import { stopSessionProcesses } from "../services/processes.js";
+import { AppError, LANGUAGES } from "../services/storage.js";
+import { normalizePath } from "../services/workspace.js";
 const router = express.Router();
-const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
-
-// GET /api/sessions — list all sessions (id, title, language, updatedAt)
-router.get('/', async (req, res) => {
-  try {
-    const files = await listFiles(SESSIONS_DIR, '.json');
-    const sessions = await Promise.all(
-      files.map(f => readJSON(f).then(s => ({
-        id:        s.id,
-        title:     s.title,
-        language:  s.language,
-        updatedAt: s.updatedAt,
-        createdAt: s.createdAt
-      })).catch(() => null))
-    );
-    const valid = sessions.filter(Boolean).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-    res.json(valid);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/sessions — create new session
-router.post('/', async (req, res) => {
-  const { title, language } = req.body;
-  const now = new Date().toISOString();
-  const session = {
-    id:             uuid(),
-    title:          title || 'Neue Session',
-    language:       language || 'python',
-    createdAt:      now,
-    updatedAt:      now,
-    messages:       [],
-    summaries:      [],
-    currentTask:    null,
-    editorSnapshot: ''
-  };
-  await writeJSON(path.join(SESSIONS_DIR, `${session.id}.json`), session);
-  res.json(session);
-});
-
-// GET /api/sessions/:id — load a single session
-router.get('/:id', async (req, res) => {
-  try {
-    const session = await readJSON(path.join(SESSIONS_DIR, `${req.params.id}.json`));
-    res.json(session);
-  } catch {
-    res.status(404).json({ error: 'Session nicht gefunden.' });
-  }
-});
-
-// PATCH /api/sessions/:id — partial update (title, editorSnapshot, language)
-router.patch('/:id', async (req, res) => {
-  try {
-    const filePath = path.join(SESSIONS_DIR, `${req.params.id}.json`);
-    const session  = await readJSON(filePath);
-    const allowed  = ['title', 'editorSnapshot', 'language'];
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) session[key] = req.body[key];
-    }
-    session.updatedAt = new Date().toISOString();
-    await writeJSON(filePath, session);
+router.get(
+  "/",
+  route(async (req, res) => res.json(await listSessions())),
+);
+router.post(
+  "/",
+  route(async (req, res) =>
+    res.status(201).json(await createSession(req.body)),
+  ),
+);
+router.get(
+  "/:id",
+  route(async (req, res) => res.json(await loadSession(req.params.id))),
+);
+router.patch(
+  "/:id",
+  route(async (req, res) =>
+    res.json(
+      await mutateSession(
+        req.params.id,
+        (s) => {
+          const b = req.body;
+          for (const key of Object.keys(b))
+            if (
+              ![
+                "title",
+                "language",
+                "activeFile",
+                "openFiles",
+                "learningPlan",
+                "expectedRevision",
+              ].includes(key)
+            )
+              throw new AppError(`Nicht unterstütztes Sessionfeld: ${key}`);
+          if (b.title !== undefined) {
+            if (
+              typeof b.title !== "string" ||
+              !b.title.trim() ||
+              b.title.length > 200
+            )
+              throw new AppError("Ungültiger Sessionname.");
+            s.title = b.title.trim();
+          }
+          if (b.language !== undefined) {
+            if (!LANGUAGES.includes(b.language))
+              throw new AppError("Ungültige Sprache.");
+            s.language = b.language;
+          }
+          if (b.activeFile !== undefined)
+            s.activeFile =
+              b.activeFile === null ? null : normalizePath(b.activeFile);
+          if (b.openFiles !== undefined) {
+            if (!Array.isArray(b.openFiles) || b.openFiles.length > 50)
+              throw new AppError("Ungültige Dateireiter.");
+            s.openFiles = [...new Set(b.openFiles.map(normalizePath))];
+          }
+          if (b.learningPlan !== undefined) {
+            setLearningPlan(s, b.learningPlan);
+            s.messages.push(
+              message("event", "", {
+                event: {
+                  type: "update_learning_plan",
+                  ...s.learningPlan,
+                  actor: "user",
+                },
+              }),
+            );
+          }
+        },
+        req.body.expectedRevision,
+      ),
+    ),
+  ),
+);
+router.delete(
+  "/:id",
+  route(async (req, res) => {
+    if (isActive(req.params.id))
+      throw new AppError("Bitte die laufende Antwort zuerst stoppen.", 409);
+    await stopSessionProcesses(req.params.id);
+    await removeSession(req.params.id);
     res.json({ ok: true });
-  } catch {
-    res.status(404).json({ error: 'Session nicht gefunden.' });
-  }
-});
-
-// DELETE /api/sessions/:id
-router.delete('/:id', async (req, res) => {
-  try {
-    await fs.unlink(path.join(SESSIONS_DIR, `${req.params.id}.json`));
-    res.json({ ok: true });
-  } catch {
-    res.status(404).json({ error: 'Session nicht gefunden.' });
-  }
-});
-
+  }),
+);
 export default router;

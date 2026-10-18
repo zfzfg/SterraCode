@@ -1,29 +1,31 @@
-// server/routes/models.js
-import express from 'express';
-import { getSettings } from '../services/storage.js';
-
+import express from "express";
+import { getSettings } from "../services/storage.js";
+import { route } from "./helpers.js";
 const router = express.Router();
-
-// GET /api/models — Query all available models from LM Studio
-router.get('/', async (req, res) => {
-  let settings;
-  try {
-    settings = await getSettings();
-  } catch {
-    return res.json({ models: [], connected: false, error: 'Einstellungen konnten nicht geladen werden.' });
-  }
-
-  try {
-    const response = await fetch(`${settings.lmStudioUrl}/v1/models`, {
-      headers: { 'Content-Type': 'application/json' }
-    });
-    if (!response.ok) throw new Error(`LM Studio antwortet nicht (${response.status})`);
-    const data = await response.json();
-    const models = (data.data ?? []).map(m => ({ id: m.id, name: m.id }));
-    res.json({ models, connected: true });
-  } catch (err) {
-    res.json({ models: [], connected: false, error: err.message });
-  }
-});
-
+router.get(
+  "/",
+  route(async (req, res) => {
+    const settings = await getSettings();
+    try {
+      const response = await fetch(`${settings.lmStudioUrl}/v1/models`, {
+        signal: AbortSignal.timeout(4000),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const models = (data.data || []).map((m) => ({ id: m.id, name: m.id }));
+      res.json({
+        models,
+        connected: true,
+        status: models.length ? "ready" : "no-model",
+      });
+    } catch (error) {
+      res.json({
+        models: [],
+        connected: false,
+        status: "offline",
+        error: `LM Studio ist nicht erreichbar (${error.message}). Server in LM Studio starten und URL prüfen.`,
+      });
+    }
+  }),
+);
 export default router;
