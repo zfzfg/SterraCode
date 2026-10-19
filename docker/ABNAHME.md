@@ -128,3 +128,11 @@ Neue Imageidentitäten:
 - Konsistente Sicherung vor dem Update: `/home/zfzfg/sterracode-test/backups/pre-editor-terminal-20261019`. Vorheriges App-Image unter `rollback-editor-terminal-20261019` erhalten. Nur App-Image neu gebaut; vorhandener Runner und Volumes weiterverwendet.
 - App und Runner nach Bereitstellung healthy. Vom Windows-Rechner `/api/health` erfolgreich und ausgelieferte Seite mit neuem Editorbereich geprüft. Neues App-Image: `sha256:b41ab03ad528dc8ab1ad2f36715c9fea466d9c59f569aa5e544d0a7f43dccd26`. Kein erneuter vollständiger Laufzeit-/Restore-Smoke für diese Layoutänderung.
 
+## Update vom 19.10.2026: Aufgabenabschluss und Weiterlernen
+
+- Commit `13e155e2d13a48bafa198059ee53fa34714d11da` auf main veröffentlicht und in der bestehenden Ubuntu-Installation installiert. Zwei neue Abschlussaktionen speichern den Abschluss und senden wahlweise den Wunsch nach der nächsten Lernplanaufgabe oder einer anderen Aufgabe zum gleichen Thema. Testaufgaben verlangen weiterhin einen aktuellen bestandenen Testlauf; eigene Abschlüsse ohne Tests werden als solche erfasst. Hinweise und angegebene Lösungshilfe bleiben im Abschlussnachweis berücksichtigt.
+- Aufgabenbeschreibung und Hinweisliste getrennt einklappbar; Zustand pro Session, Aufgabe und Version bleibt bei Aktualisierungen der Ansicht erhalten. Die Weiterlernknöpfe bleiben bei eingeklappter Beschreibung sichtbar. Parallele Chatübermittlung während des Abschlussvorgangs verhindert.
+- **26/26 Browserprüfungen** für App, Lernunterstützung und Bewertung erfolgreich. Neue Regressionen für beide Lernwünsche, erhaltene Einklappzustände und die Testabschlussprüfung bestanden. Screenshot des eingeklappten Aufgabenbereichs visuell geprüft. Geänderte Dateien bestehen Prettier und git diff --check.
+- Konsistente Sicherung: `/home/zfzfg/sterracode-test/backups/pre-task-continuation-20261019`. Vorheriges App-Image unter `rollback-task-continuation-20261019` erhalten. App neu gebaut, Runner und Volumes weiterverwendet. App und Runner healthy; Healthcheck und ausgelieferte neue Frontendmodule vom Windows-Rechner geprüft. Keine kostenpflichtige Modellanfrage bei der Live-Prüfung.
+- Neues App-Image: `sha256:5b20d833ea9f8c6eb476c966fef37ec4e7afc10a4159b9431934bf40dfd1d78f`. Vollständigen Laufzeit-/Restore-Smoke für diese Frontendänderung nicht wiederholt.
+
