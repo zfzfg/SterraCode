@@ -29,7 +29,7 @@ npm start
 
 Anschließend `http://localhost:3000` öffnen. Alternativ `start.bat` oder `start.ps1` verwenden. Der Server bindet ausschließlich an `127.0.0.1`. `npm run dev` startet den Node-Watchmodus.
 
-In LM Studio einen erreichbaren Server starten und ein Modell mit Tool-Unterstützung laden. Es kann auf diesem Rechner, einem anderen LAN-Rechner oder hinter einer externen HTTPS-Adresse laufen. Alternativ unter Einstellungen die OpenAI API auswählen, den Schlüssel unter **KI-Zugangsdaten** hinterlegen und die gewünschte Modell-ID wählen. Sessions, Dateien und Lernpläne funktionieren auch offline.
+In LM Studio einen erreichbaren Server starten und ein Modell mit Tool-Unterstützung laden. Es kann auf diesem Rechner, einem anderen LAN-Rechner oder hinter einer externen HTTPS-Adresse laufen. Alternativ unter Einstellungen die OpenAI API auswählen, den Schlüssel unter **KI-Zugangsdaten** hinterlegen und ein direkt von OpenAI abgefragtes Modell aus der Liste wählen. Sessions, Dateien und Lernpläne funktionieren auch offline.
 
 ## Bedienung
 
@@ -78,9 +78,11 @@ Der Tutor erhält im Review ausdrücklich `status: "proposed"`, `proposalId`, Pf
 
 ## Kontextkomprimierung
 
-Der integrierte Kern von context-compressor 0.8.3 arbeitet direkt im SterraCode-Backend. Das separate LM-Studio-Plugin muss nicht installiert werden. Herkunft und Anpassungen stehen in [ORIGIN.md](server/services/context/ORIGIN.md).
+Bei **OpenAI** verwaltet die Responses API die Verdichtung. SterraCode sendet weder ein Antwort-Tokenlimit noch ein Kontextbudget oder eine eigene Verdichtungsschwelle. Die API-seitige Verdichtung wird mit `context_management: [{ type: "compaction" }]` aktiviert; `/compact` nutzt `/responses/compact`. Verschlüsselte API-Kontextzustände werden für Folgeanfragen gespeichert und bei geänderter Quellhistorie verworfen. Der vollständige Chat bleibt erhalten. Die verfügbaren Modell-IDs werden über `/v1/models` abgefragt und als Auswahl angeboten; das gewählte Modell muss Responses, Funktionsaufrufe und Compaction unterstützen. Die Modellliste liefert keine verlässlichen Kontextgrößen oder Funktionsfähigkeiten.
 
-SterraCode verbindet sich über das native LM-Studio-SDK 2.1.0 mit der eingestellten Serveradresse. Die Modellauswahl zeigt geladene Modelle. Vor jedem Modellaufruf wird der tatsächliche Prompt mit dem Modelltemplate einschließlich Werkzeugdefinitionen tokenisiert. Das Antwortlimit wird als Reserve freigehalten. Fehlen genaue Messwerte oder passt der minimale Auftrag nicht, stoppt die Antwort mit einem Lösungshinweis; Datei- und Sessionarbeit bleiben verfügbar.
+Die folgenden lokalen Budgets und Compressor-Einstellungen gelten ausschließlich für **LM Studio**. Der integrierte Kern von context-compressor 0.8.3 arbeitet direkt im SterraCode-Backend. Das separate LM-Studio-Plugin muss nicht installiert werden. Herkunft und Anpassungen stehen in [ORIGIN.md](server/services/context/ORIGIN.md).
+
+SterraCode verbindet sich über das native LM-Studio-SDK 2.1.0 mit der eingestellten Serveradresse. Die Modellauswahl zeigt geladene Modelle mit ihrem tatsächlich geladenen Kontextfenster. Dieses wird automatisch über `getContextLength()` erkannt und vor Folgeaufrufen erneut geprüft. Ein separates Antwortlimit (`maxTokens`) ist eine Inferenzoption pro Anfrage; das native SDK stellt keinen Getter für die in der LM-Studio-Oberfläche gewählte Antwortgrenze bereit. Vor jedem Modellaufruf wird der tatsächliche Prompt mit dem Modelltemplate einschließlich Werkzeugdefinitionen tokenisiert. Das Antwortlimit wird als Reserve freigehalten. Fehlen genaue Messwerte oder passt der minimale Auftrag nicht, stoppt die Antwort mit einem Lösungshinweis; Datei- und Sessionarbeit bleiben verfügbar.
 
 Automatische Komprimierung startet standardmäßig bei 75 % und verkleinert den Kontext möglichst auf 55 %. Das gilt auch zwischen Werkzeugrunden. Neuere Inhalte bleiben möglichst wörtlich; die aktuelle Nutzeranweisung bleibt immer wörtlich erhalten. Der ursprüngliche Nutzerauftrag wird zusätzlich direkt als historischer Beleg bewahrt, soweit das Budget reicht (höchstens 1.024 Tokens); Onboarding-Antworten sind davon ausgenommen. Standardbudgets: 6.000 Tokens neuester Kontext, 16.000 je Quellabschnitt, 1.500 je Zusammenfassung und 12.000 insgesamt. Werkzeugausgaben erhalten 4.000 Tokens je Ergebnis und 20.000 insgesamt pro Runde. Kleine Kontextfenster verwenden entsprechend verkleinerte Budgets; `/usage` zeigt die effektiven Werte. Einstellungen stehen unter „Erweiterte Einstellungen“.
 

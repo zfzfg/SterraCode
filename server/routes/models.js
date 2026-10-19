@@ -1,17 +1,16 @@
 import express from "express";
 import { getSettings } from "../services/storage.js";
 import { route } from "./helpers.js";
-import { listLoadedModels } from "../services/lmStudio.js";
+import { listModelOptions } from "../services/lmStudio.js";
 const router = express.Router();
 router.get(
   "/",
   route(async (req, res) => {
     const settings = await getSettings();
+    if (["openai", "lmstudio"].includes(req.query.provider))
+      settings.provider = req.query.provider;
     try {
-      const models = (await listLoadedModels(settings)).map((m) => ({
-        id: m.identifier,
-        name: m.displayName || m.identifier,
-      }));
+      const models = await listModelOptions(settings);
       res.json({
         models,
         connected: true,

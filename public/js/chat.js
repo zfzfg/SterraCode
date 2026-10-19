@@ -16,6 +16,8 @@ function usageText(usage) {
   if (!usage) return "Kontext bereit";
   const number = (n) =>
     Number.isFinite(n) ? n.toLocaleString("de-DE") : "unbekannt";
+  if (usage.provider === "openai")
+    return `OpenAI-Kontext: ${number(usage.promptTokens)} Tokens${usage.measurementQuality === "estimated" ? " (geschätzt)" : ""} · Grenzen und Verdichtung durch OpenAI`;
   const prefix = usage.stale
     ? "Kontext (letzte Messung)"
     : usage.measurementQuality === "exact"
@@ -36,9 +38,12 @@ function renderUsage(usage) {
     usage = null;
   const counter = $("token-counter");
   counter.textContent = usageText(usage);
-  counter.title = usage
-    ? `Antwortreserve: ${usage.reservedOutputTokens.toLocaleString("de-DE")} Tokens · ${usage.coveredMessages} Nachrichten komprimiert · ${usage.chunkCount} Zusammenfassungen · zuletzt gemessen: ${new Date(usage.sampledAt).toLocaleString("de-DE")}`
-    : "/compact komprimiert ältere Abschnitte, /usage zeigt die Kontextnutzung.";
+  counter.title =
+    state.settings.provider === "openai"
+      ? "OpenAI verwaltet Kontext und Tokenlimits. /compact verdichtet über die OpenAI API; /usage zeigt die Nutzung."
+      : usage
+        ? `Antwortreserve: ${usage.reservedOutputTokens.toLocaleString("de-DE")} Tokens · ${usage.coveredMessages} Nachrichten komprimiert · ${usage.chunkCount} Zusammenfassungen · zuletzt gemessen: ${new Date(usage.sampledAt).toLocaleString("de-DE")}`
+        : "/compact komprimiert ältere Abschnitte, /usage zeigt die Kontextnutzung.";
 }
 const typeInfo = {
   trigger_summarize: ["plan", "Kontextzusammenfassung"],
@@ -138,9 +143,11 @@ function eventCard(event, sessionId) {
         node(
           "p",
           "",
-          event.changed
-            ? `${event.beforeTokens.toLocaleString("de-DE")} → ${event.afterTokens.toLocaleString("de-DE")} Tokens im Modellkontext. Der vollständige Chat bleibt erhalten.`
-            : "Es konnten keine weiteren Abschnitte sinnvoll komprimiert werden. Der vollständige Chat bleibt erhalten.",
+          event.provider === "openai"
+            ? "Der Kontext wurde durch die OpenAI API verdichtet. Der vollständige Chat bleibt erhalten."
+            : event.changed
+              ? `${event.beforeTokens.toLocaleString("de-DE")} → ${event.afterTokens.toLocaleString("de-DE")} Tokens im Modellkontext. Der vollständige Chat bleibt erhalten.`
+              : "Es konnten keine weiteren Abschnitte sinnvoll komprimiert werden. Der vollständige Chat bleibt erhalten.",
         ),
       );
     card.append(node("p", "", usageText(usage)));

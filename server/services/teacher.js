@@ -12,6 +12,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { TOOL_DEFINITIONS } from "./tools.js";
 import { executeTool } from "./toolExecutor.js";
 import { ContextManager, estimatedUsage } from "./context/index.js";
+import { OpenAIContext } from "./openAIContext.js";
+import { sourceHash } from "./context/sourceHash.js";
 import { contextCommand } from "./context/settings.js";
 import { isTransientEngineError } from "./context/core/retry.js";
 import { getProfile, profileToPromptText } from "./profileManager.js";
@@ -226,7 +228,9 @@ export async function runTeacher({
     let connection;
     try {
       connection = await connectModel(settings, controller.signal);
-      manager = new ContextManager({
+      const Manager =
+        settings.provider === "openai" ? OpenAIContext : ContextManager;
+      manager = new Manager({
         connection,
         settings,
         sessionId,
@@ -239,7 +243,13 @@ export async function runTeacher({
       usage = estimatedUsage(session, settings, error.message);
     }
     const definitions =
-      connection?.model.trainedForToolUse === false ? [] : TOOL_DEFINITIONS;
+      connection?.model.trainedForToolUse === false
+        ? []
+        : TOOL_DEFINITIONS.filter(
+            (definition) =>
+              settings.provider !== "openai" ||
+              definition.function.name !== "trigger_summarize",
+          );
     if (connection?.model.trainedForToolUse === false && !action)
       emit("notice", {
         message:
@@ -332,11 +342,18 @@ export async function runTeacher({
               if (stream) emit("reasoning", { token, turnId });
             },
             onAssistant: async (response) => {
+              if (response.providerState)
+                response.providerState.sourceHash = sourceHash(
+                  (await loadSession(sessionId)).messages,
+                );
               const m = message("assistant", response.content || "", {
                 turnId,
                 thinking: response.thinking || thinking,
                 ...(response.providerItems?.length
                   ? { providerItems: response.providerItems }
+                  : {}),
+                ...(response.providerState
+                  ? { providerState: response.providerState }
                   : {}),
                 ...(response.tool_calls.length
                   ? { tool_calls: response.tool_calls }

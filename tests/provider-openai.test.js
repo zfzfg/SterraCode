@@ -82,7 +82,6 @@ beforeEach(async () => {
   await storage.updateSettings({
     provider: "openai",
     openAIModel: "fixture-responses-model",
-    openAIContextLength: 128000,
   });
   responses = [];
   requests = [];
@@ -327,23 +326,168 @@ describe("Responses provider", () => {
       result.session.messages.findIndex((m) => m === assistant),
     ).toBeLessThan(result.session.messages.findIndex((m) => m.role === "tool"));
   });
-  it("supports internal summarization using the same budgeted provider", async () => {
+  it("does not impose a local output limit on OpenAI helper responses", async () => {
     const { model } = await lm.connectModel(await storage.getSettings());
-    const { predictInternal } =
-      await import("../server/services/context/core/internalPrediction.js");
-    const result = await predictInternal(
-      model,
+    const result = await model.respond(
       Chat.from([
         { role: "system", content: "Summarize" },
         { role: "user", content: "Known context" },
       ]),
       { maxTokens: 500 },
-      { abortSignal: new AbortController().signal },
     );
     expect(result.content).toContain("Antwort");
     expect(
       requests.find((request) => request.url.endsWith("/responses")).body,
-    ).toMatchObject({ max_output_tokens: 500, tools: [], store: false });
+    ).toMatchObject({ tools: [], store: false });
+    expect(
+      requests.find((request) => request.url.endsWith("/responses")).body,
+    ).not.toHaveProperty("max_output_tokens");
+  });
+  it("delegates compaction and token limits independently of local settings", async () => {
+    await storage.updateSettings({
+      autoCompact: false,
+      maxTokensResponse: 256,
+      thresholdPercent: 95,
+    });
+    const session = await sessions.createSession();
+    const result = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Ungekürzter Auftrag",
+    });
+    expect(result.turn.status).toBe("done");
+    const body = requests.find((r) => r.url.endsWith("/responses")).body;
+    expect(body.context_management).toEqual([{ type: "compaction" }]);
+    expect(body).not.toHaveProperty("max_output_tokens");
+    expect(body).not.toHaveProperty("compact_threshold");
+    expect(body.input).toContainEqual({
+      role: "user",
+      content: "Ungekürzter Auftrag",
+    });
+    expect(body.tools.some((t) => t.name === "trigger_summarize")).toBe(false);
+    expect(result.contextUsage).toMatchObject({
+      managedBy: "openai",
+      contextLength: null,
+      reservedOutputTokens: 0,
+    });
+    await expect(
+      storage.updateSettings({ openAIContextLength: 4096 }),
+    ).rejects.toThrow("Unbekannte Einstellung");
+    await expect(
+      fs.access(path.join(temp, "context", session.id, "cache.json")),
+    ).rejects.toThrow();
+  });
+  it("replays encrypted server compaction across turns without replaying the old transcript", async () => {
+    const session = await sessions.createSession();
+    const compact = {
+      type: "compaction",
+      id: "cmp_auto",
+      encrypted_content: "opaque-auto",
+    };
+    responses.push({
+      status: "completed",
+      output: [compact, message("Erledigt")],
+    });
+    const first = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Alte Anweisung",
+    });
+    expect(first.turn.status).toBe("done");
+    expect(
+      first.session.messages.find((m) => m.role === "assistant").providerState
+        .output[0],
+    ).toEqual(compact);
+    requests.length = 0;
+    await teacher.runTeacher({ sessionId: session.id, userMessage: "Weiter" });
+    const body = requests.find((r) => r.url.endsWith("/responses")).body;
+    expect(body.input).toContainEqual(compact);
+    expect(body.input).not.toContainEqual({
+      role: "user",
+      content: "Alte Anweisung",
+    });
+    expect(body.input).toContainEqual({ role: "user", content: "Weiter" });
+    expect(body.input[0].role).toBe("developer");
+  });
+  it("uses standalone OpenAI compaction and preserves its complete returned window", async () => {
+    const session = await sessions.createSession();
+    await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Erster Auftrag",
+    });
+    const window = [
+      { role: "user", content: "Von OpenAI beibehaltener Kontext" },
+      {
+        type: "compaction",
+        id: "cmp_manual",
+        encrypted_content: "opaque-manual",
+      },
+    ];
+    openai.setOpenAITransportForTests(async (url, options) => {
+      const body = JSON.parse(options.body);
+      requests.push({ url, body });
+      if (url.endsWith("/responses/compact"))
+        return jsonResponse({ output: window });
+      if (url.endsWith("/responses/input_tokens"))
+        return jsonResponse({ input_tokens: 30 });
+      return streaming({
+        status: "completed",
+        output: [message("Weitergearbeitet")],
+      });
+    });
+    const compacted = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "/compact",
+    });
+    expect(compacted.turn.status).toBe("done");
+    expect(
+      requests.filter((r) => r.url.endsWith("/responses/compact")),
+    ).toHaveLength(1);
+    expect(
+      compacted.session.messages.some((m) => m.event?.providerState?.replace),
+    ).toBe(true);
+    for (const text of ["Weiter", "Noch weiter"]) {
+      requests.length = 0;
+      await teacher.runTeacher({ sessionId: session.id, userMessage: text });
+      const input = requests.find((r) => r.url.endsWith("/responses")).body
+        .input;
+      expect(input.slice(1, 3)).toEqual(window);
+    }
+  });
+  it("invalidates opaque compaction when its source history changes", async () => {
+    const session = await sessions.createSession();
+    responses.push({
+      status: "completed",
+      output: [
+        { type: "compaction", encrypted_content: "obsolete" },
+        message("Antwort"),
+      ],
+    });
+    await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Ursprünglich",
+    });
+    await sessions.mutateSession(session.id, (s) => {
+      s.messages.find((m) => m.role === "user").content = "Korrigierte Quelle";
+    });
+    requests.length = 0;
+    await teacher.runTeacher({ sessionId: session.id, userMessage: "Weiter" });
+    const input = requests.find((r) => r.url.endsWith("/responses")).body.input;
+    expect(input.some((item) => item.type === "compaction")).toBe(false);
+    expect(input).toContainEqual({
+      role: "user",
+      content: "Korrigierte Quelle",
+    });
+  });
+  it("discovers selectable model IDs directly from OpenAI", async () => {
+    openai.setOpenAITransportForTests(async (url) => {
+      expect(url).toBe("https://api.openai.com/v1/models");
+      return jsonResponse({
+        data: [{ id: "z-model" }, { id: "new-model" }, { id: 4 }],
+      });
+    });
+    expect(await openai.listOpenAIModels()).toEqual([
+      { identifier: "new-model", displayName: "new-model" },
+      { identifier: "z-model", displayName: "z-model" },
+    ]);
   });
   it("does not execute incomplete calls and preserves an interrupted stream without replay", async () => {
     const { model } = await lm.connectModel(await storage.getSettings()),

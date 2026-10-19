@@ -1,3 +1,4 @@
+import { openAIModelOptions } from "./js/providerModels.js";
 import { api } from "./js/api.js";
 import { state, emit, on } from "./js/state.js";
 import { $, node, toast, formDialog, applyTheme } from "./js/ui.js";
@@ -54,7 +55,13 @@ async function refreshModels() {
     const select = $("model-select");
     select.replaceChildren();
     for (const model of data.models) {
-      const option = node("option", "", model.name);
+      const option = node(
+        "option",
+        "",
+        model.contextLength
+          ? `${model.name} · ${model.contextLength.toLocaleString("de-DE")} Kontext-Tokens`
+          : model.name,
+      );
       option.value = model.id;
       select.append(option);
     }
@@ -359,18 +366,11 @@ async function openSettings() {
     },
     {
       name: "openAIModel",
-      label: "OpenAI-Modell-ID",
+      label: "OpenAI-Modell",
+      type: "select",
+      options: await openAIModelOptions(s.openAIModel),
       value: s.openAIModel || "",
       help: "Ein verfügbares Textmodell mit Funktionsaufrufen auswählen. Der API-Schlüssel wird unter KI-Zugangsdaten gespeichert.",
-    },
-    {
-      name: "openAIContextLength",
-      label: "OpenAI-Kontextbudget (Tokens)",
-      type: "number",
-      min: 4096,
-      max: 2000000,
-      value: s.openAIContextLength || 128000,
-      help: "Höchstens das Kontextfenster des gewählten Modells eintragen.",
     },
     {
       name: "theme",
@@ -436,7 +436,8 @@ async function openSettings() {
     },
     {
       name: "maxTokensResponse",
-      label: "Maximale Antwort-Tokens",
+      label: "LM Studio: Maximale Antwort-Tokens",
+      help: "Das Kontextfenster wird automatisch vom geladenen Modell erkannt. Dieses Feld begrenzt nur die Antwort bei LM Studio. OpenAI verwaltet seine Tokenlimits selbst.",
       type: "number",
       value: s.maxTokensResponse,
       min: 256,
@@ -445,7 +446,8 @@ async function openSettings() {
     },
     {
       name: "autoCompact",
-      label: "Kontext automatisch komprimieren",
+      label: "LM Studio: Kontext automatisch komprimieren",
+      help: "Alle lokalen Kontext- und Zusammenfassungsbudgets gelten ausschließlich für LM Studio.",
       type: "checkbox",
       value: s.autoCompact,
       advanced: true,

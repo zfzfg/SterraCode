@@ -127,6 +127,28 @@ export async function listLoadedModels(settings, signal) {
   if (settings.provider === "openai") return listOpenAIModels(signal);
   return rpc((await clientFor(settings)).llm.listLoaded(), signal, 4000);
 }
+export async function listModelOptions(settings, signal) {
+  return Promise.all(
+    (await listLoadedModels(settings, signal)).map(async (model) => {
+      const option = {
+        id: model.identifier,
+        name: model.displayName || model.identifier,
+      };
+      if (settings.provider !== "openai") {
+        let length;
+        try {
+          if (model.getContextLength)
+            length = await rpc(model.getContextLength(), signal, 4000);
+        } catch (error) {
+          signal?.throwIfAborted();
+        }
+        option.contextLength =
+          Number.isInteger(length) && length > 0 ? length : null;
+      }
+      return option;
+    }),
+  );
+}
 export async function testLMStudioConnection(settings, signal) {
   const effectiveUrl =
     process.env.STERRACODE_LM_STUDIO_OVERRIDE_URL || settings.lmStudioUrl;

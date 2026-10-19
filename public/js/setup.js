@@ -1,3 +1,4 @@
+import { openAIModelOptions } from "./providerModels.js";
 import { api } from "./api.js";
 import { $, node, formDialog, toast } from "./ui.js";
 
@@ -167,8 +168,11 @@ export async function configureModel() {
       },
       {
         name: "openAIModel",
-        label: "OpenAI-Modell-ID",
+        label: "OpenAI-Modell",
+        type: "select",
+        options: await openAIModelOptions(settings.openAIModel),
         value: settings.openAIModel || "",
+        help: "Nach dem Speichern eines neuen API-Schlüssels stehen die Modelle in der Modellauswahl bereit.",
       },
       {
         name: "apiKey",

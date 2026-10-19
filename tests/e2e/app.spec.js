@@ -500,3 +500,46 @@ test("laufende Komprimierung lässt sich stoppen und erhält den Verlauf", async
     });
   }
 });
+
+test("OpenAI-Modelle aus API-Liste und automatisch erkanntes LM-Studio-Kontextfenster", async ({
+  page,
+}) => {
+  await page.route("**/api/models?provider=openai", (route) =>
+    route.fulfill({
+      json: {
+        connected: true,
+        models: [
+          { id: "api-model-alpha", name: "API Modell Alpha" },
+          { id: "api-model-beta", name: "API Modell Beta" },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/models", (route) =>
+    route.fulfill({
+      json: {
+        connected: true,
+        models: [
+          { id: "test-model", name: "Geladenes Modell", contextLength: 24576 },
+        ],
+      },
+    }),
+  );
+  await page.goto("/");
+  await expect(page.locator("#model-select option")).toContainText([
+    "Geladenes Modell · 24.576 Kontext-Tokens",
+  ]);
+  await page.locator("#settings-btn").click();
+  const dialog = page.getByRole("dialog");
+  const models = dialog.getByLabel("OpenAI-Modell", { exact: true });
+  await expect(models).toHaveJSProperty("tagName", "SELECT");
+  await expect(models.locator("option")).toHaveText([
+    "OpenAI-Modell auswählen",
+    "API Modell Alpha",
+    "API Modell Beta",
+  ]);
+  await models.selectOption("api-model-beta");
+  await expect(models).toHaveValue("api-model-beta");
+  await expect(dialog.locator('[name="openAIContextLength"]')).toHaveCount(0);
+  await page.keyboard.press("Escape");
+});

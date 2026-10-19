@@ -55,7 +55,7 @@ async function request(endpoint, { body, signal, timeout = 20000 } = {}) {
     } catch {}
     if (code === "context_length_exceeded")
       throw fail(
-        "Das konfigurierte Kontextbudget übersteigt das Modellfenster. OpenAI-Kontextgröße in den Einstellungen verkleinern.",
+        "OpenAI hat die Kontextgrenze des Modells gemeldet. Den Kontext über /compact verdichten oder ein anderes Modell auswählen.",
         "CONTEXT_UNVERIFIED",
       );
     if ([401, 403].includes(response.status))
@@ -106,7 +106,7 @@ const toolsFor = (definitions = []) =>
     parameters: definition.function.parameters,
     strict: false,
   }));
-function inputFor(chat, reasoning = new Map()) {
+export function inputFor(chat, reasoning = new Map()) {
   const input = [],
     included = new Set();
   for (const message of Chat.from(chat).getMessagesArray()) {
@@ -249,17 +249,10 @@ export async function connectOpenAIModel(settings, signal) {
       400,
       "NO_MODEL",
     );
-  const contextLength = settings.openAIContextLength;
-  if (
-    !Number.isInteger(contextLength) ||
-    contextLength < 4096 ||
-    contextLength > 2000000
-  )
-    throw fail("Ungültiges OpenAI-Kontextbudget.", "CONTEXT_UNVERIFIED");
   const info = {
     identifier,
     path: `openai/${identifier}`,
-    instanceReference: `openai:${identifier}:${contextLength}`,
+    instanceReference: `openai:${identifier}`,
     trainedForToolUse: true,
   };
   const prefix = `\0sterracode-openai:${randomUUID()}:`;
@@ -269,7 +262,34 @@ export async function connectOpenAIModel(settings, signal) {
     identifier,
     trainedForToolUse: true,
     getModelInfo: async () => info,
-    getContextLength: async () => contextLength,
+    getContextLength: async () => null,
+    nativeInput: null,
+    countInput: (input, definitions = []) =>
+      countPayload(
+        { model: identifier, input, tools: toolsFor(definitions) },
+        signal,
+      ),
+    async compact(input) {
+      const result = await safeJSON(
+        await request("/responses/compact", {
+          body: { model: identifier, input },
+          signal,
+          timeout: 120000,
+        }),
+      );
+      if (
+        !Array.isArray(result.output) ||
+        !result.output.some(
+          (item) => item.type === "compaction" && item.encrypted_content,
+        )
+      )
+        throw fail(
+          "OpenAI liefert keinen gültigen komprimierten Kontext.",
+          "OPENAI_INVALID_RESPONSE",
+          502,
+        );
+      return result.output;
+    },
     setProviderHistory(messages) {
       reasoning.clear();
       for (const message of messages)
@@ -277,7 +297,7 @@ export async function connectOpenAIModel(settings, signal) {
           for (const call of message.tool_calls || [])
             reasoning.set(call.id, message.providerItems);
     },
-    input: (chat) => inputFor(chat, reasoning),
+    input: (chat) => model.nativeInput ?? inputFor(chat, reasoning),
     applyPromptTemplate: async (chat, options = {}) =>
       prefix +
       JSON.stringify({
@@ -297,7 +317,6 @@ export async function connectOpenAIModel(settings, signal) {
         {
           model: identifier,
           input: inputFor(chat, reasoning),
-          max_output_tokens: options.maxTokens || 1500,
           tools: [],
         },
         options.signal || signal,
@@ -353,7 +372,6 @@ export async function testOpenAIConnection(settings, signal) {
       status: "ready",
       tokenization: true,
       tokenCount,
-      contextLength: settings.openAIContextLength,
       models: models.map((model) => ({
         id: model.identifier,
         name: model.displayName,
@@ -395,7 +413,7 @@ export async function runOpenAIModelPass({
         model: model.identifier,
         input: model.input(chat),
         tools: toolsFor(definitions),
-        max_output_tokens: maxTokens,
+        context_management: [{ type: "compaction" }],
         parallel_tool_calls: false,
         truncation: "disabled",
       },
@@ -454,6 +472,14 @@ export async function runOpenAIModelPass({
       tool_calls: calls,
       thinking: "",
       providerItems: outputReasoning(response),
+      providerState: {
+        model: model.identifier,
+        output: response.output.flatMap((item) => {
+          if (item.type !== "function_call") return [item];
+          const call = calls.find((call) => call.id === item.call_id);
+          return call ? [{ ...item, arguments: call.function.arguments }] : [];
+        }),
+      },
     });
     for (const call of calls) {
       signal.throwIfAborted();

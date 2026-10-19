@@ -106,7 +106,6 @@ export function defaultSettings() {
   return {
     provider: "lmstudio",
     openAIModel: "",
-    openAIContextLength: 128000,
     lmStudioUrl:
       process.env.STERRACODE_LM_STUDIO_URL ||
       (process.env.STERRACODE_MODE === "docker"
@@ -234,13 +233,10 @@ export async function updateSettings(updates) {
       !/^[A-Za-z0-9._:-]{0,200}$/.test(next.openAIModel)
     )
       throw new AppError("Ungültiger KI-Anbieter oder ungültige Modell-ID.");
-    if (!Number.isInteger(next.openAIContextLength))
-      throw new AppError("Das Kontextbudget muss eine ganze Zahl sein.");
     if (!["dark", "light", "high-contrast", "solarized"].includes(next.theme))
       throw new AppError("Ungültiges Theme.");
     for (const [key, min, max] of [
       ["temperature", 0, 1],
-      ["openAIContextLength", 4096, 2000000],
       ["fontSize", 10, 24],
       ["executionTimeout", 0, 600000],
       ["compilationTimeout", 1000, 600000],

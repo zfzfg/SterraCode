@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   setLMStudioClientFactory,
   listLoadedModels,
+  listModelOptions,
   testLMStudioConnection,
   lmStudioWarning,
 } from "../server/services/lmStudio.js";
@@ -22,6 +23,22 @@ afterEach(async () => {
   await fs.rm(temp, { recursive: true, force: true });
 });
 describe("native LM Studio secrets and connection checks", () => {
+  it("exposes the loaded context window and refreshes it after a configuration change", async () => {
+    let contextLength = 8192;
+    setLMStudioClientFactory(() => ({
+      llm: {
+        listLoaded: async () => [
+          { identifier: "loaded", getContextLength: async () => contextLength },
+        ],
+      },
+    }));
+    const settings = { provider: "lmstudio", lmStudioUrl: "http://host:1234" };
+    expect(await listModelOptions(settings)).toEqual([
+      { id: "loaded", name: "loaded", contextLength: 8192 },
+    ]);
+    contextLength = 24576;
+    expect((await listModelOptions(settings))[0].contextLength).toBe(24576);
+  });
   it("omits the optional SDK apiToken when no secret file is configured", async () => {
     const factory = vi.fn(() => ({ llm: { listLoaded: async () => [] } }));
     setLMStudioClientFactory(factory);
