@@ -14,7 +14,7 @@ import {
   stopProcess,
   waitProcess,
 } from "./processes.js";
-import { getProfile } from "./profileManager.js";
+import { getProfile, profileToPromptText } from "./profileManager.js";
 import { getTrace, traceEvents } from "./traces.js";
 const text = (v, name) => {
   if (typeof v !== "string" || !v.trim() || v.length > 100000)
@@ -141,7 +141,7 @@ export async function executeTool(name, args, context) {
       case "create_task": {
         const task = {
           id: randomUUID(),
-          ...taskAssessment(args),
+          createdAt: new Date().toISOString(),
           title: text(args.title, "title"),
           description: text(args.description, "description"),
           difficulty: args.difficulty,
@@ -151,12 +151,18 @@ export async function executeTool(name, args, context) {
           done: false,
         };
         await mutateSession(sessionId, (s) => {
+          Object.assign(task, taskAssessment(args, s.language));
           s.currentTask = task;
         });
         return { type: name, task };
       }
       case "mark_task_done": {
-        const result = await completeTask(sessionId, args, context.language);
+        const result = await completeTask(
+          sessionId,
+          args,
+          context.language,
+          "ai",
+        );
         return {
           type: name,
           taskId: result.currentTask.id,
@@ -175,7 +181,7 @@ export async function executeTool(name, args, context) {
           throw new AppError("Sprachprofil ist deaktiviert.");
         return {
           type: name,
-          profile: (await getProfile()).languages?.[args.language] || null,
+          profile: profileToPromptText(await getProfile()),
         };
       }
       case "trigger_summarize": {

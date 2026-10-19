@@ -2,7 +2,7 @@
 
 ## Fünf Kernideen mit Lernzielen, MVPs, Architektur und Abnahmekriterien
 
-**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Ideen 1 und 2 sind als beschriebene Python-MVPs implementiert (Status und Nachweise in Abschnitt 2 und 3). Ideen 3 bis 5 sowie die ausdrücklich späteren Ausbaustufen bleiben vorgeschlagene Erweiterungen.
+**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Ideen 1 und 2 sind als beschriebene Python-MVPs implementiert (Status und Nachweise in Abschnitt 2 und 3). Idee 3 ist mit Konzeptansicht, belegtem Lernprofil und freiwilligen Leitner-Wiederholungen umgesetzt (Abschnitt 4). Ideen 4 und 5 sowie die ausdrücklich späteren Ausbaustufen bleiben vorgeschlagene Erweiterungen.
 
 SterraCode soll Lernenden helfen, drei Fragen selbstständig zu beantworten: **Was macht mein Code? Woran erkenne ich, ob er die Aufgabe erfüllt? Was sollte ich als Nächstes üben?** Die fünf Kernideen bilden dafür einen zusammenhängenden Lernablauf: Code verstehen, Lösung prüfen, Änderungen nachvollziehen, Ergebnisse sehen und Wissen festigen.
 
@@ -412,6 +412,8 @@ Tests bleiben ohne Modellverbindung nutzbar. Eine zusätzliche Tutorfrage ist fr
 
 ## 4. Idee 3: Sichtbares Lernprofil und gezielte Wiederholung
 
+**Umgesetzt am 19. Oktober 2026:** Konzeptkatalog, ereignisbasiertes Profil V2 mit historischer Migration, Opt-in, Quellenansicht, Selbsteinschätzungen, Lernziel, Sprachvergleiche, Leitner-Scheduler V1, sechs geprüfte Python-Wiederholungen, Export/Reset und begrenzter Tutor-Kontext sind implementiert. Bedienung, API, Datenschutz und konkrete Regeln stehen in [README.md](README.md#lernprofil-und-freiwillige-wiederholungen). Die spätere Graph-/Radaransicht, Streaks und weitere Testsprachen bleiben Ausblick. Nachweise: `tests/profile.test.js`, `tests/grading.test.js` und `tests/e2e/profile.spec.js`; lokale Windows-Prüfung mit Node 24 und Chromium. Keine Runner- oder Containervertragsänderung für Idee 3.
+
 ### 4.1 Lernziel und belastbare Grundlage
 
 „Du bist fortgeschritten“ ist wenig hilfreich, wenn die Person nicht erkennen kann, warum. Das Dashboard soll zeigen: **Welche Konzepte wurden geübt? Welche Beobachtungen sprechen für Sicherheit? Wo lohnt sich Wiederholung?**
@@ -529,12 +531,12 @@ Profilinhalt wird nur im freigegebenen Umfang an den ausgewählten KI-Anbieter �
 
 ### 4.8 Abnahme
 
-- [ ] Ein mehrfach abgesendeter Aufgabenabschluss erzeugt genau einen Lernbeleg.
-- [ ] Alte Tutorabschlüsse bleiben von testgestützten Nachweisen unterscheidbar.
-- [ ] Deaktiviertes Profil verhindert neue profilübergreifende Ableitungen.
-- [ ] Fälligkeit funktioniert über Tagesgrenzen und Sommerzeitwechsel in der Nutzerzeitzone.
-- [ ] Ein Wiederholungsfehler, eine Selbsteinschätzung und ein Runnerausfall haben unterschiedliche Folgen.
-- [ ] Die gesamte Ansicht ist auch ohne Diagramm verständlich und bedienbar.
+- [x] Ein mehrfach abgesendeter Aufgabenabschluss erzeugt genau einen Lernbeleg.
+- [x] Alte Tutorabschlüsse bleiben von testgestützten Nachweisen unterscheidbar.
+- [x] Deaktiviertes Profil verhindert neue profilübergreifende Ableitungen.
+- [x] Fälligkeit funktioniert über Tagesgrenzen und Sommerzeitwechsel in der Nutzerzeitzone.
+- [x] Ein Wiederholungsfehler, eine Selbsteinschätzung und ein Runnerausfall haben unterschiedliche Folgen.
+- [x] Die gesamte Ansicht ist auch ohne Diagramm verständlich und bedienbar.
 
 <a id="webvorschau"></a>
 

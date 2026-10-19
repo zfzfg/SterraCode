@@ -225,7 +225,7 @@ for (const [width, height] of [
         .getByRole("button", { name: "Schließen", exact: true })
         .all())
         await close.click();
-      await expect(page).toHaveScreenshot(`layout-${width}-${theme}.png`, {
+      await expect.soft(page).toHaveScreenshot(`layout-${width}-${theme}.png`, {
         mask: [page.locator("#sessions-list")],
       });
     }

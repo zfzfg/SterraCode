@@ -298,7 +298,14 @@ export async function updateSettings(updates) {
         path.join(DATA_DIR, "backups", `settings-${randomUUID()}.json`),
         original,
       );
-    await writeJSON(file, next);
+    // Opt-in changes commit between profile writes, so no in-flight profile
+    // mutation can finish after a successful disable response.
+    if (
+      Object.hasOwn(updates, "crossChatProfileEnabled") ||
+      Object.hasOwn(updates, "autoUpdateProfileOnTaskDone")
+    )
+      await serial("profile", () => writeJSON(file, next));
+    else await writeJSON(file, next);
     return next;
   });
 }

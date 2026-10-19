@@ -13,14 +13,15 @@ import {
   assertSessionWritable,
 } from "./storage.js";
 import { loadSession, mutateSession } from "./sessions.js";
-import { readFile, normalizePath } from "./workspace.js";
+import { readFile, normalizePath, listChanges } from "./workspace.js";
 import {
   startProcess,
   readProcess,
   stopProcess,
   getRuntimes,
 } from "./processes.js";
-import { updateProfile } from "./profileManager.js";
+import { updateProfile, recordReviewFailure } from "./profileManager.js";
+import { validateConceptIds } from "./concepts.js";
 import {
   TEST_LIMITS,
   validateSuite,
@@ -99,7 +100,7 @@ function publicRun(r) {
   const { request, snapshot, suite, ...rest } = r;
   return rest;
 }
-export function taskAssessment(args) {
+export function taskAssessment(args, language) {
   if (
     args.conceptIds !== undefined &&
     (!Array.isArray(args.conceptIds) ||
@@ -113,7 +114,13 @@ export function taskAssessment(args) {
     fail("Testsuite benötigt assessmentMode tests.");
   return {
     taskVersion: 1,
-    conceptIds: args.conceptIds || [],
+    ...(args.testSuite?.language || language
+      ? { language: args.testSuite?.language || language }
+      : {}),
+    conceptIds: validateConceptIds(
+      args.conceptIds || [],
+      args.testSuite?.language || language,
+    ),
     assessmentMode: args.testSuite ? "tests" : "manual",
     ...(args.testSuite
       ? { testSuite: validateSuite(args.testSuite, fail) }
@@ -125,9 +132,30 @@ function checkTask(t, id, version) {
 }
 export async function updateTask(s, id, body) {
   return mutateSession(s, (session) => {
+    if (
+      Object.keys(body).some(
+        (key) =>
+          ![
+            "taskVersion",
+            "title",
+            "description",
+            "difficulty",
+            "hints",
+            "conceptIds",
+            "testSuite",
+            "assessmentMode",
+          ].includes(key),
+      )
+    )
+      fail("Nicht unterstütztes Aufgabenfeld.");
     const t = session.currentTask;
     checkTask(t, id, body.taskVersion);
-    const next = { ...t, ...body, id, ...taskAssessment({ ...t, ...body }) };
+    const next = {
+      ...t,
+      ...body,
+      id,
+      ...taskAssessment({ ...t, ...body }, t.language || session.language),
+    };
     if (
       typeof next.title !== "string" ||
       typeof next.description !== "string" ||
@@ -140,6 +168,8 @@ export async function updateTask(s, id, body) {
       next.testSuite.version = (t.testSuite?.version || 0) + 1;
     (session.taskHistory ||= []).push(structuredClone(t));
     next.done = false;
+    // An edited exercise no longer represents the curated review catalog.
+    delete next.reviewId;
     delete next.completion;
     delete next.lastTestRunId;
     session.currentTask = next;
@@ -240,6 +270,10 @@ export async function startTaskTests(s, taskId, body, actor = "user") {
       assessment: null,
       cases: [],
       startedAt: new Date().toISOString(),
+      profileEnabled: Boolean((await getSettings()).crossChatProfileEnabled),
+      ...(task.reviewId
+        ? { reviewId: task.reviewId, conceptIds: task.conceptIds }
+        : {}),
     };
     await save(run); // Never replay a start after a crash, even in the acceptance window.
     try {
@@ -360,6 +394,35 @@ async function refresh(r) {
     }
     await save(r);
   }
+  if (
+    r.profileEnabled &&
+    r.reviewId &&
+    !r.reason &&
+    r.status === "finished" &&
+    r.assessment === "failed" &&
+    r.cases.every((c) =>
+      ["return", "program_error", "serialization_error"].includes(c.kind),
+    )
+  ) {
+    await recordReviewFailure({
+      schemaVersion: 1,
+      eventId: `review-failure:${r.testRunId}`,
+      type: "review_result",
+      sessionId: r.sessionId,
+      taskId: r.taskId,
+      taskVersion: r.taskVersion,
+      reviewId: r.reviewId,
+      language: "python",
+      conceptIds: r.conceptIds,
+      occurredAt: r.finishedAt,
+      evidence: {
+        kind: "test_run",
+        testRunId: r.testRunId,
+        outcome: "failed",
+        assistance: "not_recorded",
+      },
+    });
+  }
   return r;
 }
 function monitor(s, id) {
@@ -444,11 +507,16 @@ export async function listTaskTestRuns(s, taskId) {
       assessment: r.assessment,
     }));
 }
-export async function completeTask(s, body, language) {
+export async function completeTask(s, body, language, actor = "user") {
   const result = await serial(`workspace:${s}`, async () => {
     const original = (await loadSession(s)).currentTask;
     checkTask(original, body.taskId, body.taskVersion);
     let evidence = { kind: "manual" };
+    if (
+      body.assistance !== undefined &&
+      !["independent", "assisted", "not_recorded"].includes(body.assistance)
+    )
+      fail("Ungültige Angabe zur Lösungshilfe.");
     if (original.testSuite) {
       const r = await serial(`test:${s}:${body.testRunId}`, async () =>
         refresh(await load(s, body.testRunId)),
@@ -471,6 +539,13 @@ export async function completeTask(s, body, language) {
         snapshotId: r.snapshotId,
       };
     }
+    const taskStartedAt = original.reviewStartedAt || original.createdAt;
+    const changes = taskStartedAt ? await listChanges(s) : [];
+    evidence.assistance = changes.some((c) => c.createdAt >= taskStartedAt)
+      ? "assisted"
+      : actor === "ai"
+        ? "not_recorded"
+        : body.assistance || "not_recorded";
     return mutateSession(s, async (session) => {
       const t = session.currentTask;
       checkTask(t, body.taskId, body.taskVersion);
@@ -483,13 +558,18 @@ export async function completeTask(s, body, language) {
         previous && previous.taskVersion === (t.taskVersion || 1)
           ? previous
           : {
-              eventId: key,
+              eventId: `${key}:${t.taskVersion || 1}`,
               type: "task_completed",
               sessionId: s,
               taskId: t.id,
               taskVersion: t.taskVersion || 1,
-              language: t.testSuite?.language || language || session.language,
+              language:
+                t.testSuite?.language ||
+                t.language ||
+                language ||
+                session.language,
               conceptIds: t.conceptIds || [],
+              ...(t.reviewId ? { reviewId: t.reviewId } : {}),
               evidence,
               completedAt: historical ? null : new Date().toISOString(),
               ...(historical
@@ -538,6 +618,16 @@ export async function recoverTaskCompletions(s) {
         taskSucceeded: true,
         completionEvent: event,
       });
+  }
+  const dir = path.join(DATA_DIR, "test-runs", s);
+  const names = await fs.readdir(dir).catch((e) => {
+    if (e.code === "ENOENT") return [];
+    throw e;
+  });
+  for (const name of names.filter((n) => n.endsWith(".json"))) {
+    const r = await readJSON(path.join(dir, name));
+    if (r.reviewId && r.profileEnabled && r.status !== "expired")
+      await serial(`test:${s}:${r.testRunId}`, () => refresh(r));
   }
 }
 const housekeeping = setInterval(async () => {

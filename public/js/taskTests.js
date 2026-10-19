@@ -19,6 +19,18 @@ export function renderTaskTests(container, task, onComplete) {
   status.setAttribute("role", "status");
   const cases = node("div");
   const controls = node("div", "task-test-controls");
+  const assistanceLabel = node("label", "", "Lösungshilfe (eigene Angabe): ");
+  const assistance = node("select");
+  for (const [value, label] of [
+    ["not_recorded", "Keine Angabe"],
+    ["independent", "Selbstständig gelöst"],
+    ["assisted", "Mit Lösungshilfe"],
+  ]) {
+    const option = node("option", "", label);
+    option.value = value;
+    assistance.append(option);
+  }
+  assistanceLabel.append(assistance);
   const start = node("button", "", "Lösung prüfen");
   const cancel = node("button", "", "Tests abbrechen");
   const complete = node(
@@ -51,6 +63,7 @@ export function renderTaskTests(container, task, onComplete) {
       `Python: ${task.testSuite.entry.path} → ${task.testSuite.entry.function}. Strenger JSON-Vergleich; maximal 2 Sekunden je Fall / 30 Sekunden je Suite.`,
     ),
     controls,
+    assistanceLabel,
     historyLabel,
     status,
     cases,
@@ -280,7 +293,11 @@ export function renderTaskTests(container, task, onComplete) {
       await flush();
       const result = await api(`${base}/tasks/${task.id}/complete`, {
         method: "POST",
-        body: { taskVersion: task.taskVersion || 1, testRunId: run.testRunId },
+        body: {
+          taskVersion: task.taskVersion || 1,
+          testRunId: run.testRunId,
+          assistance: assistance.value,
+        },
       });
       if (!current()) return;
       state.session = result;

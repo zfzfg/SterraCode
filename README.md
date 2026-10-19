@@ -111,6 +111,34 @@ Unter `test-runs/<Session-UUID>/` bleiben Quellsnapshot, Definition und begrenzt
 
 Lokal und im Docker-Runner heißt der Modus `test`, Fähigkeit `testAdapterVersion: 1`; App und Runner gemeinsam aktualisieren. Die vorhandenen Ausführungsrechte bleiben bestehen: Das Harness liefert Lernfeedback und ist kein manipulationssicheres Prüfungssystem.
 
+## Lernprofil und freiwillige Wiederholungen
+
+Über **Lernprofil** in der Kopfzeile öffnest du die auch ohne KI nutzbare Konzeptansicht. Das bestehende Opt-in `crossChatProfileEnabled` bleibt standardmäßig ausgeschaltet. Beim Aktivieren werden alte Sessions nicht automatisch ausgewertet. Eine gesondert bestätigte Übernahme kennzeichnet frühere Abschlüsse als historische Angaben. Aufgaben und Tests funktionieren unabhängig vom Profil.
+
+Der versionierte Katalog enthält Variablen, Bedingungen, Schleifen, Listen, Funktionen und Zeichenketten für Python und JavaScript. Aliase wie „Loops“, „Schleifen“ und „for-Schleifen“ werden sprachbezogen zusammengeführt. Neue Aufgaben dürfen nur passende Katalog-IDs verwenden; ohne passende Konzepte bleibt die Liste leer. Gruppen und Voraussetzungen dienen als Orientierung und beweisen keine weiteren Fähigkeiten. Die Ansicht zeigt Belege, letzte Übung, nächste passende Übung, eigene Korrekturen, Lernziel und mögliche Analogien zwischen Sprachen. Es gibt keine vermeintlich präzise Kompetenzquote.
+
+Belege unterscheiden Tests, Tutorbeurteilungen, Selbsteinschätzungen, Lösungen mit Hilfe und Altbestand. Beim Aufgabenabschluss lässt sich Lösungshilfe ausdrücklich angeben; „selbstständig“ ist eine eigene Angabe. Seit Aufgabenbeginn protokollierte KI-Dateiänderungen werden konservativ als Hilfe behandelt. Ohne Angabe wird keine Selbstständigkeit angenommen. Ein Aufgabenpunkt zählt auch nach mehrfachen Abschlüssen und Versionswechseln nur einmal. Sessionzähler beruhen auf eindeutigen Session-IDs. V1-Profilzähler und freie Konzeptbezeichnungen bleiben gesondert als historische Angaben erhalten; daraus werden keine exakten Übungszeitpunkte oder fälligen Wiederholungen erfunden. Beschädigte oder doppelte Ereignisse melden einen Fehler und lassen die Originaldatei erhalten.
+
+**Leitner-Version 1:** Die fünf konfigurierbaren Intervalle sind zunächst 1, 3, 7, 14 und 30 Kalendertage. Zeitpunkte der Ereignisse sind UTC; Wiederholungstage (`nextReviewAt`, `dueDay`) sind bewusst lokale Datumswerte in der gewählten IANA-Zeitzone, standardmäßig `Europe/Berlin`. So gelten auch bei Sommerzeitwechseln lokale Tagesgrenzen. Eine fällige, eigenständig testgeprüfte Katalogwiederholung erhöht die Stufe höchstens um eins; dieselbe Aufgabe am selben Tag vervielfacht keinen Fortschritt. Ein fachlicher Wiederholungsfehler setzt die Stufe zurück und plant den nächsten Tag. Selbsteinschätzung verändert keine Leitner-Stufe. Hilfe verschiebt eine selbstständige Kontrolle höchstens auf den nächsten Tag und verlängert keinen schon früher fälligen Termin. Timeout, Abbruch und Laufzeitausfall senken keine Stufe. Lernpausen senken ebenfalls keine Stufe.
+
+Je Einstieg erscheinen höchstens drei freiwillige Vorschläge. **Heute überspringen** blendet einen Vorschlag bis morgen aus, **In drei Tagen erinnern** für drei lokale Tage; beides verändert keine Kompetenzbelege. Für Python gibt es sechs geprüfte, sichtbare Funktionsaufgaben. **Wiederholung starten** öffnet eine eigene Session und überschreibt keine bestehende Lösung. Wiederholte Startanfragen finden dieselbe offene Aufgabe. JavaScript bietet Konzeptübersicht und Selbsteinschätzung; ein ausführbarer JavaScript-Testadapter sowie Wissensgraph, Radar und Streak bleiben spätere Erweiterungen.
+
+Unter `profiles/user.json` liegt Profilversion 2 mit Ereignissen, historischer Migration und Planung. Profilabschlüsse werden über die dauerhaften Sessionbelege wiederaufgenommen; fachliche Wiederholungsfehler zusätzlich aus den Testlaufbelegen. **Profil exportieren** liefert die vollständigen Profildaten als JSON. **Profil zurücksetzen** benötigt die markierte Löschbestätigung, löscht Kompetenzverlauf und Planung und behält nur technische Sperrmarken gegen die Wiederaufnahme bereits gelöschter Belege. Ursprüngliche Sessionabschlüsse und vorhandene Sicherungen werden dadurch nicht gelöscht. Bei deaktiviertem Profil werden keine neuen sessionübergreifenden Lernbelege gesammelt; Export und bewusstes Zurücksetzen bleiben möglich.
+
+Die aufklappbare Datenschutzansicht zeigt genau die begrenzte Profilzusammenfassung, die der ausgewählte KI-Anbieter für die nächste Tutorantwort erhält. Rohereignisse und vollständige Testläufe werden nicht automatisch an den Tutor übermittelt. Das lesende Tutorwerkzeug erhält dieselbe begrenzte Zusammenfassung und respektiert das Opt-in.
+
+Profil-API (hinter denselben Authentifizierungs- und Originprüfungen wie die übrige Anwendung):
+
+- `GET /api/profile`: freigegebene Übersicht; deaktiviert nur `{ enabled: false }`.
+- `PATCH /api/profile`: `goal`, `timeZone` und/oder fünf `intervals` speichern.
+- `GET /api/profile/reviews`: höchstens drei fällige Vorschläge.
+- `POST /api/profile/reviews/:reviewId/start`: geprüfte Python-Wiederholung in eigener Session öffnen.
+- `POST /api/profile/reviews/:reviewId/results`: `action: "skip" | "snooze" | "submit"`; `submit` benötigt `sessionId`, `testRunId` und optional `assistance`. Ergebnisse werden aus dem gespeicherten Testlauf geprüft, nicht aus einer behaupteten Erfolgsangabe übernommen. Der normale Aufgabenabschluss verarbeitet Wiederholungen ebenfalls.
+- `POST /api/profile/concepts/:conceptId/self-assessments`: `operationId` und `outcome: "unsure" | "confident"`; gleiche ID mit anderen Daten liefert `409`.
+- `GET /api/profile/export`: vollständiger JSON-Export.
+- `DELETE /api/profile`: bewusstes Zurücksetzen mit `{ confirm: true }`.
+- `POST /api/profile/import-history`: gesonderte historische Übernahme mit `{ confirm: true }`.
+
 ## Tests
 
 ```powershell

@@ -1272,3 +1272,51 @@ dialog::backdrop {
   display: block;
   overflow-wrap: anywhere;
 }
+
+.profile-dialog {
+  width: min(900px, 94vw);
+  max-height: 90dvh;
+  overflow: auto;
+  padding: 20px;
+}
+@media (max-width: 480px) {
+  .app-header .brand {
+    font-size: 0;
+    gap: 0;
+  }
+  .header-actions {
+    flex-shrink: 0;
+  }
+}
+.profile-content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.profile-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-block: 10px;
+  overflow-wrap: anywhere;
+}
+.profile-card button {
+  margin: 4px;
+  white-space: normal;
+}
+.profile-content pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.profile-settings input {
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .profile-dialog {
+    padding: 12px;
+  }
+  .app-header .header-divider {
+    display: none;
+  }
+}

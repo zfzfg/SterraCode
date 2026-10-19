@@ -20,6 +20,11 @@ import {
 } from "./js/setup.js";
 import { openPrograms } from "./js/programs.js";
 import { initTracer } from "./js/tracer.js";
+import { openProfile } from "./js/profile.js";
+
+$("profile-btn").addEventListener("click", () =>
+  openProfile().catch((e) => toast(e.message, "error")),
+);
 
 let modelsLoading = false,
   layoutTimer;
@@ -661,6 +666,7 @@ async function init() {
     showChanges().catch((e) => toast(e.message, "error")),
   );
   $("new-session-btn").disabled = false;
+  $("profile-btn").disabled = false;
   $("welcome-new").disabled = false;
   for (const id of ["new-session-btn", "welcome-new"])
     $(id).addEventListener("click", () =>

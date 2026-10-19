@@ -1,3 +1,5 @@
+import { CONCEPTS } from "./concepts.js";
+
 const tool = (
   name,
   description,
@@ -86,7 +88,12 @@ export const TOOL_DEFINITIONS = [
         enum: ["beginner", "intermediate", "advanced"],
       },
       hints: { type: "array", items: string },
-      conceptIds: { type: "array", items: string },
+      conceptIds: {
+        type: "array",
+        items: { type: "string", enum: CONCEPTS.map((c) => c.id) },
+        description:
+          "Nur Konzepte der Aufgabensprache zuordnen. Voraussetzungen nicht automatisch als belegt behandeln. Ohne passende Katalogeinträge leer lassen.",
+      },
       assessmentMode: { type: "string", enum: ["manual", "tests"] },
       testSuite: {
         type: "object",

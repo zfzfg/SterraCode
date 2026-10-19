@@ -31,6 +31,9 @@
           >Dein Lernarbeitsplatz</span
         >
         <div class="header-actions">
+          <button id="profile-btn" aria-haspopup="dialog" disabled>
+            Lernprofil
+          </button>
           <button
             id="terminal-toggle"
             title="Terminal umschalten"
@@ -337,6 +340,7 @@
       </footer>
     </div>
     <dialog id="app-dialog"></dialog>
+    <dialog id="profile-dialog" class="profile-dialog"></dialog>
     <div id="toasts" class="toasts"></div>
     <script src="/monaco/vs/loader.js"></script>
     <script type="module" src="/app.js"></script>
