@@ -1,5 +1,11 @@
 # Docker-Abnahmeprotokoll
 
+## Deployment vom 19.10.2026: verständlicher Python-Einstieg
+
+Der Funktionsstand `f10b364176796cc675e27700f3d51cfe4d82f8e0` wurde auf `feature/docker-deployment` committed, gepusht und auf der bestehenden Ubuntu-Instanz `/home/zfzfg/sterracode-test` installiert. „Python Schritt für Schritt“ erscheint nur bei einer geöffneten Python-Datei; der Dialog erklärt die Aufzeichnung und blendet zusätzliche Eingaben sowie die noch nicht nutzbare Wiedergabe zunächst aus. Die lokale Prüfung umfasst 37 bestandene Playwright-Tests einschließlich Dateitypwechsel, Neuladen, Wiedergabe und Tastaturfokus. Screenshotänderungen wurden visuell geprüft; Formatprüfung erfolgreich.
+
+Vor dem Update wurde der laufende Stand einschließlich Daten, geschützter Konfiguration und Imageidentitäten unter `/home/zfzfg/sterracode-test/backups/pre-tracer-ui-20261019T124145Z` gesichert; die vorherigen Images tragen den Rollback-Tag `rollback-20261019T124145Z`. App und Runner melden nach dem Update `healthy`. Startseite und Health-Endpunkt liefern vom Server und vom Windows-LAN-Rechner HTTP 200; unangemeldete Sessionabfragen bleiben mit 401 gesperrt. Die ausgelieferte Startseite und `js/tracer.js` stimmen per SHA-256 mit dem bereitgestellten Quellstand überein. Daten, Zugangsdaten, installierte Laufzeiten und andere Hostdienste bleiben erhalten. `SOURCE_COMMIT` und `deployment-images.txt` auf dem Server dokumentieren den abschließenden Stand einschließlich Protokoll. Es wurden keine Runner- oder Datenformatänderungen vorgenommen; ein erneuter vollständiger Docker-Katalog-/Restore-Smoke wurde für diese Oberflächenänderung nicht ausgeführt.
+
 ## Deployment vom 19.10.2026: Lernalltag und Projektpakete
 
 Der Funktionsstand `d81c049957a8767aa421128fd68628622524d8ca` wurde auf `feature/docker-deployment` committed und gepusht und per Fast-Forward auf `main` übernommen. Anschließend wurden App und Runner der bestehenden Ubuntu-Instanz `/home/zfzfg/sterracode-test` neu gebaut und mit der vorhandenen Compose-Konfiguration gestartet. Der abschließende Git-Stand einschließlich dieses Protokolls steht auf dem Server in `SOURCE_COMMIT`; Imageidentitäten stehen dort in `deployment-images.txt`.
