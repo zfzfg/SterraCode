@@ -99,3 +99,18 @@ Der vollständige Ubuntu-Katalog-/Restore-/Import-Smoke ist erfolgreich abgeschl
 Die erste Ubuntu-Verbindung zu LM Studio lief in ein TCP-Zeitlimit. Aktiviertes CORS änderte daran nichts. Das Eintragen der engen Windows-Firewallregel benötigte Administratorrechte; nach Ausführung des bereitgestellten Skripts durch den Benutzer gelang der reale Container-Nachweis einschließlich nativer WebSocket-Verbindung, Tokenisierung und Inferenz. Dieser Netzwerkpunkt ist abgeschlossen.
 
 Eine tatsächliche OpenAI-Verbindung benötigt einen bereitgestellten API-Schlüssel. Ohne Schlüssel werden die Provider-/Secret-/Responses-Verträge mit isolierten Tests geprüft; eine echte Anfrage wird nicht behauptet. IPv6 und öffentlich gültige HTTPS-Zertifikate erfordern die passende Netz-/DNS-Umgebung. Windows-Docker bleibt ausdrücklich offen.
+## Update vom 19.10.2026: Getrennte OpenAI-Kontextverwaltung
+
+- Codecommit `13d0968b2454ba2389d83a0d87c9fbe185262156` auf main veröffentlicht und per SSH mit geprüftem Hostschlüssel auf Ubuntu unter `/home/zfzfg/sterracode-test` bereitgestellt. Bestehende Archivinstallation aktualisiert; keine zweite laufende Installation angelegt. App und Runner neu gebaut und über das Startskript mit erhaltenen Volumes ersetzt. Andere Compose-Projekte blieben unberührt.
+- Konsistente Sicherung vor dem Update: `/home/zfzfg/sterracode-test/backups/pre-openai-context-20261019`. Vorherige App-/Runner-Images unter dem Tag `rollback-openai-context-20261019` verfügbar. Keine Volumes oder Sicherungen gelöscht.
+- App und Runner anschließend healthy. Seite und `/api/health` vom Windows-Rechner über `http://192.168.178.104:3000` mit HTTP 200 erreichbar; nicht angemeldete Sessionabfragen weiterhin HTTP 401. Alle elf vorhandenen Sessiondateien, Administrator-Passwortdatensatz und bisherige Anmeldesitzungen erhalten. Settingsdatei bytegleich; Änderungen an der Authdatei betrafen ausschließlich Sitzungsmetadaten.
+- Echte SDK-Modellabfrage aus dem App-Container: `ternary-bonsai-2-27b` mit tatsächlich geladenem Kontextfenster **48.128 Tokens**. Das entfernte manuelle OpenAI-Kontextbudget wird nicht mehr als Einstellung ausgeliefert. Keine kostenpflichtige OpenAI-Inferenz ausgeführt.
+- Deployment-Smoke im neuen App-Container mit temporären Daten erfolgreich: Python-Aufgabentests, Idempotenz, Aufgabenabschluss, Lernjournal, Python-Trace, Hinweise, statische Vorschau, Projektexport/-import sowie Vorschlagsfreigabe, echte JavaScript-Ausführung und Rückgängig. Drei eigene Testsessions anschließend entfernt. Vorhandene Python- und Java-25-Laufzeiten verfügbar.
+- Lokale vollständige Vitest-Suite vor der abschließenden zusätzlichen Metadatenprüfung: **31 Dateien, 503 bestanden, 5 übersprungen**. Abschließende gezielte OpenAI-/LM-Studio-Suite: **25/25 bestanden**, einschließlich der neuen Prüfung auf geänderte geladene Kontextgrößen. App-Browserprüfungen: **15/15 bestanden**. Geänderte JavaScript-Dateien bestehen Prettier; globaler Formatcheck meldet bestehende Abweichungen in public/index.html, public/js/tracer.js, public/style.css, docker/ABNAHME.md und tests/e2e/tracer.spec.js.
+- Vollständigen Laufzeitkatalog-/Restore-Smoke für dieses Anbieter-/Kontextupdate nicht wiederholt. Windows-Docker und echte OpenAI-Anfragen bleiben für dieses Update ungeprüft.
+
+Neue Imageidentitäten:
+
+- App: `sha256:75af41e7d9e7b545c11de559f1ad3ee7122d8da2df262fc605ab77e8ba9e4b3d`
+- Runner: `sha256:486328b013c4d7cacc779ce90192b4e6739561fd42b7d584f860d8de80dc4023`
+
