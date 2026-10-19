@@ -1,5 +1,13 @@
 # Docker-Abnahmeprotokoll
 
+## Ergänzung: Python-Tracer, 19.10.2026
+
+Der neue Python-Trace-Modus wurde auf `zfzfg@192.168.178.104` mit Docker Engine 29.5.2 und Compose 5.1.4 tatsächlich ausgeführt. Übertragung in das separate Quellverzeichnis `/home/zfzfg/sterra-trace-validation-20261019`; der reproduzierbare Test `node tests/docker/trace-smoke.mjs` erzeugt jeweils ein eigenes zufälliges `sterra-trace-*`-Compose-Projekt, einen freien Loopback-Port und eigene Wegwerf-Volumes. Die bestehenden Container einschließlich `sterracode-test` wurden erhalten. Der abschließende Lauf `sterra-trace-258726d5` war erfolgreich; seine Container, Netzwerke und Volumes wurden anschließend entfernt. Das Protokoll liegt auf dem Testserver unter `trace-smoke.log` im genannten Quellverzeichnis.
+
+Nachgewiesen wurden Python-Installation im frischen Runner, Fähigkeitserkennung, echte Trace-Ausführung über die authentifizierte App-API, Rekursion, gemeinsame Referenzen, getrennte stdout-Ausgabe, idempotenter Start, Abbruch mit erhaltenen Teilereignissen und der externe Zehn-Sekunden-Wächter bei deaktiviertem Python-Tracing. Ein absichtlicher `SIGKILL` des Runners mit anschließendem Start liefert `interrupted`, erhält bereits von der App gesicherte Ereignisse und startet nichts erneut. Der nachfolgende App-Neustart erhält den Laufbeleg; Session-Löschen funktioniert anschließend. Ein dabei gefundener Verlust des längeren App-Ereignispräfixes durch das kürzere Runner-Journal wurde behoben und erneut erfolgreich geprüft.
+
+Die lokale Windows-Prüfung umfasst 438 bestandene Vitest-Tests (fünf mangels lokaler Sprachlaufzeit übersprungen), Trace-Browserabläufe einschließlich Offlinebetrieb, LAN-HTTP-UUID-Fallback, Sessionwechsel, Vorhersage, ursprünglichem Quellstand nach Editoränderung und fehlender Python-Freigabe. Formatprüfung erfolgreich. Die separate Windows-Docker-Abnahme bleibt wie bisher offen; der neue Container-Nachweis stammt vom genannten Linux-Rechner.
+
 Datum: 18.10.2026, Europe/Berlin. Dieses Protokoll trennt tatsächlich ausgeführte Prüfungen von noch fehlenden Umgebungsnachweisen. Der ursprüngliche Umbauplan beschreibt weiterhin die Anforderungen und ist kein Testergebnis.
 
 ## Umgebung

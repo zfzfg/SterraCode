@@ -12,6 +12,7 @@ RUN groupadd --gid 10001 sterracode && useradd --uid 10001 --gid 10001 --no-crea
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY server ./server
+COPY runner/tracer ./runner/tracer
 COPY public ./public
 COPY docker ./docker
 USER 10001:10001

@@ -2,7 +2,7 @@
 
 ## Fünf Kernideen mit Lernzielen, MVPs, Architektur und Abnahmekriterien
 
-**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Er beschreibt vorgeschlagene Erweiterungen; die hier neu genannten Endpunkte, Datenfelder und Module sind noch nicht implementiert.
+**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Idee 1 ist inzwischen als beschriebener Python-MVP implementiert (Status und Nachweise in Abschnitt 2). Die übrigen Ideen sowie die ausdrücklich späteren Ausbaustufen bleiben vorgeschlagene Erweiterungen.
 
 SterraCode soll Lernenden helfen, drei Fragen selbstständig zu beantworten: **Was macht mein Code? Woran erkenne ich, ob er die Aufgabe erfüllt? Was sollte ich als Nächstes üben?** Die fünf Kernideen bilden dafür einen zusammenhängenden Lernablauf: Code verstehen, Lösung prüfen, Änderungen nachvollziehen, Ergebnisse sehen und Wissen festigen.
 
@@ -71,6 +71,8 @@ Express, Monaco, Vanilla JavaScript, der gemeinsame Prozessdienst und die vorhan
 <a id="tracer"></a>
 
 ## 2. Idee 1: Interaktiver Code-Visualizer und Execution Tracer
+
+**Umgesetzt am 19. Oktober 2026:** Der hier beschriebene Python-MVP ist implementiert: Snapshot, expliziter lokaler/Docker-Trace-Modus, dauerhafte Operationsbelege, paginierte API, Wiedergabepanel, freiwillige Vorhersage und lesendes Tutor-Werkzeug. Bedienung, konkrete Grenzen, Aufbewahrung und API-Vertrag stehen in [README.md](README.md#aufgezeichnete-python-abläufe). Die als „Später“ genannten Erweiterungen bleiben Ausblick; insbesondere erfordert die spätere Testfall-Verknüpfung zunächst Idee 2.
 
 ### 2.1 Lernziel und typische Nutzung
 
@@ -196,11 +198,13 @@ Eine Erklärung kann damit auf konkrete Belege verweisen: „Im Trace des gespei
 
 ### 2.8 Abnahme
 
-- [ ] Eine Schleife, eine Rekursion und eine gemeinsam referenzierte Liste werden mit korrekter Zeilen- und Frame-Zuordnung dargestellt.
-- [ ] Eine abgefangene Ausnahme wird von einem endgültigen Programmfehler unterschieden.
-- [ ] Endlosschleifen, große Container, zyklische Listen und ein fehlerhaftes `__repr__` blockieren den Dienst nicht dauerhaft.
-- [ ] Stoppen, Sessionwechsel und Browser-Neuladen starten den Lauf nicht erneut.
-- [ ] Der vollständige Ablauf funktioniert ohne KI und mit ausdrücklich angezeigter fehlender Python-Laufzeit.
+- [x] Eine Schleife, eine Rekursion und eine gemeinsam referenzierte Liste werden mit korrekter Zeilen- und Frame-Zuordnung dargestellt.
+- [x] Eine abgefangene Ausnahme wird von einem endgültigen Programmfehler unterschieden.
+- [x] Endlosschleifen, große Container, zyklische Listen und ein fehlerhaftes `__repr__` blockieren den Dienst nicht dauerhaft.
+- [x] Stoppen, Sessionwechsel und Browser-Neuladen starten den Lauf nicht erneut.
+- [x] Der vollständige Ablauf funktioniert ohne KI und mit ausdrücklich angezeigter fehlender Python-Laufzeit.
+
+Nachweise: `tests/traces.test.js`, `tests/e2e/tracer.spec.js` und `tests/docker/trace-smoke.mjs`. Der Container-Smoke verwendet ein eigenes Compose-Projekt samt Wegwerf-Volumes und prüft zusätzlich den harten Runner-Neustart mit Erhalt bereits gesicherter Schritte.
 
 ---
 

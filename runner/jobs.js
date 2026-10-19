@@ -16,6 +16,7 @@ import {
   removeTree,
 } from "./common.js";
 import { LANGUAGES, childEnvironment, runtimes, runFile } from "./runtime.js";
+import { runTrace, validateTrace } from "./tracer/adapter.js";
 
 export const MAX_OUTPUT = 1024 * 1024;
 const FINAL = new Set([
@@ -40,7 +41,7 @@ export function validatePayload(value) {
     throw new RunnerError("Auftragsdaten fehlen.");
   sessionId(value.sessionId);
   const type = value.type || (value.file ? "file" : "command");
-  if (!["file", "command"].includes(type))
+  if (!["file", "command", "trace"].includes(type))
     throw new RunnerError("Unbekannte Auftragsart.");
   const result = {
     sessionId: value.sessionId,
@@ -58,7 +59,13 @@ export function validatePayload(value) {
       result[key] > 600000
     )
       throw new RunnerError("Ungültiges Zeitlimit (höchstens 600.000 ms).");
-  if (type === "file") {
+  if (type === "trace") {
+    result.trace = validateTrace(value.trace, (message) => {
+      throw new RunnerError(message);
+    });
+    result.language = "python";
+    result.executionTimeout = 10000;
+  } else if (type === "file") {
     result.file = relativePath(value.file);
     if (!LANGUAGES.includes(value.language))
       throw new RunnerError("Sprache nicht unterstützt.");
@@ -198,6 +205,11 @@ export class JobManager {
         !job.outputExpired
       ) {
         delete job.output;
+        delete job.traceData;
+        if (job.payload.type === "trace")
+          job.payload.trace.files = job.payload.trace.files.map(({ path }) => ({
+            path,
+          }));
         job.outputExpired = true;
         await this.persist(job);
       }
@@ -214,7 +226,8 @@ export class JobManager {
       processId: job.id,
       sessionId: job.payload.sessionId,
       command:
-        job.payload.command || `${job.payload.language} ${job.payload.file}`,
+        job.payload.command ||
+        `${job.payload.language} ${job.payload.trace?.entry || job.payload.file}`,
       actor: job.payload.actor,
       output: output.subarray(start).toString("utf8"),
       offset: job.bytes || 0,
@@ -225,6 +238,7 @@ export class JobManager {
       reason: job.reason || null,
       truncated: Boolean(job.truncated),
       outputExpired: Boolean(job.outputExpired),
+      ...(job.traceData === undefined ? {} : { traceData: job.traceData }),
     };
   }
   owned(id, session) {
@@ -284,7 +298,7 @@ export class JobManager {
       await handle.close();
       await freeSpace(this.config.tempDir, 16 * 1024 * 1024);
       let runtime;
-      if (payload.type === "file") {
+      if (payload.type === "file" || payload.type === "trace") {
         runtime = (await runtimes()).find(
           (r) => r.language === payload.language,
         );
@@ -337,15 +351,25 @@ export class JobManager {
       job.state = "starting";
       await this.persist(job);
       job.exitCode =
-        job.payload.type === "file"
-          ? await runFile(this, job, root, runtime)
-          : await this.launch(
+        job.payload.type === "trace"
+          ? await runTrace(
               job,
-              "bash",
-              ["--noprofile", "--norc", "-c", job.payload.command],
-              root,
-              job.payload.executionTimeout,
-            );
+              job.payload.trace,
+              runtime,
+              this.config.tempDir,
+              (cmd, args, cwd, timeout) =>
+                this.launch(job, cmd, args, cwd, timeout),
+              true,
+            )
+          : job.payload.type === "file"
+            ? await runFile(this, job, root, runtime)
+            : await this.launch(
+                job,
+                "bash",
+                ["--noprofile", "--norc", "-c", job.payload.command],
+                root,
+                job.payload.executionTimeout,
+              );
       if (job.exitCode === 137 && !job.reason)
         job.reason = "resource_limit_or_sigkill";
       job.state =
@@ -361,6 +385,8 @@ export class JobManager {
       job.exitCode = -1;
       job.state = job.stopping ? "cancelled" : "failed";
     } finally {
+      if (job.payload.type === "trace")
+        await removeTree(this.config.tempDir, job.id).catch(() => {});
       // Do not flush an incomplete final UTF-8 sequence at the cap.
       const tail = job.decoder.end() + (job.stderrDecoder?.end() || "");
       if (!job.truncated && Buffer.byteLength(job.output + tail) <= MAX_OUTPUT)

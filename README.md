@@ -38,6 +38,7 @@ In LM Studio einen erreichbaren Server starten und ein Modell mit Tool-Unterstü
 - **Speicherkonflikte:** Der Speicherstatus öffnet einen Vergleich. Lokale Änderungen können als separate Datei gesichert werden. Neuere Serverstände werden nicht still überschrieben. Ungespeicherter Text wird zusätzlich im lokalen Browserspeicher gesichert.
 - **KI-Änderungen:** Direkt in der jeweiligen Chatkarte rückgängig machen. Das Rückgängig-Symbol neben dem Speicherstatus öffnet die unabhängige Änderungshistorie, auch nach dem Entfernen von Chatnachrichten.
 - **Ausführen:** `Strg+Enter` führt die aktive Datei im Workspace aus. Das Terminal unterstützt Befehle, Programmeingaben und das Stoppen vollständiger Prozessbäume. Beim Löschen einer Session werden deren Prozesse beendet.
+- **Ablauf ansehen:** Zeichnet die aktuelle Python-Datei nach dem Speichern auf, optional mit ausdrücklich ausgewählten lokalen Hilfsdateien und vorab festgelegter stdin-Eingabe. Zeitleiste, Wiedergabe, Vorwärts-/Rückwärtsschritte, Fehlersprung, Aufrufstack und Variablen zeigen den unveränderlichen Originalstand. Eine freiwillige Vorhersage funktioniert ohne KI; „Trace im Chat vorbereiten“ legt eine Frage zum gespeicherten Lauf in das Eingabefeld.
 - **Lernplan:** Themen selbst oder mit dem KI-Tutor bearbeiten und abhaken. Nach Abschluss erscheint einmalig eine Anschlussfrage.
 - **Layout:** Bereiche per Maus oder fokussierter Trennlinie mit Pfeiltasten anpassen. Unter 1280 px wird die Seitenleiste überlagert; unter 960 px sind Editor und Chat umschaltbare Ansichten.
 - **Kontext:** `/usage` zeigt die Modellnutzung und Messqualität; das funktioniert auch offline mit gekennzeichneten Schätzwerten. `/compact` oder `/compress` komprimiert ältere Gesprächsabschnitte ohne Tutorantwort. Der vollständige Chat und alle Werkzeugergebnisse bleiben gespeichert. Der Editor-Menüpunkt zur Zusammenfassung verwendet dieselbe Aktion.
@@ -77,6 +78,18 @@ Pro Session läuft höchstens ein Prozess. Kompilierung und Ausführung verwende
 
 Die Ausführung verwendet die Rechte des lokalen Benutzers; sie ist keine Betriebssystem-Sandbox. KI-Terminalbefehle können in den Einstellungen deaktiviert werden. Host- und Ursprungsprüfungen begrenzen API-Zugriffe auf die lokale Oberfläche.
 
+### Aufgezeichnete Python-Abläufe
+
+Der Tracer beobachtet den Hauptthread und ausschließlich die ausgewählten Python-Quellen. Ein Zeilenereignis zeigt den Zustand **vor** der markierten Zeile; eine aufgetretene Ausnahme kann später abgefangen werden. Erst das Gesamtergebnis unterscheidet einen unbehandelten Programmfehler. Gemeinsam referenzierte Container behalten dieselbe Objekt-ID. Eigene `repr`-Methoden, Properties und Iteratoren benutzerdefinierter Objekte werden zur Darstellung nicht aufgerufen. Interne Variablen mit `__` am Anfang werden ausgeblendet.
+
+Pro Snapshot gelten höchstens 20 Python-Dateien und insgesamt 1 MiB UTF-8-Quelltext. Die Aufzeichnung endet bei 1.000 Ereignissen oder 2 MiB Trace-Daten; ein externer Wächter beendet den Prozessbaum nach zehn Sekunden, auch bei normalem Ausführungs-Timeout `0`. Die Wertansicht begrenzt Tiefe auf vier, Container auf 20 Einträge, Texte auf 250 Zeichen und den Stack auf 30 Frames; zusätzlich gilt ein Budget von 200 dargestellten Werten pro Ereignis. Kürzungen sind gekennzeichnet. Threads, asynchrone Abläufe und native Bibliotheksdetails sind nicht vollständig beobachtbar. Rückwärtsschritte führen keinen Code erneut aus und machen keine Seiteneffekte rückgängig.
+
+Lokale Ausführung und Docker-Runner verwenden denselben festen Wrapper unter `runner/tracer/`, einen eigenen Trace-Modus und getrennte Programm-/Trace-Ausgaben. Python muss installiert und freigegeben sein. Die Laufzeit meldet ihre `modes`; ältere Runner ohne `trace`-Fähigkeit werden ausdrücklich abgewiesen. App und Runner gemeinsam aktualisieren. Ein belegter Session-Prozess wird nicht automatisch beendet.
+
+`POST /api/workspaces/:sessionId/traces` erhält `operationId` (UUID), `entry`, `expectedVersions` (Pfad → SHA-256) und optional `stdin`. Die Antwort ist `202`. `GET .../traces` listet die letzten 20 Vorgänge, `GET .../traces/:traceRunId` liefert Status und Snapshot, `GET .../events?fromStep=1&limit=50` höchstens 50 Schritte und `POST .../cancel` stoppt den Lauf idempotent. Gleiche Operations-ID mit anderem Inhalt ergibt `409`; gleiche Anfrage startet keinen zweiten Prozess. Neuladen, Verbindungsfehler und Neustarts lesen vorhandene Belege nach. Der Tutor kann mit `inspect_execution_trace` zunächst die Zusammenfassung und anschließend begrenzte Ausschnitte lesen; dieses Werkzeug startet keinen Lauf.
+
+Unter `traces/<Session-UUID>/` werden Metadaten und Operationsbelege getrennt von Quellsnapshot und Ereignis-/Ausgabeartefakten gespeichert. Ereignisse werden während des Laufs laufend gesichert. Abgebrochene oder beschädigte Aufzeichnungen bleiben ausdrücklich unvollständig. Fertige Artefakte verfallen nach 24 Stunden; beim Starten/Listen werden höchstens die neuesten 20 fertigen Artefakte erhalten, zusätzlich läuft stündlich eine Bereinigung. Aktive Vorgänge bleiben erhalten. Bei Ablauf verbleiben Status `expired`, Operationsbeleg und Dateimanifest. Beim Löschen einer Session werden Traces mitgesichert und aus den aktiven Daten entfernt. Der Tracer ist ein Diagnosewerkzeug und erweitert die Ausführungsisolation nicht.
+
 ## Tests
 
 ```powershell
@@ -85,6 +98,7 @@ npx playwright install chromium
 npm run test:e2e
 npm run format:check
 npm run test:context:live
+node tests/docker/trace-smoke.mjs
 ```
 
 Vitest prüft Migration, Pfadgrenzen, Schreibkonflikte, Rückgängig, Chat-Streaming mit simuliertem LM Studio und Prozesse. Installierte Sprachlaufzeiten erhalten echte Ausführungstests; fehlende Laufzeiten werden ausdrücklich übersprungen und zusätzlich über den Fehlerpfad geprüft.

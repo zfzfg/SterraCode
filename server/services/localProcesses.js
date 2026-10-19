@@ -9,8 +9,11 @@ import {
   LANGUAGES,
   getSettings,
   getWorkspacePath,
+  validateSessionId,
+  assertSessionWritable,
 } from "./storage.js";
 import { readFile, resolvePath } from "./workspace.js";
+import { runTrace, validateTrace } from "../../runner/tracer/adapter.js";
 
 export const MAX_OUTPUT = 1024 * 1024;
 const jobs = new Map();
@@ -79,6 +82,8 @@ export async function getRuntimes(probeFn = probe) {
           const enabled = settings.allowedLanguages.includes(language);
           return {
             language,
+            modes: language === "python" ? ["file", "trace"] : ["file"],
+            traceAdapterVersion: language === "python" ? 1 : null,
             installed: true,
             enabled,
             available: enabled,
@@ -282,9 +287,37 @@ export async function startProcess({
   file,
   language,
   actor = "user",
+  trace,
+  idempotencyId,
 }) {
   const root = await getWorkspacePath(sessionId);
   const settings = await getSettings();
+  if (trace) {
+    trace = validateTrace(trace, (message) => {
+      throw new AppError(message);
+    });
+    file = trace.entry;
+    language = "python";
+  }
+  if (idempotencyId) validateSessionId(idempotencyId);
+  const request = JSON.stringify({
+    sessionId,
+    command,
+    file,
+    language,
+    actor,
+    trace,
+  });
+  if (idempotencyId && jobs.has(idempotencyId)) {
+    const previous = jobs.get(idempotencyId);
+    if (previous.request !== request)
+      throw new AppError(
+        "Die Auftrags-ID wurde bereits mit anderen Daten verwendet.",
+        409,
+        "IDEMPOTENCY_CONFLICT",
+      );
+    return snapshot(previous);
+  }
   if (actor === "ai" && !settings.allowAITerminalCommands)
     throw new AppError(
       "KI-Terminalbefehle sind deaktiviert.",
@@ -311,10 +344,18 @@ export async function startProcess({
     command.length > 10000
   )
     throw new AppError("Ein gültiger Befehl ist erforderlich.");
+  await assertSessionWritable(sessionId);
+  if (trace && [...jobs.values()].filter((j) => !j.exited).length >= 4)
+    throw new AppError(
+      "Die lokale Ausführung ist ausgelastet.",
+      429,
+      "RUNNER_BUSY",
+    );
   if ([...jobs.values()].some((j) => j.sessionId === sessionId && !j.exited))
     throw new AppError("In dieser Session läuft bereits ein Prozess.", 409);
   const job = {
-    id: randomUUID(),
+    id: idempotencyId || randomUUID(),
+    request,
     sessionId,
     actor,
     command: command || `${language} ${file}`,
@@ -330,17 +371,33 @@ export async function startProcess({
   jobs.set(job.id, job);
   job.done = (async () => {
     try {
-      job.exitCode = file
-        ? await runCode(job, root, file, language, runtime, settings)
-        : await launch(job, command, [], {
-            cwd: root,
-            shell: true,
-            timeout: settings.executionTimeout,
-          });
+      job.exitCode = trace
+        ? await runTrace(
+            job,
+            trace,
+            runtime,
+            path.join(DATA_DIR, "trace-processes"),
+            (cmd, args, cwd, timeout) =>
+              launch(job, cmd, args, { cwd, timeout }),
+          )
+        : file
+          ? await runCode(job, root, file, language, runtime, settings)
+          : await launch(job, command, [], {
+              cwd: root,
+              shell: true,
+              timeout: settings.executionTimeout,
+            });
     } catch (error) {
       append(job, Buffer.from(`\n${error.message}\n`));
       job.exitCode = -1;
     } finally {
+      if (trace)
+        await fs
+          .rm(path.join(DATA_DIR, "trace-processes", job.id), {
+            recursive: true,
+            force: true,
+          })
+          .catch(() => {});
       job.output += job.decoder.end();
       job.exited = true;
       job.endedAt = Date.now();
@@ -366,6 +423,7 @@ function snapshot(job, offset = 0) {
     exited: job.exited,
     exitCode: job.exitCode,
     reason: job.reason,
+    ...(job.traceData === undefined ? {} : { traceData: job.traceData }),
   };
 }
 export function readProcess(id, sessionId, offset = 0) {

@@ -124,6 +124,8 @@ export async function runtimes(probeFn = probe) {
           continue;
         return {
           language,
+          modes: language === "python" ? ["file", "trace"] : ["file"],
+          traceAdapterVersion: language === "python" ? 1 : null,
           installed: true,
           enabled: true,
           available: true,

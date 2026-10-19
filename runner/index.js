@@ -28,7 +28,7 @@ async function body(req) {
   const chunks = [];
   for await (const chunk of req) {
     bytes += chunk.length;
-    if (bytes > 512 * 1024)
+    if (bytes > 4 * 1024 * 1024)
       throw new RunnerError("Runner-Anfrage zu groß.", 413, "BODY_TOO_LARGE");
     chunks.push(chunk);
   }

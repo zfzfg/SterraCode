@@ -1167,3 +1167,75 @@ dialog::backdrop {
     flex-direction: column;
   }
 }
+:root .trace-dialog {
+  width: min(1200px, 96vw);
+  max-height: 94dvh;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text);
+}
+.trace-dialog::backdrop {
+  background: #0009;
+}
+.trace-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.75rem;
+}
+.trace-controls input {
+  flex: 1;
+  min-width: 160px;
+}
+.trace-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.trace-dialog label {
+  display: block;
+  margin-block: 0.5rem;
+}
+.trace-dialog textarea {
+  display: block;
+  width: 100%;
+}
+.trace-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.trace-source {
+  min-width: 0;
+  height: 450px;
+  border: 1px solid currentColor;
+}
+.trace-data {
+  min-width: 0;
+  max-height: 600px;
+  overflow: auto;
+}
+.trace-data td {
+  overflow-wrap: anywhere;
+  padding: 0.3rem;
+  border-bottom: 1px solid currentColor;
+}
+.trace-data pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.trace-line {
+  background: #a58a2533;
+  outline: 1px solid #a58a25;
+}
+.trace-line-marker {
+  border-left: 3px solid #a58a25;
+}
+@media (max-width: 750px) {
+  .trace-columns {
+    grid-template-columns: 1fr;
+  }
+  .trace-source {
+    height: 280px;
+  }
+}

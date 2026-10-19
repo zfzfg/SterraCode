@@ -32,6 +32,8 @@ export async function getRuntimes(probeFn) {
   });
 }
 export async function startProcess(options) {
+  if (options.trace)
+    options = { ...options, file: options.trace.entry, language: "python" };
   if (!runnerEnabled()) return local.startProcess(options);
   validateSessionId(options.sessionId);
   await assertSessionWritable(options.sessionId);
@@ -52,13 +54,16 @@ export async function startProcess(options) {
   const payload = {
     id,
     sessionId: options.sessionId,
-    type: options.file ? "file" : "command",
+    type: options.trace ? "trace" : options.file ? "file" : "command",
     actor: options.actor || "user",
     ...(options.file
       ? { file: options.file, language: options.language }
       : { command: options.command }),
     executionTimeout: settings.executionTimeout,
     compilationTimeout: settings.compilationTimeout,
+    ...(options.trace
+      ? { trace: options.trace, language: "python", executionTimeout: 10000 }
+      : {}),
   };
   try {
     return await runnerRequest("/v1/jobs", {

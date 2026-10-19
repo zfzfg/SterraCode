@@ -1,8 +1,11 @@
 import { eventOf } from "./history.js";
 import { readProcess } from "../processes.js";
+import { getTrace } from "../traces.js";
 
 const unresolved = (record) =>
-  ["running", "open", "unavailable", "unknown"].includes(record.status);
+  ["starting", "running", "open", "unavailable", "unknown"].includes(
+    record.status,
+  );
 
 // Kept independently of model-generated prose. Updates replace older status.
 export async function workflowState(session) {
@@ -17,7 +20,17 @@ export async function workflowState(session) {
     };
     let key;
     let record;
-    if (e.changeId) {
+    if (e.traceRunId) {
+      key = `trace:${e.traceRunId}`;
+      record = {
+        ...common,
+        traceRunId: e.traceRunId,
+        status: e.status,
+        reason: e.reason,
+        complete: e.complete,
+        recovery: { tool: "inspect_execution_trace", traceRunId: e.traceRunId },
+      };
+    } else if (e.changeId) {
       key = `change:${e.changeId}`;
       record = {
         ...common,
@@ -60,6 +73,19 @@ export async function workflowState(session) {
   }
   return Promise.all(
     [...records.values()].map(async (record) => {
+      if (record.traceRunId) {
+        try {
+          const trace = await getTrace(session.id, record.traceRunId);
+          return {
+            ...record,
+            status: trace.status,
+            reason: trace.reason,
+            complete: trace.complete,
+          };
+        } catch {
+          return { ...record, status: "unavailable" };
+        }
+      }
       if (!record.processId) return record;
       try {
         const current = await readProcess(

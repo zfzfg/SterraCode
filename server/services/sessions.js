@@ -413,6 +413,7 @@ export async function removeSession(id) {
       for (const [origin, target] of [
         [contextDir, "context"],
         [path.join(DATA_DIR, "changes", id), "changes"],
+        [path.join(DATA_DIR, "traces", id), "traces"],
       ]) {
         try {
           await copySafe(origin, path.join(backup, target));
@@ -433,6 +434,10 @@ export async function removeSession(id) {
       force: true,
     });
     await fs.rm(contextDir, { recursive: true, force: true });
+    await fs.rm(path.join(DATA_DIR, "traces", id), {
+      recursive: true,
+      force: true,
+    });
     await fs.unlink(sessionFile(id));
     await fs.rm(marker, { force: true });
   });

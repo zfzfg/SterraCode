@@ -19,6 +19,7 @@ import {
   openCredentials,
 } from "./js/setup.js";
 import { openPrograms } from "./js/programs.js";
+import { initTracer } from "./js/tracer.js";
 
 let modelsLoading = false,
   layoutTimer;
@@ -655,6 +656,7 @@ async function init() {
   initWorkspace();
   initChat();
   initTerminal();
+  initTracer();
   $("changes-btn").addEventListener("click", () =>
     showChanges().catch((e) => toast(e.message, "error")),
   );

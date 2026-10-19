@@ -9,6 +9,7 @@ import {
   waitProcess,
 } from "./processes.js";
 import { getProfile, updateProfile } from "./profileManager.js";
+import { getTrace, traceEvents } from "./traces.js";
 const text = (v, name) => {
   if (typeof v !== "string" || !v.trim() || v.length > 100000)
     throw new AppError(`Ungültiges Tool-Feld: ${name}`);
@@ -19,6 +20,33 @@ export async function executeTool(name, args, context) {
   try {
     if (signal?.aborted) throw new AppError("Abgebrochen.");
     switch (name) {
+      case "inspect_execution_trace": {
+        const info = await getTrace(sessionId, args.traceRunId);
+        if (args.fromStep === undefined)
+          return {
+            type: name,
+            traceRunId: info.traceRunId,
+            status: info.status,
+            reason: info.reason,
+            complete: info.complete,
+            eventCount: info.eventCount,
+            manifest: info.snapshot.files.map(({ path, version }) => ({
+              path,
+              version,
+            })),
+            limitations: info.limitations,
+          };
+        return {
+          type: name,
+          ...(await traceEvents(
+            sessionId,
+            args.traceRunId,
+            args.fromStep,
+            args.limit ?? 5,
+            args.detail ?? "summary",
+          )),
+        };
+      }
       case "list_files":
         return { type: name, files: await listWorkspace(sessionId) };
       case "read_file":

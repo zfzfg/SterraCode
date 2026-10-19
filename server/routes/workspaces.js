@@ -1,6 +1,13 @@
 import express from "express";
 import { route } from "./helpers.js";
 import {
+  startTrace,
+  getTrace,
+  traceEvents,
+  cancelTrace,
+  listTraces,
+} from "../services/traces.js";
+import {
   readFile,
   writeFile,
   listWorkspace,
@@ -11,6 +18,42 @@ import {
   listChanges,
 } from "../services/workspace.js";
 const router = express.Router();
+router.post(
+  "/:sessionId/traces",
+  route(async (req, res) =>
+    res.status(202).json(await startTrace(req.params.sessionId, req.body)),
+  ),
+);
+router.get(
+  "/:sessionId/traces",
+  route(async (req, res) => res.json(await listTraces(req.params.sessionId))),
+);
+router.get(
+  "/:sessionId/traces/:traceRunId",
+  route(async (req, res) =>
+    res.json(await getTrace(req.params.sessionId, req.params.traceRunId)),
+  ),
+);
+router.get(
+  "/:sessionId/traces/:traceRunId/events",
+  route(async (req, res) =>
+    res.json(
+      await traceEvents(
+        req.params.sessionId,
+        req.params.traceRunId,
+        Number(req.query.fromStep ?? 1),
+        Number(req.query.limit ?? 50),
+        req.query.detail ?? "full",
+      ),
+    ),
+  ),
+);
+router.post(
+  "/:sessionId/traces/:traceRunId/cancel",
+  route(async (req, res) =>
+    res.json(await cancelTrace(req.params.sessionId, req.params.traceRunId)),
+  ),
+);
 router.get(
   "/:sessionId/changes",
   route(async (req, res) => res.json(await listChanges(req.params.sessionId))),
