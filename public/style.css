@@ -447,6 +447,43 @@ a {
   min-width: 0;
   min-height: 0;
 }
+.editor-area {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+#editor-panel {
+  flex: 1;
+  overflow: hidden;
+}
+#terminal-resizer {
+  flex-shrink: 0;
+}
+.editor-area:has(#terminal-panel[hidden]) #terminal-resizer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: transparent;
+}
+.editor-area:has(#terminal-panel[hidden]) #terminal-resizer::after {
+  content: "";
+  position: absolute;
+  width: 40px;
+  height: 2px;
+  bottom: 1px;
+  left: calc(50% - 20px);
+  background: var(--border);
+}
+.editor-area:has(#terminal-panel[hidden]) #terminal-resizer:hover::after,
+.editor-area:has(#terminal-panel[hidden])
+  #terminal-resizer:focus-visible::after {
+  background: var(--accent);
+}
 .panel-heading {
   height: 52px;
   min-height: 52px;
@@ -842,7 +879,8 @@ a {
 .terminal-panel {
   display: flex;
   flex-direction: column;
-  height: min(var(--terminal-h), 40dvh);
+  height: var(--terminal-h);
+  max-height: calc(100% - 180px);
   flex-shrink: 0;
   background: var(--terminal-bg);
   min-height: 120px;
@@ -850,6 +888,7 @@ a {
 }
 .terminal-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 5px 12px;
@@ -1047,7 +1086,7 @@ dialog::backdrop {
     border-color: var(--accent);
   }
   .app[data-view="editor"] #teacher-panel,
-  .app[data-view="chat"] #editor-panel {
+  .app[data-view="chat"] #editor-area {
     display: none;
   }
   .app-header {
@@ -1519,7 +1558,7 @@ dialog::backdrop {
   padding: 0 0.8rem;
 }
 .terminal-panel:has(.error-card) {
-  height: min(max(var(--terminal-h), 280px), 45dvh);
+  height: min(max(var(--terminal-h), 280px), calc(100% - 180px));
 }
 .error-card pre {
   max-height: 180px;

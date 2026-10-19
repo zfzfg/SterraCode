@@ -630,3 +630,83 @@ test("OpenAI-Schlüssel aus Secret-Datei ist in Einstellungen schreibgeschützt"
   ).toBeVisible();
   await page.keyboard.press("Escape");
 });
+
+for (const width of [1366, 800]) {
+  test(`Terminal bleibt im Dateibereich und lässt sich aufziehen bei ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 768 });
+    await startSession(page, `Terminalbereich ${width}`, "javascript");
+    const terminal = page.locator("#terminal-panel");
+    const handle = page.getByRole("separator", {
+      name: "Terminalhöhe",
+      exact: true,
+    });
+    const teacher = page.locator("#teacher-panel");
+    const tutorBefore = width >= 960 ? await teacher.boundingBox() : null;
+    await expect(terminal).toBeHidden();
+    await page.locator("#terminal-toggle").click();
+    await expect(terminal).toBeVisible();
+    const area = await page.locator("#editor-area").boundingBox();
+    const bounds = await terminal.boundingBox();
+    expect(Math.abs(bounds.x - area.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(bounds.width - area.width)).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(bounds.y + bounds.height - area.y - area.height),
+    ).toBeLessThanOrEqual(1);
+    if (tutorBefore) {
+      const tutorAfter = await teacher.boundingBox();
+      expect(tutorAfter).toEqual(tutorBefore);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(tutorAfter.x);
+      expect(
+        Math.abs(tutorAfter.y + tutorAfter.height - area.y - area.height),
+      ).toBeLessThanOrEqual(1);
+    }
+    const grip = await handle.boundingBox();
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + grip.width / 2, area.y + area.height - 10, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    await expect(terminal).toBeHidden();
+    const closedGrip = await handle.boundingBox();
+    await page.mouse.move(
+      closedGrip.x + closedGrip.width / 2,
+      closedGrip.y + closedGrip.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      closedGrip.x + closedGrip.width / 2,
+      area.y + area.height - 260,
+      { steps: 8 },
+    );
+    await page.mouse.up();
+    await expect(terminal).toBeVisible();
+    expect((await terminal.boundingBox()).height).toBeGreaterThan(230);
+    await handle.focus();
+    const previousHeight = (await terminal.boundingBox()).height;
+    await page.keyboard.press("ArrowUp");
+    expect((await terminal.boundingBox()).height).toBeGreaterThan(
+      previousHeight,
+    );
+    await page.keyboard.press("Enter");
+    await expect(terminal).toBeHidden();
+    await page.keyboard.press("Enter");
+    await expect(terminal).toBeVisible();
+    if (width < 960) {
+      await page.locator("#view-chat").click();
+      await expect(teacher).toBeVisible();
+      await expect(terminal).not.toBeVisible();
+      await page.locator("#terminal-toggle").click();
+      await expect(terminal).toBeVisible();
+      await expect(teacher).not.toBeVisible();
+    }
+    await page.mouse.move(0, 0);
+    await page.screenshot({ path: testInfo.outputPath("terminal-docked.png") });
+    await page.locator("#close-terminal-btn").click();
+    await expect(terminal).toBeHidden();
+    await expect(handle).toHaveAttribute("aria-valuenow", "0");
+    if (tutorBefore) expect(await teacher.boundingBox()).toEqual(tutorBefore);
+  });
+}

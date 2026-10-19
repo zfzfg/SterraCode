@@ -12,7 +12,7 @@ import {
 import { createSession, loadSessions, languageOptions } from "./js/sessions.js";
 import { initWorkspace } from "./js/workspace.js";
 import { initChat, updateChatState, showChanges } from "./js/chat.js";
-import { initTerminal, updateRunState } from "./js/terminal.js";
+import { initTerminal, updateRunState, showTerminal } from "./js/terminal.js";
 import {
   ensureAccess,
   changePassword,
@@ -163,6 +163,9 @@ function closeSidebar() {
     sidebarState();
   }
 }
+function terminalMaxHeight() {
+  return Math.max(120, Math.min(1200, $("editor-area").clientHeight - 180));
+}
 function applyLayout() {
   const root = document.documentElement.style;
   root.setProperty("--sidebar-w", `${state.settings.sidebarWidth || 256}px`);
@@ -173,18 +176,20 @@ function applyLayout() {
   root.setProperty("--editor-ratio", ratio);
   root.setProperty(
     "--terminal-h",
-    `${Math.min(state.settings.terminalHeight || 180, innerHeight * 0.4)}px`,
+    `${Math.min(state.settings.terminalHeight || 180, terminalMaxHeight())}px`,
   );
   for (const [id, value, min, max] of [
     ["sidebar-resizer", state.settings.sidebarWidth || 256, 220, 360],
     ["editor-resizer", Math.round(ratio * 100), 30, 75],
     [
       "terminal-resizer",
-      Math.round(
-        Math.min(state.settings.terminalHeight || 180, innerHeight * 0.4),
-      ),
-      120,
-      Math.floor(innerHeight * 0.4),
+      $("terminal-panel").hidden
+        ? 0
+        : Math.round(
+            Math.min(state.settings.terminalHeight || 180, terminalMaxHeight()),
+          ),
+      0,
+      terminalMaxHeight(),
     ],
   ]) {
     const e = $(id);
@@ -247,19 +252,31 @@ function initLayout() {
     [
       "terminal-resizer",
       (event) => {
+        const height =
+          $("editor-area").getBoundingClientRect().bottom - event.clientY;
+        if (height < 50) {
+          if (!$("terminal-panel").hidden) showTerminal(false);
+          return;
+        }
         state.settings.terminalHeight = Math.max(
           120,
-          Math.min(
-            innerHeight * 0.4,
-            $("terminal-panel").getBoundingClientRect().bottom - event.clientY,
-          ),
+          Math.min(terminalMaxHeight(), height),
         );
+        if ($("terminal-panel").hidden) showTerminal(true);
       },
       (delta) => {
+        if ($("terminal-panel").hidden) {
+          if (delta < 0) showTerminal(true);
+          return;
+        }
+        if (delta > 0 && state.settings.terminalHeight <= 120) {
+          showTerminal(false);
+          return;
+        }
         state.settings.terminalHeight = Math.max(
           120,
           Math.min(
-            innerHeight * 0.4,
+            terminalMaxHeight(),
             (state.settings.terminalHeight || 180) - delta * 10,
           ),
         );
@@ -282,6 +299,11 @@ function initLayout() {
       handle.addEventListener("pointercancel", end, { once: true });
     });
     handle.addEventListener("keydown", (event) => {
+      if (id === "terminal-resizer" && ["Enter", " "].includes(event.key)) {
+        event.preventDefault();
+        showTerminal($("terminal-panel").hidden);
+        return;
+      }
       const delta = ["ArrowRight", "ArrowDown"].includes(event.key)
         ? 1
         : ["ArrowLeft", "ArrowUp"].includes(event.key)

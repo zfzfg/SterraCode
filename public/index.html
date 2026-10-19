@@ -169,70 +169,130 @@
           ><button id="view-chat" aria-pressed="false">KI-Tutor</button>
         </nav>
         <div id="panes" class="panes" hidden>
-          <section id="editor-panel" class="panel" aria-label="Code-Editor">
-            <div class="panel-heading">
-              <span class="eyebrow">Editor</span>
-              <div class="panel-actions">
-                <select
-                  id="language-select"
-                  aria-label="Programmiersprache"
-                ></select
+          <div id="editor-area" class="editor-area">
+            <section id="editor-panel" class="panel" aria-label="Code-Editor">
+              <div class="panel-heading">
+                <span class="eyebrow">Editor</span>
+                <div class="panel-actions">
+                  <select
+                    id="language-select"
+                    aria-label="Programmiersprache"
+                  ></select
+                  ><button
+                    id="save-btn"
+                    class="icon-only"
+                    title="Speichern (Strg+S)"
+                    aria-label="Speichern"
+                  >
+                    <svg class="icon" aria-hidden="true">
+                      <use href="/assets/icons.svg#save"></use>
+                    </svg></button
+                  ><button id="run-btn" class="primary">
+                    <svg class="icon" aria-hidden="true">
+                      <use href="/assets/icons.svg#play"></use></svg
+                    >Ausführen
+                  </button>
+                </div>
+              </div>
+              <div
+                id="file-tabs"
+                class="file-tabs"
+                role="tablist"
+                aria-label="Geöffnete Dateien"
+              ></div>
+              <div class="file-info">
+                <span id="file-path">Keine Datei geöffnet</span
                 ><button
-                  id="save-btn"
+                  id="save-status"
+                  class="text-button"
+                  aria-live="polite"
+                >
+                  Gespeichert
+                </button>
+                <button
+                  id="changes-btn"
                   class="icon-only"
-                  title="Speichern (Strg+S)"
-                  aria-label="Speichern"
+                  title="KI-Dateiänderungen"
+                  aria-label="KI-Dateiänderungen"
                 >
                   <svg class="icon" aria-hidden="true">
-                    <use href="/assets/icons.svg#save"></use>
-                  </svg></button
-                ><button id="run-btn" class="primary">
-                  <svg class="icon" aria-hidden="true">
-                    <use href="/assets/icons.svg#play"></use></svg
-                  >Ausführen
+                    <use href="/assets/icons.svg#undo"></use>
+                  </svg>
                 </button>
               </div>
-            </div>
-            <div
-              id="file-tabs"
-              class="file-tabs"
-              role="tablist"
-              aria-label="Geöffnete Dateien"
-            ></div>
-            <div class="file-info">
-              <span id="file-path">Keine Datei geöffnet</span
-              ><button id="save-status" class="text-button" aria-live="polite">
-                Gespeichert
-              </button>
+              <div id="editor-container"></div>
+              <div id="runtime-hint" class="runtime-hint"></div>
+              <div id="trace-tools" class="trace-tools" hidden>
+                <button id="trace-open" type="button" aria-haspopup="dialog">
+                  Python Schritt für Schritt
+                </button>
+                <span>Codezeilen und Variablen nachvollziehen</span>
+              </div>
               <button
-                id="changes-btn"
-                class="icon-only"
-                title="KI-Dateiänderungen"
-                aria-label="KI-Dateiänderungen"
+                id="preview-open"
+                type="button"
+                hidden
+                aria-expanded="false"
+                aria-controls="preview-panel"
               >
-                <svg class="icon" aria-hidden="true">
-                  <use href="/assets/icons.svg#undo"></use>
-                </svg>
+                Web-Vorschau
               </button>
-            </div>
-            <div id="editor-container"></div>
-            <div id="runtime-hint" class="runtime-hint"></div>
-            <div id="trace-tools" class="trace-tools" hidden>
-              <button id="trace-open" type="button" aria-haspopup="dialog">
-                Python Schritt für Schritt
-              </button>
-              <span>Codezeilen und Variablen nachvollziehen</span>
-            </div>
-            <button
-              id="preview-open"
-              type="button"
-              hidden
+            </section>
+            <div
+              id="terminal-resizer"
+              class="resizer horizontal"
+              role="separator"
+              aria-label="Terminalhöhe"
+              aria-orientation="horizontal"
+              aria-controls="terminal-panel"
               aria-expanded="false"
-              aria-controls="preview-panel"
+              title="Terminal nach oben ziehen; Enter öffnet oder schließt es"
+              tabindex="0"
+            ></div>
+            <section
+              id="terminal-panel"
+              class="terminal-panel"
+              aria-label="Terminal"
+              hidden
             >
-              Web-Vorschau
-            </button>
-          </section>
+              <div class="terminal-heading">
+                <span class="eyebrow">Terminal</span
+                ><span id="process-status" class="muted">Bereit</span>
+                <div class="panel-actions">
+                  <button id="stop-process-btn" disabled>
+                    <svg class="icon" aria-hidden="true">
+                      <use href="/assets/icons.svg#stop"></use></svg
+                    >Stoppen</button
+                  ><button id="clear-terminal-btn">Ausgabe leeren</button
+                  ><button
+                    id="close-terminal-btn"
+                    class="icon-only"
+                    aria-label="Terminal schließen"
+                    title="Terminal schließen"
+                  >
+                    <svg class="icon" aria-hidden="true">
+                      <use href="/assets/icons.svg#close"></use>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <pre
+                id="terminal-output"
+                class="terminal-output"
+                tabindex="0"
+                aria-label="Terminalausgabe"
+              ></pre>
+              <form id="terminal-form">
+                <label for="terminal-input" class="sr-only"
+                  >Befehl oder Programmeingabe</label
+                ><input
+                  id="terminal-input"
+                  placeholder="Befehl im Session-Workspace eingeben …"
+                  autocomplete="off"
+                /><button type="submit">Senden</button>
+              </form>
+            </section>
+          </div>
           <div
             id="editor-resizer"
             class="resizer vertical"
@@ -304,57 +364,6 @@
             </form>
           </section>
         </div>
-        <section
-          id="terminal-panel"
-          class="terminal-panel"
-          aria-label="Terminal"
-          hidden
-        >
-          <div
-            id="terminal-resizer"
-            class="resizer horizontal"
-            role="separator"
-            aria-label="Terminalhöhe"
-            aria-orientation="horizontal"
-            tabindex="0"
-          ></div>
-          <div class="terminal-heading">
-            <span class="eyebrow">Terminal</span
-            ><span id="process-status" class="muted">Bereit</span>
-            <div class="panel-actions">
-              <button id="stop-process-btn" disabled>
-                <svg class="icon" aria-hidden="true">
-                  <use href="/assets/icons.svg#stop"></use></svg
-                >Stoppen</button
-              ><button id="clear-terminal-btn">Ausgabe leeren</button
-              ><button
-                id="close-terminal-btn"
-                class="icon-only"
-                aria-label="Terminal schließen"
-                title="Terminal schließen"
-              >
-                <svg class="icon" aria-hidden="true">
-                  <use href="/assets/icons.svg#close"></use>
-                </svg>
-              </button>
-            </div>
-          </div>
-          <pre
-            id="terminal-output"
-            class="terminal-output"
-            tabindex="0"
-            aria-label="Terminalausgabe"
-          ></pre>
-          <form id="terminal-form">
-            <label for="terminal-input" class="sr-only"
-              >Befehl oder Programmeingabe</label
-            ><input
-              id="terminal-input"
-              placeholder="Befehl im Session-Workspace eingeben …"
-              autocomplete="off"
-            /><button type="submit">Senden</button>
-          </form>
-        </section>
       </main>
       <footer class="statusbar">
         <span id="workspace-status">Lokal auf deinem Rechner</span

@@ -46,8 +46,14 @@ async function showDiagnostic(s) {
   if (state.session?.id === id) diagnostics.replaceChildren(s.diagnostic);
 }
 export function showTerminal(show = true) {
+  if (show && !state.session) {
+    toast("Bitte zuerst eine Session öffnen.");
+    return;
+  }
+  if (show && innerWidth < 960) $("view-editor").click();
   $("terminal-panel").hidden = !show;
   $("terminal-toggle").setAttribute("aria-expanded", String(show));
+  $("terminal-resizer").setAttribute("aria-expanded", String(show));
   emit("layout");
 }
 function entry(id = state.session?.id) {
@@ -197,7 +203,10 @@ export function initTerminal() {
   diagnostics.id = "terminal-diagnostics";
   $("terminal-output").after(diagnostics);
   $("terminal-toggle").addEventListener("click", () =>
-    showTerminal($("terminal-panel").hidden),
+    showTerminal(
+      $("terminal-panel").hidden ||
+        (innerWidth < 960 && $("app").dataset.view === "chat"),
+    ),
   );
   $("close-terminal-btn").addEventListener("click", () => showTerminal(false));
   $("run-btn").addEventListener("click", () =>
