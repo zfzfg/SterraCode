@@ -114,3 +114,10 @@ Neue Imageidentitäten:
 - App: `sha256:75af41e7d9e7b545c11de559f1ad3ee7122d8da2df262fc605ab77e8ba9e4b3d`
 - Runner: `sha256:486328b013c4d7cacc779ce90192b4e6739561fd42b7d584f860d8de80dc4023`
 
+## Update vom 19.10.2026: API-Schlüssel direkt in Einstellungen
+
+- Commit `d98069dc4bfdf9a9f2c6232f62ab91125e73ca89` auf main gepusht und auf der bestehenden Ubuntu-Instanz installiert. Neues Passwortfeld direkt unter dem KI-Anbieter; leere Eingabe erhält den vorhandenen Schlüssel, Secret-Dateien bleiben schreibgeschützt. Schlüssel werden ausschließlich an die Zugangsdaten-API gesendet und niemals in allgemeine Einstellungen übernommen.
+- Alle **17 App-Browsertests** bestanden, einschließlich neuer Prüfungen auf geschützte Eingabe, Speicherung, Erhaltung bei leerem Feld und externe Secret-Dateien. Formatprüfung der geänderten JavaScript-Dateien und git diff --check erfolgreich.
+- Konsistente Sicherung vor dem Update unter `/home/zfzfg/sterracode-test/backups/pre-inline-openai-key-20261019`. App neu gebaut und ersetzt; Runner und persistente Volumes erhalten. Vorheriges App-Image unter `rollback-inline-key-20261019` verfügbar.
+- Live-Prüfung vom Windows-Rechner: ausgelieferte app.js enthält das neue Schlüsselfeld; `/api/health` erfolgreich. App und Runner healthy. Neues App-Image: `sha256:7428858fc0ff1946fb5a31b5e971b94a0684ba35e846d36906388336bddf88e8`. Keine kostenpflichtige OpenAI-Anfrage ausgeführt.
+
