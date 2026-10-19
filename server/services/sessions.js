@@ -445,4 +445,11 @@ export async function removeSession(id) {
     await fs.unlink(sessionFile(id));
     await fs.rm(marker, { force: true });
   });
+  // Preview readers acquire the session queue while collecting source files.
+  // Wait for their queue only after releasing the session queue.
+  await serial(`preview:${id}`, async () => {
+    await removeSafe(path.join(DATA_DIR, "previews", id)).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  });
 }

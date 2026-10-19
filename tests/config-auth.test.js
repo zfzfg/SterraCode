@@ -121,6 +121,20 @@ describe("server configuration", () => {
   });
 });
 describe("protected HTTP setup and login", () => {
+  it("schützt alle Vorschau-Routen durch die bestehende Authentifizierung", async () => {
+    const { call } = await instance();
+    const root =
+      "/api/workspaces/00000000-0000-4000-8000-000000000000/preview-runs";
+    for (const endpoint of [
+      root + "/00000000-0000-4000-8000-000000000001",
+      root + "/00000000-0000-4000-8000-000000000001/document",
+    ]) {
+      expect((await call(endpoint)).response.status).toBe(401);
+    }
+    expect(
+      (await call(root, { method: "POST", body: {} })).response.status,
+    ).toBe(401);
+  });
   it("blocks new API work before shutdown while keeping minimal health available", async () => {
     const { call, auth, app } = await instance();
     const setupKey = await auth.createSetupKey();

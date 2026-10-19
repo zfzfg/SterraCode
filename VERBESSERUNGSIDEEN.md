@@ -2,7 +2,7 @@
 
 ## Fünf Kernideen mit Lernzielen, MVPs, Architektur und Abnahmekriterien
 
-**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Ideen 1 und 2 sind als beschriebene Python-MVPs implementiert (Status und Nachweise in Abschnitt 2 und 3). Idee 3 ist mit Konzeptansicht, belegtem Lernprofil und freiwilligen Leitner-Wiederholungen umgesetzt (Abschnitt 4). Ideen 4 und 5 sowie die ausdrücklich späteren Ausbaustufen bleiben vorgeschlagene Erweiterungen.
+**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Ideen 1 und 2 sind als beschriebene Python-MVPs implementiert (Status und Nachweise in Abschnitt 2 und 3). Idee 3 ist mit Konzeptansicht, belegtem Lernprofil und freiwilligen Leitner-Wiederholungen umgesetzt (Abschnitt 4). Idee 4 ist als statische, isolierte Web-Vorschau umgesetzt (Abschnitt 5). Idee 5 sowie die ausdrücklich späteren Ausbaustufen bleiben vorgeschlagene Erweiterungen.
 
 SterraCode soll Lernenden helfen, drei Fragen selbstständig zu beantworten: **Was macht mein Code? Woran erkenne ich, ob er die Aufgabe erfüllt? Was sollte ich als Nächstes üben?** Die fünf Kernideen bilden dafür einen zusammenhängenden Lernablauf: Code verstehen, Lösung prüfen, Änderungen nachvollziehen, Ergebnisse sehen und Wissen festigen.
 
@@ -542,6 +542,10 @@ Profilinhalt wird nur im freigegebenen Umfang an den ausgewählten KI-Anbieter �
 
 ## 5. Idee 4: Isolierte Live-Vorschau für Web, Canvas und SVG
 
+**Umgesetzt am 19. Oktober 2026:** Versionierte, unveränderliche Vorschau-Snapshots, eigene authentifizierte Dokumentroute mit CSP/Sandbox-Header, HTML-/CSS-Parser, lokale klassische Skripte und Stylesheets, responsives Panel, Autosave-Aktualisierung mit Pause, begrenzte Console-Bridge, Originalzeilen und freiwilliger Chatentwurf sind implementiert. API, Aufbewahrung, unterstützte Ressourcen und Browsergrenzen stehen in [README.md](README.md#isolierte-web-vorschau). Regressionen: `tests/previews.test.js`, `tests/e2e/preview.spec.js` und die Vorschau-Authentifizierungsprüfung in `tests/config-auth.test.js`. Die Web-Projektvorlage und die ausdrücklich später genannten Erweiterungen bleiben Ausblick.
+
+**Festgelegte Grenzen:** Maximal 50 Dateien / 2 MiB Quelltext, zehn Snapshots pro Session, 30 Minuten Gültigkeit; Dokumentaufbereitung höchstens 8 MiB, 10.000 Knoten, 100 Ebenen und 100 Skripte. Neue Aufträge antworten mit `201`. Lokale Stylesheets werden einzeln verlinkt; CSS-`@import`, Module, lokale Binärassets und Inline-Handler sind nicht unterstützt und werden diagnostiziert. CSP sperrt Ressourcenverbindungen, Formulare, Popups und Top-Navigation im iframe. Eine vollständige Sperre beliebiger JavaScript-Selbstnavigation oder ein CPU-Hardlimit bietet die Browser-Sandbox nicht; diese Grenze wird ausdrücklich dokumentiert.
+
 ### 5.1 Lernziel und bewusst begrenzter Einstieg
 
 Eine Person ändert eine CSS-Regel und sieht deren Wirkung sofort. Sie baut eine Schaltfläche, zeichnet auf ein Canvas oder verändert eine SVG-Grafik. Der Weg vom Quelltext zum sichtbaren Ergebnis bleibt innerhalb des Lernarbeitsplatzes.
@@ -639,12 +643,12 @@ Vorgeschlagene Startgrenzen sind 200 sichtbare Logeinträge und ein begrenzter P
 
 ### 5.8 Abnahme
 
-- [ ] Lokales HTML, CSS, DOM-Ereignisse, Canvas und eingebettetes SVG funktionieren mit der produktiven App-CSP.
-- [ ] Vorschaucode kann weder das App-DOM noch Cookies oder lokalen Speicher der Hauptoberfläche lesen.
-- [ ] Netzwerkzugriffe, unerlaubte Navigationen und nicht unterstützte Ressourcen erhalten überprüfte Grenzen.
-- [ ] Fremde Fenster, alte Renderläufe und übergroße Lognachrichten beeinflussen die UI nicht.
-- [ ] Ein direkter Aufruf der Dokument-URL verliert den Sandbox-Header nicht.
-- [ ] UTF-8-Editorverhalten und Binärdatei-Dialog bleiben erhalten.
+- [x] Lokales HTML, CSS, DOM-Ereignisse, Canvas und eingebettetes SVG funktionieren mit der produktiven App-CSP.
+- [x] Vorschaucode kann weder das App-DOM noch Cookies oder lokalen Speicher der Hauptoberfläche lesen.
+- [x] Netzwerkzugriffe, unerlaubte Navigationen und nicht unterstützte Ressourcen erhalten überprüfte Grenzen; Selbstnavigation bleibt die oben benannte Browsergrenze.
+- [x] Fremde Fenster, alte Renderläufe und übergroße Lognachrichten beeinflussen die UI nicht.
+- [x] Ein direkter Aufruf der Dokument-URL verliert den Sandbox-Header nicht.
+- [x] UTF-8-Editorverhalten und Binärdatei-Dialog bleiben erhalten.
 
 ---
 

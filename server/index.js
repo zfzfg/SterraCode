@@ -1,4 +1,5 @@
 import { createApp } from "./app.js";
+import { prunePreviews } from "./services/previews.js";
 import { ensureDataDirs } from "./services/storage.js";
 import { stopAllProcesses } from "./services/processes.js";
 import fs from "node:fs/promises";
@@ -9,6 +10,12 @@ import { drainServer, writeShutdownState } from "./services/shutdown.js";
 const config = loadConfig();
 process.umask(0o002);
 await ensureDataDirs();
+const prune = () =>
+  prunePreviews().catch((error) =>
+    console.error("Vorschau-Bereinigung fehlgeschlagen", { code: error.code }),
+  );
+await prune();
+setInterval(prune, 60 * 60 * 1000).unref();
 await writeShutdownState(config.dataDir, "running");
 const auth = createAuthService({ dataDir: config.dataDir });
 if (

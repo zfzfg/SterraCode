@@ -20,6 +20,7 @@ import {
 } from "./js/setup.js";
 import { openPrograms } from "./js/programs.js";
 import { initTracer } from "./js/tracer.js";
+import { initPreview } from "./js/preview.js";
 import { openProfile } from "./js/profile.js";
 
 $("profile-btn").addEventListener("click", () =>
@@ -662,6 +663,7 @@ async function init() {
   initChat();
   initTerminal();
   initTracer();
+  initPreview();
   $("changes-btn").addEventListener("click", () =>
     showChanges().catch((e) => toast(e.message, "error")),
   );

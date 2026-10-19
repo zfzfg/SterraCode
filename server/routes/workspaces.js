@@ -7,6 +7,12 @@ import {
   listTaskTestRuns,
 } from "../services/testRunner.js";
 import express from "express";
+import {
+  startPreview,
+  getPreview,
+  previewDocument,
+  previewHeaders,
+} from "../services/previews.js";
 import { route } from "./helpers.js";
 import {
   startTrace,
@@ -26,6 +32,29 @@ import {
   listChanges,
 } from "../services/workspace.js";
 const router = express.Router();
+router.post(
+  "/:sessionId/preview-runs",
+  route(async (req, res) =>
+    res.status(201).json(await startPreview(req.params.sessionId, req.body)),
+  ),
+);
+router.get(
+  "/:sessionId/preview-runs/:previewRunId",
+  route(async (req, res) =>
+    res.json(await getPreview(req.params.sessionId, req.params.previewRunId)),
+  ),
+);
+router.get(
+  "/:sessionId/preview-runs/:previewRunId/document",
+  route(async (req, res) => {
+    const html = await previewDocument(
+      req.params.sessionId,
+      req.params.previewRunId,
+      res.locals.appOrigin,
+    );
+    res.set(previewHeaders(res.locals.appOrigin)).type("html").send(html);
+  }),
+);
 router.post(
   "/:sessionId/tasks/:taskId/test-runs",
   route(async (req, res) =>
