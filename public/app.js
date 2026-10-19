@@ -338,6 +338,8 @@ function initLayout() {
 }
 async function openSettings() {
   const s = state.settings;
+  const credentials = await api("/api/provider/credentials");
+  const externalOpenAIKey = credentials.openai?.source === "file";
   let nextAction;
   const fields = [
     {
@@ -352,6 +354,20 @@ async function openSettings() {
         },
         { value: "openai", label: "OpenAI API" },
       ],
+    },
+    {
+      name: "openAIApiKey",
+      label: "OpenAI-API-Schlüssel",
+      type: "password",
+      value: "",
+      maxLength: 2048,
+      autocomplete: "off",
+      disabled: externalOpenAIKey,
+      help: externalOpenAIKey
+        ? "Der Schlüssel wird durch eine Secret-Datei auf dem Server vorgegeben."
+        : credentials.openai?.configured
+          ? "Ein Schlüssel ist gespeichert. Leer lassen behält ihn; eine neue Eingabe ersetzt ihn."
+          : "Hier den API-Schlüssel einfügen und die Einstellungen speichern. Danach stehen die OpenAI-Modelle zur Auswahl bereit.",
     },
     {
       name: "lmStudioUrl",
@@ -370,7 +386,7 @@ async function openSettings() {
       type: "select",
       options: await openAIModelOptions(s.openAIModel),
       value: s.openAIModel || "",
-      help: "Ein verfügbares Textmodell mit Funktionsaufrufen auswählen. Der API-Schlüssel wird unter KI-Zugangsdaten gespeichert.",
+      help: "Nach dem Speichern des API-Schlüssels ein verfügbares Textmodell mit Funktionsaufrufen auswählen.",
     },
     {
       name: "theme",
@@ -604,7 +620,12 @@ async function openSettings() {
     ],
     fields,
     onPreview: (values) => applyTheme(values.theme),
-    onSave: async (values) => {
+    onSave: async ({ openAIApiKey, ...values }) => {
+      if (openAIApiKey.trim() && !externalOpenAIKey)
+        await api("/api/provider/credentials", {
+          method: "PATCH",
+          body: { provider: "openai", apiKey: openAIApiKey.trim() },
+        });
       const updates = {
         ...values,
         activeModel: values.activeModel || null,

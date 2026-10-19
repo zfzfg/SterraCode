@@ -543,3 +543,90 @@ test("OpenAI-Modelle aus API-Liste und automatisch erkanntes LM-Studio-Kontextfe
   await expect(dialog.locator('[name="openAIContextLength"]')).toHaveCount(0);
   await page.keyboard.press("Escape");
 });
+
+test("OpenAI-Schlüssel direkt in Einstellungen speichern und bei leerem Feld erhalten", async ({
+  page,
+}) => {
+  let configured = false;
+  const savedKeys = [];
+  const settingsWrites = [];
+  await page.route("**/api/provider/credentials", async (route) => {
+    if (route.request().method() === "PATCH") {
+      savedKeys.push(route.request().postDataJSON());
+      configured = true;
+    }
+    await route.fulfill({
+      json: { openai: { configured, source: configured ? "saved" : null } },
+    });
+  });
+  await page.route("**/api/models?provider=openai", (route) =>
+    route.fulfill({
+      json: {
+        connected: configured,
+        models: configured ? [{ id: "api-model", name: "API Modell" }] : [],
+      },
+    }),
+  );
+  await page.route("**/api/chat/settings", async (route) => {
+    if (route.request().method() === "PATCH")
+      settingsWrites.push(route.request().postDataJSON());
+    await route.continue();
+  });
+  await page.goto("/");
+  await expect(page.locator("#connection-text")).toHaveText(
+    "LM Studio verbunden",
+  );
+  await page.locator("#settings-btn").click();
+  const dialog = page.getByRole("dialog");
+  const key = dialog.getByLabel("OpenAI-API-Schlüssel", { exact: true });
+  await expect(key).toHaveAttribute("type", "password");
+  await expect(key).toHaveValue("");
+  await key.fill("  sk-browser-fixture  ");
+  await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(savedKeys).toEqual([
+    { provider: "openai", apiKey: "sk-browser-fixture" },
+  ]);
+  expect(settingsWrites[0]).not.toHaveProperty("openAIApiKey");
+  expect(JSON.stringify(settingsWrites)).not.toContain("sk-browser-fixture");
+  await page.locator("#settings-btn").click();
+  await expect(key).toHaveValue("");
+  await expect(
+    dialog.getByText("Ein Schlüssel ist gespeichert.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByLabel("OpenAI-Modell", { exact: true }).locator("option"),
+  ).toContainText(["API Modell"]);
+  await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(savedKeys).toHaveLength(1);
+});
+
+test("OpenAI-Schlüssel aus Secret-Datei ist in Einstellungen schreibgeschützt", async ({
+  page,
+}) => {
+  await page.route("**/api/provider/credentials", (route) =>
+    route.fulfill({
+      json: {
+        openai: { configured: true, source: "file" },
+      },
+    }),
+  );
+  await page.route("**/api/models?provider=openai", (route) =>
+    route.fulfill({ json: { connected: true, models: [] } }),
+  );
+  await page.goto("/");
+  await expect(page.locator("#connection-text")).toHaveText(
+    "LM Studio verbunden",
+  );
+  await page.locator("#settings-btn").click();
+  await expect(
+    page.getByLabel("OpenAI-API-Schlüssel", { exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText(
+      "Der Schlüssel wird durch eine Secret-Datei auf dem Server vorgegeben.",
+    ),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+});
