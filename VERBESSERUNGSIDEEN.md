@@ -542,7 +542,7 @@ Profilinhalt wird nur im freigegebenen Umfang an den ausgewählten KI-Anbieter �
 
 ## 5. Idee 4: Isolierte Live-Vorschau für Web, Canvas und SVG
 
-**Umgesetzt am 19. Oktober 2026:** Versionierte, unveränderliche Vorschau-Snapshots, eigene authentifizierte Dokumentroute mit CSP/Sandbox-Header, HTML-/CSS-Parser, lokale klassische Skripte und Stylesheets, responsives Panel, Autosave-Aktualisierung mit Pause, begrenzte Console-Bridge, Originalzeilen und freiwilliger Chatentwurf sind implementiert. API, Aufbewahrung, unterstützte Ressourcen und Browsergrenzen stehen in [README.md](README.md#isolierte-web-vorschau). Regressionen: `tests/previews.test.js`, `tests/e2e/preview.spec.js` und die Vorschau-Authentifizierungsprüfung in `tests/config-auth.test.js`. Die Web-Projektvorlage und die ausdrücklich später genannten Erweiterungen bleiben Ausblick.
+**Umgesetzt am 19. Oktober 2026:** Versionierte, unveränderliche Vorschau-Snapshots, eigene authentifizierte Dokumentroute mit CSP/Sandbox-Header, HTML-/CSS-Parser, lokale klassische Skripte und Stylesheets, responsives Panel, Autosave-Aktualisierung mit Pause, begrenzte Console-Bridge, Originalzeilen und freiwilliger Chatentwurf sind implementiert. API, Aufbewahrung, unterstützte Ressourcen und Browsergrenzen stehen in [README.md](README.md#isolierte-web-vorschau). Regressionen: `tests/previews.test.js`, `tests/e2e/preview.spec.js` und die Vorschau-Authentifizierungsprüfung in `tests/config-auth.test.js`. Die Web-Projektvorlage ist inzwischen in Abschnitt 8.3 umgesetzt; die ausdrücklich später genannten Erweiterungen bleiben Ausblick.
 
 **Festgelegte Grenzen:** Maximal 50 Dateien / 2 MiB Quelltext, zehn Snapshots pro Session, 30 Minuten Gültigkeit; Dokumentaufbereitung höchstens 8 MiB, 10.000 Knoten, 100 Ebenen und 100 Skripte. Neue Aufträge antworten mit `201`. Lokale Stylesheets werden einzeln verlinkt; CSS-`@import`, Module, lokale Binärassets und Inline-Handler sind nicht unterstützt und werden diagnostiziert. CSP sperrt Ressourcenverbindungen, Formulare, Popups und Top-Navigation im iframe. Eine vollständige Sperre beliebiger JavaScript-Selbstnavigation oder ein CPU-Hardlimit bietet die Browser-Sandbox nicht; diese Grenze wird ausdrücklich dokumentiert.
 
@@ -879,7 +879,19 @@ Die Oberfläche berücksichtigt Sessionwechsel und verspätete Antworten über S
 
 ## 8. Ergänzende Ideen für den Lernalltag
 
-Diese Erweiterungen ergänzen die fünf Kernideen. Sie sind ein nachgeordnetes Backlog und keine Voraussetzung für den ersten Ausbau.
+**Umgesetzt am 19. Oktober 2026:** Die unten beschriebenen ersten Ausbauschritte 8.1 bis 8.5 sind implementiert. Bedienung, Format und konkrete Grenzen stehen in [README.md](README.md#hinweise-fehlerkarten-projektwerkstatt-und-lernjournal). Die hier ausdrücklich später vorgeschlagenen Erweiterungen bleiben Ausblick.
+
+| Ergänzung            | Umgesetztes Verhalten                                                                                                          | Nachweis                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| 8.1 Hinweise         | Einzeln öffnen, Aufgabenstand prüfen, Nutzung dauerhaft speichern und im Abschluss als Hilfe kennzeichnen; keine Dateiänderung | `learningSupport.js`, Aufgabenkarte, `learning-support.test.js`             |
+| 8.2 Fehlerkarten     | Gemeinsamer Offline-Katalog für Tests, Terminal und Browser; Originaldiagnose und geprüfte Quellnavigation                     | `errorCatalog.js`, `errorCards.js`, Browserablauf                           |
+| 8.3 Projektwerkstatt | Zwei Python-Vorlagen mit sichtbaren Tests, ein statisches Webprojekt mit Prüfliste; neue Session ohne Installation/Ausführung  | `projectTemplates.js`, `projects.js`, Browserablauf                         |
+| 8.4 Journal          | Freiwillige persönliche Einträge je Aufgabenstand, optionaler Testbezug, versionsgeprüfte Bearbeitung und Entfernen des Textes | `learningSupport.js`, Sessiondaten, Regressionstests                        |
+| 8.5 Projektpakete    | Bewusste Dateiauswahl, versioniertes JSON-Manifest, sichtbare Aufgabe/Tests, Laufzeitangabe und Import in eine neue Session    | `projects.js`, Pfad-/Manifest-/Idempotenztests und Export/Import im Browser |
+
+Die Prüfungen verwenden temporäre Datenverzeichnisse. Der Browserablauf umfasst Offlinebetrieb, Neuladen, Reflexion, Export/Import und schmale Fenster in allen vier Themes. Bestehende Authentifizierungs- und Origin-Schutzschichten gelten auch für die neuen Routen. Runner und Ausführungsprotokoll werden durch diese Ergänzungen nicht verändert.
+
+Diese Erweiterungen ergänzen die fünf Kernideen. Sie waren keine Voraussetzung für den ersten Ausbau.
 
 ### 8.1 Gestufte Hinweise statt sofortiger Komplettlösung
 

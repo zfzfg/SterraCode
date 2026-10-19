@@ -194,6 +194,34 @@ Profil-API (hinter denselben Authentifizierungs- und Originprüfungen wie die ü
 - `DELETE /api/profile`: bewusstes Zurücksetzen mit `{ confirm: true }`.
 - `POST /api/profile/import-history`: gesonderte historische Übernahme mit `{ confirm: true }`.
 
+## Hinweise, Fehlerkarten, Projektwerkstatt und Lernjournal
+
+Unter **Sessions** in der Seitenleiste findest du **Projektwerkstatt**, **Projekt exportieren** und **Lernjournal**. Alle drei Bereiche funktionieren ohne KI-Verbindung; auf schmalen Fenstern zuerst die Seitenleiste öffnen.
+
+Aufgaben zeigen ihre Hinweise einzeln über **Nächsten Hinweis öffnen**. Geöffnete Hinweise bleiben nach Neuladen erhalten; ein Versionswechsel der Aufgabe beginnt eine neue Hinweisleiter. Der vierte Hinweis wird ausdrücklich als freiwilliger Lösungshinweis angeboten. Ein Hinweis verändert keine Datei und startet keine KI-Anfrage. `hintUsage` hält Anzahl und Zeitpunkt am Aufgabenstand fest; der Tutor erhält diesen Zustand auch nach Kontextkomprimierung. Ein Abschluss mit geöffneten Hinweisen erhält `evidence.hintsUsed` und `assistance: "assisted"`; daraus wird kein Punktabzug oder selbstständiger Kompetenznachweis abgeleitet.
+
+Fehlerkarten erläutern häufige Python- und JavaScript-Fehler offline in Testergebnissen, Terminal und Web-Vorschau. Sie unterscheiden Syntax, Laufzeit, abweichenden Rückgabewert, Rückgabeformat und unvollständig auswertbare Ausführung. Unbekannte Meldungen bleiben als solche bezeichnet. **Originalmeldung** zeigt die ursprüngliche Diagnose; **Zur Zeile** öffnet ausschließlich eine bestätigte Workspace-Datei. Bei historischen Läufen zeigt der Editor die heutige Datei, keinen wiederhergestellten alten Quellstand. Eine Karte startet keinen Trace und verändert keinen Code.
+
+Die Projektwerkstatt enthält **Zahlenratespiel**, **Textauswertung** und **Meine kleine Webseite**, jeweils mit Lernziel, Voraussetzungen, erstem Meilenstein, Funktionsumfang, Laufzeitinformation, Prüfliste und Herkunft (`SterraCode`, Vorlagenversion 1, `CC0-1.0`). Python-Projekte haben sichtbare Funktionstests; die Webseite verwendet die integrierte statische Vorschau. Jede Vorlage öffnet eine neue Session. Es werden keine Programme installiert oder Projektbefehle ausgeführt. Aufgaben ohne Tests lassen sich offline nach eigener Prüfung abschließen; dieser Abschluss bleibt als `manual` gekennzeichnet. Im aktivierten Lernprofil zählt ein eigener Abschluss als Selbsteinschätzung (`self_assessment`), ein Tutorabschluss als Tutorbeurteilung; verwendete Lösungshilfe bleibt gesondert erkennbar.
+
+Unter **Freiwilliges Lernjournal** bei einer Aufgabe kann ein persönlicher Satz separat gespeichert werden. Abschluss und Reflexion sind freiwillige, getrennte Aktionen. Das Journal enthält höchstens 200 Aufgabenstände je Session und 2.000 Zeichen je Eintrag. Es verknüpft persönliche Texte mit Aufgaben-ID, Aufgabenstand und, beim Speichern nach einem testgeprüften Abschluss, der Testlauf-ID. Ältere Einträge bleiben nach Aufgabenwechseln unter **Lernjournal** sichtbar und bearbeitbar. Leerer Text entfernt den Inhalt; ein kleiner Versionsbeleg verhindert, dass ein verspätetes Speichern ihn wiederherstellt. Die Texte stehen in der Session, fließen nicht in das sessionübergreifende Profil oder Projektpakete und werden nicht automatisch an den Tutor übergeben. Vorhandene Sessions benötigen keine Migration. Session-Sicherung und -Löschung umfassen diese Daten wie andere Sessionfelder.
+
+### Projektpakete exportieren und wieder öffnen
+
+**Projekt exportieren** speichert ausdrücklich ausgewählte UTF-8-Quellen sowie die aktuelle sichtbare Aufgabe mit ihren Tests und der Prüfliste als `sterracode-projekt.json`. Die Projektwerkstatt zeigt vor dem Import Titel, Sprache und enthaltene Dateien. **Paket in neue Session importieren** legt eine neue Session mit frischen Aufgaben-IDs ohne frühere Abschlüsse, Hinweise oder Kompetenzbelege an. Die aktive Datei wird mitgenommen, sofern sie ausgewählt wurde.
+
+Format: `format: "sterracode-project"`, `schemaVersion: 1`, `title`, `language`, `activeFile`, `runtime`, `task`, `checklist` und `files`. Jeder Dateieintrag enthält `path`, `content`, `bytes` (UTF-8) und `version` (SHA-256). Das Manifest wird beim Import vollständig geprüft. Grenzen: 50 Dateien, zusammen 2 MiB Quelltext und höchstens 3 MiB JSON. Erlaubt sind die unterstützten Quelltext-Endungen sowie HTML, CSS, SVG, Markdown, Text und JSON. Verknüpfungen, absolute Pfade, Traversal, widersprüchliche Manifestdaten und unter Windows kollidierende Namen werden abgewiesen. Verdeckte Tests werden nicht akzeptiert. Versteckte Dateien/Ordner, `.env`, bekannte Geheimnisdateien, Paket-/Buildordner und private App-Daten sind ausgeschlossen. Selbst ausgewählten Quelltext vor einer Weitergabe auf persönliche Inhalte prüfen.
+
+Der Export prüft erwartete Dateiversionen und den Aufgabenstand; gleichzeitige Änderungen führen zu `409`. App-Schreibvorgänge sind dabei gesperrt, Änderungen durch fremde Programme werden erneut geprüft. Das ist kein atomarer Dateisystem-Snapshot gegenüber externen Programmen. Laufzeitinformationen beschreiben Anforderungen und installieren oder reproduzieren keine vollständige Umgebung. Vollständige App-Sicherungen bleiben die Betriebsfunktionen aus `DOCKER-BETRIEB.md`.
+
+Die API ergänzt:
+
+- `GET /api/projects/templates`: geprüfter Vorlagenkatalog.
+- `POST /api/projects/import`: `operationId` (UUID) und entweder `templateId` oder `package`. Wiederholung derselben ID liefert dieselbe Session; anderer Inhalt ergibt `409 IDEMPOTENCY_CONFLICT`. Unter `project-imports/` bleibt der Zuordnungsbeleg. Ein vor Veröffentlichung unterbrochener Import oder eine danach gelöschte Session liefert `409 IMPORT_INTERRUPTED`; für einen bewussten neuen Import eine neue ID verwenden. Unveröffentlichte Restdateien werden nicht automatisch ausgeführt oder veröffentlicht.
+- `GET /api/workspaces/:sessionId/project-files` und `POST /api/workspaces/:sessionId/project-export`: freigegebene Pfade beziehungsweise Export mit `paths`, `expectedVersions` und `taskVersion` (ohne Aufgabe `null`).
+- `POST /api/workspaces/:sessionId/tasks/:taskId/hints`: `taskVersion` und nächster, einsbasierter `index`; dieselbe Stufe erneut zu öffnen gibt keinen weiteren Hinweis frei.
+- `GET /api/workspaces/:sessionId/journal` und `PUT /api/workspaces/:sessionId/tasks/:taskId/journal`: Journalliste beziehungsweise Speichern mit `taskVersion`, `text` und `expectedVersion` (anfangs `0`). Veraltete Einträge ergeben `409`, auch nach Entfernen des Textes.
+
 ## Tests
 
 ```powershell

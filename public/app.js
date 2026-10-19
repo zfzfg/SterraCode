@@ -22,6 +22,16 @@ import { openPrograms } from "./js/programs.js";
 import { initTracer } from "./js/tracer.js";
 import { initPreview } from "./js/preview.js";
 import { openProfile } from "./js/profile.js";
+import { openProjects, openExport, openJournal } from "./js/projects.js";
+
+for (const [id, open] of [
+  ["projects-btn", openProjects],
+  ["project-export-btn", openExport],
+  ["journal-btn", openJournal],
+])
+  $(id).addEventListener("click", () =>
+    open().catch((e) => toast(e.message, "error")),
+  );
 
 $("profile-btn").addEventListener("click", () =>
   openProfile().catch((e) => toast(e.message, "error")),

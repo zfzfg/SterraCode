@@ -1442,3 +1442,77 @@ dialog::backdrop {
   overflow: auto;
   margin-top: 0.6rem;
 }
+
+.learning-actions,
+.learning-support {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.8rem;
+}
+#sessions-view:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+#sessions-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.learning-support {
+  padding: 0.6rem 0;
+}
+.learning-support textarea {
+  width: 100%;
+  min-height: 65px;
+  resize: vertical;
+}
+.hint-ladder p,
+.error-card p {
+  margin: 0.5rem 0;
+}
+.learning-dialog {
+  width: min(720px, 94vw);
+  max-width: 94vw;
+  max-height: 90vh;
+  overflow: auto;
+  padding: 1.2rem;
+}
+.learning-dialog h2 {
+  margin-bottom: 0.8rem;
+}
+.project-card,
+.error-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.8rem;
+  margin: 0.8rem 0;
+  overflow-wrap: anywhere;
+}
+.project-card p {
+  margin: 0.6rem 0;
+}
+.package-file {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem;
+}
+.learning-dialog fieldset {
+  max-height: 35vh;
+  overflow: auto;
+  margin: 0.8rem 0;
+}
+#terminal-diagnostics {
+  max-height: 150px;
+  overflow: auto;
+  padding: 0 0.8rem;
+}
+.terminal-panel:has(.error-card) {
+  height: min(max(var(--terminal-h), 280px), 45dvh);
+}
+.error-card pre {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+}

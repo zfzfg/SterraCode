@@ -1,8 +1,8 @@
 import { api, workspaceURL } from "./api.js";
 import { state } from "./state.js";
-import { flush, revealLine } from "./editor.js";
+import { flush } from "./editor.js";
 import { node, toast } from "./ui.js";
-import { selectFile } from "./workspace.js";
+import { errorCard } from "./errorCards.js";
 import { openPrograms } from "./programs.js";
 import { showTerminal } from "./terminal.js";
 import { randomUUID } from "./uuid.js";
@@ -50,7 +50,8 @@ export function renderTaskTests(container, task, onComplete) {
   const current = () =>
     panel.isConnected &&
     state.session?.id === sessionId &&
-    state.session.currentTask?.id === task.id;
+    state.session.currentTask?.id === task.id &&
+    (state.session.currentTask.taskVersion || 1) === (task.taskVersion || 1);
   const active = () => ["starting", "running"].includes(run?.status);
   cancel.hidden = true;
   complete.disabled = true;
@@ -161,21 +162,14 @@ export function renderTaskTests(container, task, onComplete) {
           `Argumente: ${JSON.stringify(c.args)}\nErwartet (${valueType(c.expected)}): ${JSON.stringify(c.expected)}${Object.hasOwn(c, "actual") ? `\nErhalten (${valueType(c.actual)}): ${JSON.stringify(c.actual)}` : ""}${c.message ? `\n${c.message}` : ""}${c.output ? `\nProgrammausgabe${c.outputTruncated ? " (gekürzt)" : ""}:\n${c.output}` : ""}`,
         ),
       );
-      if (c.file) {
-        const jump = node("button", "", `${c.file}, Zeile ${c.line} öffnen`);
-        jump.onclick = () =>
-          selectFile(c.file)
-            .then(() => revealLine(c.line))
-            .catch((e) => toast(e.message, "error"));
-        detail.append(jump);
-      }
-      if (!c.passed && c.kind === "return")
+      if (!c.passed)
         detail.append(
-          node(
-            "p",
-            "",
-            "Prüfe Rückgabewert, Datentyp und Randfälle. Ein vergessenes return ergibt null.",
-          ),
+          errorCard({
+            ...c,
+            sessionId,
+            runId: run.testRunId,
+            historical: true,
+          }),
         );
       cases.append(detail);
     }

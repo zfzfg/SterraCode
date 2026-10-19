@@ -2,9 +2,49 @@ import { api } from "./api.js";
 import { state, emit, on } from "./state.js";
 import { $, toast } from "./ui.js";
 import { flush, currentFile, fileLanguage } from "./editor.js";
+import { errorLocation } from "./errorCatalog.js";
+import { errorCard } from "./errorCards.js";
 const sessions = new Map();
 let polling = false;
 let timer;
+let diagnostics;
+async function showDiagnostic(s) {
+  const id = state.session?.id;
+  const key = `${s.processId}:${s.output.length}:${s.reason}:${s.exitCode}`;
+  if (!diagnostics || !s.output || !s.exited || (!s.reason && !s.exitCode)) {
+    diagnostics?.replaceChildren();
+    return;
+  }
+  if (s.diagnosticKey === key) {
+    diagnostics.replaceChildren(...(s.diagnostic ? [s.diagnostic] : []));
+    return;
+  }
+  s.diagnosticKey = key;
+  const output = s.output.slice(s.diagnosticOffset || 0).slice(-65536);
+  let paths = [];
+  try {
+    const tree = await api(`/api/workspaces/${id}/files`);
+    const walk = (items) => {
+      for (const f of items) {
+        if (f.children) walk(f.children);
+        else paths.push(f.path);
+      }
+    };
+    walk(tree);
+  } catch {
+    /* The original diagnostic remains useful without source navigation. */
+  }
+  if (s.diagnosticKey !== key) return;
+  s.diagnostic = errorCard({
+    message: output,
+    reason: s.reason,
+    ...errorLocation(output, paths, id),
+    sessionId: id,
+    runId: s.processId,
+    historical: true,
+  });
+  if (state.session?.id === id) diagnostics.replaceChildren(s.diagnostic);
+}
 export function showTerminal(show = true) {
   $("terminal-panel").hidden = !show;
   $("terminal-toggle").setAttribute("aria-expanded", String(show));
@@ -17,6 +57,7 @@ function entry(id = state.session?.id) {
 }
 function display() {
   const s = entry();
+  showDiagnostic(s);
   $("terminal-output").textContent = s.output;
   $("stop-process-btn").disabled = s.exited;
   const reasons = {
@@ -42,6 +83,8 @@ function display() {
 export function attachProcess(job) {
   const s = entry(job.sessionId);
   if (s.processId !== job.processId) {
+    s.diagnosticOffset = s.output.length;
+    s.diagnosticKey = s.diagnostic = null;
     s.output += `\n${job.actor === "ai" ? "KI" : "Nutzer"} > ${job.command}\n`;
     s.offset = 0;
   }
@@ -150,6 +193,9 @@ export function updateRunState() {
       : "";
 }
 export function initTerminal() {
+  diagnostics = document.createElement("div");
+  diagnostics.id = "terminal-diagnostics";
+  $("terminal-output").after(diagnostics);
   $("terminal-toggle").addEventListener("click", () =>
     showTerminal($("terminal-panel").hidden),
   );
@@ -187,6 +233,8 @@ export function initTerminal() {
   });
   $("clear-terminal-btn").addEventListener("click", () => {
     entry().output = "";
+    entry().diagnosticOffset = 0;
+    entry().diagnosticKey = entry().diagnostic = null;
     display();
   });
   $("stop-process-btn").addEventListener("click", async () => {

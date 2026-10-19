@@ -303,10 +303,10 @@ export async function mutateSession(id, change, expectedRevision) {
     return session;
   });
 }
-export async function createSession({
-  title = "Neue Session",
-  language = "python",
-} = {}) {
+export async function createSession(
+  { title = "Neue Session", language = "python" } = {},
+  seed = {},
+) {
   if (
     typeof title !== "string" ||
     !title.trim() ||
@@ -314,9 +314,9 @@ export async function createSession({
     !LANGUAGES.includes(language)
   )
     throw new AppError("Ungültiger Sessionname oder ungültige Sprache.");
-  const id = randomUUID();
+  const id = seed.id || randomUUID();
   const now = new Date().toISOString();
-  const file = entryFile(language);
+  const file = seed.activeFile || seed.files?.[0]?.path || entryFile(language);
   const question = {
     type: "ask_question",
     questionId: randomUUID(),
@@ -340,17 +340,27 @@ export async function createSession({
     contextVersion: CONTEXT_VERSION,
     contextUsage: null,
     turns: {},
-    currentTask: null,
+    currentTask: seed.task || null,
+    ...(seed.project ? { project: seed.project } : {}),
     learningPlan: null,
     onboardingAsked: true,
   };
   await fs.mkdir(path.join(WORKSPACE_DIR, id), {
-    recursive: true,
     mode: 0o2770,
   });
   if (process.platform !== "win32")
     await fs.chmod(path.join(WORKSPACE_DIR, id), 0o2770);
-  await fs.writeFile(path.join(WORKSPACE_DIR, id, file), "", { mode: 0o660 });
+  for (const source of seed.files || [{ path: file, content: "" }]) {
+    const full = path.join(WORKSPACE_DIR, id, source.path);
+    await fs.mkdir(path.dirname(full), { recursive: true, mode: 0o2770 });
+    await fs.writeFile(full, source.content, { mode: 0o660, flag: "wx" });
+  }
+  if (seed.task)
+    session.messages = [
+      message("event", "", {
+        event: { type: "create_task", task: seed.task, actor: "user" },
+      }),
+    ];
   await writeJSON(sessionFile(id), session);
   return session;
 }

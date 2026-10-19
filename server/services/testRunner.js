@@ -172,6 +172,7 @@ export async function updateTask(s, id, body) {
     delete next.reviewId;
     delete next.completion;
     delete next.lastTestRunId;
+    delete next.hintUsage;
     session.currentTask = next;
   });
 }
@@ -511,7 +512,10 @@ export async function completeTask(s, body, language, actor = "user") {
   const result = await serial(`workspace:${s}`, async () => {
     const original = (await loadSession(s)).currentTask;
     checkTask(original, body.taskId, body.taskVersion);
-    let evidence = { kind: "manual" };
+    let evidence = {
+      kind: "manual",
+      assessmentSource: actor === "user" ? "self_assessment" : "tutor",
+    };
     if (
       body.assistance !== undefined &&
       !["independent", "assisted", "not_recorded"].includes(body.assistance)
@@ -541,15 +545,21 @@ export async function completeTask(s, body, language, actor = "user") {
     }
     const taskStartedAt = original.reviewStartedAt || original.createdAt;
     const changes = taskStartedAt ? await listChanges(s) : [];
-    evidence.assistance = changes.some((c) => c.createdAt >= taskStartedAt)
-      ? "assisted"
-      : actor === "ai"
-        ? "not_recorded"
-        : body.assistance || "not_recorded";
+    evidence.hintsUsed = original.hintUsage?.count || 0;
+    evidence.assistance =
+      evidence.hintsUsed > 0 ||
+      changes.some((c) => c.createdAt >= taskStartedAt)
+        ? "assisted"
+        : actor === "ai"
+          ? "not_recorded"
+          : body.assistance || "not_recorded";
     return mutateSession(s, async (session) => {
       const t = session.currentTask;
       checkTask(t, body.taskId, body.taskVersion);
       if (digest(t.testSuite) !== digest(original.testSuite)) conflict();
+      // Hint reveals share this lock; a completion must see committed help.
+      evidence.hintsUsed = t.hintUsage?.count || 0;
+      if (evidence.hintsUsed) evidence.assistance = "assisted";
       const settings = await getSettings();
       const key = `${s}:${t.id}`;
       const previous = session.taskCompletions?.[t.id];

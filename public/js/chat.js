@@ -1,5 +1,6 @@
 import { inspectDiff, showDiffHistory } from "./diffInspector.js";
 import { renderTaskTests } from "./taskTests.js";
+import { renderLearningSupport } from "./learningSupport.js";
 import { api, streamChat, workspaceURL, sessionURL } from "./api.js";
 import { state, emit, on } from "./state.js";
 import { $, node, markdown, toast, formDialog } from "./ui.js";
@@ -384,12 +385,16 @@ function renderTask() {
     node("strong", "", task.title),
     node("p", "", task.description),
   );
-  if (task.hints?.length) {
-    const details = node("details");
-    details.append(node("summary", "", "Hinweise"));
-    for (const hint of task.hints) details.append(node("p", "", hint));
-    container.append(details);
+  if (state.session.project?.checklist?.length) {
+    const checklist = node("details");
+    checklist.append(node("summary", "", "Projektprüfliste"));
+    const list = node("ul");
+    for (const item of state.session.project.checklist)
+      list.append(node("li", "", item));
+    checklist.append(list);
+    container.append(checklist);
   }
+  renderLearningSupport(container, task, renderTask);
   if (task.testSuite) {
     renderTaskTests(container, task, renderChat);
     return;

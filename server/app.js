@@ -20,6 +20,7 @@ import { createServerRouter } from "./routes/server.js";
 import programs from "./routes/programs.js";
 import provider from "./routes/provider.js";
 import profile from "./routes/profile.js";
+import projects from "./routes/projects.js";
 
 export function createApp({
   config = loadConfig(),
@@ -95,6 +96,7 @@ export function createApp({
   app.use("/api/programs", programs);
   app.use("/api/provider", provider);
   app.use("/api/profile", profile);
+  app.use("/api/projects", projects);
   app.use("/api/chat", chat);
   app.use("/api/models", models);
   app.use("/api/sessions", sessions);

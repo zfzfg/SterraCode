@@ -350,7 +350,9 @@ export async function updateProfile({ language, completionEvent }) {
             ? "assisted"
             : completionEvent.evidence?.kind === "test_run"
               ? "test_run"
-              : "tutor",
+              : completionEvent.evidence?.assessmentSource === "self_assessment"
+                ? "self_assessment"
+                : "tutor",
         outcome: "passed",
         assistance,
       },

@@ -3,6 +3,7 @@ import { state, on, emit } from "./state.js";
 import { flush, currentFile, revealLine } from "./editor.js";
 import { selectFile } from "./workspace.js";
 import { node, toast } from "./ui.js";
+import { errorCard } from "./errorCards.js";
 
 export function initPreview() {
   const panel = node("section", "preview-panel");
@@ -93,7 +94,29 @@ export function initPreview() {
       return summary();
     const row = node("div", `preview-message preview-level-${data.level}`);
     row.append(node("span", "", `${data.level}: ${data.text}`));
-    if (data.file && run.manifest.some((f) => f.path === data.file)) {
+    const knownFile =
+      data.file && run.manifest.some((f) => f.path === data.file);
+    if (data.level === "error")
+      row.append(
+        errorCard({
+          message: data.text,
+          file: knownFile ? data.file : null,
+          line: data.line || 1,
+          sessionId: session,
+          runId: run.previewRunId,
+          historical: true,
+          onNavigate: () => {
+            if (innerWidth < 960) {
+              document
+                .getElementById("editor-panel")
+                .classList.add("preview-editing");
+              switchView.textContent = "Vorschau anzeigen";
+              emit("layout");
+            }
+          },
+        }),
+      );
+    if (data.level !== "error" && knownFile) {
       const source = node(
         "button",
         "text-button",

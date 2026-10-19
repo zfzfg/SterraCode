@@ -13,6 +13,12 @@ import {
 } from "../services/testRunner.js";
 import express from "express";
 import {
+  revealHint,
+  listJournal,
+  saveJournal,
+} from "../services/learningSupport.js";
+import { exportProject, projectFiles } from "../services/projects.js";
+import {
   startPreview,
   getPreview,
   previewDocument,
@@ -38,6 +44,36 @@ import {
   getChange,
 } from "../services/workspace.js";
 const router = express.Router();
+router.get(
+  "/:sessionId/project-files",
+  route(async (req, res) => res.json(await projectFiles(req.params.sessionId))),
+);
+router.post(
+  "/:sessionId/project-export",
+  route(async (req, res) =>
+    res.json(await exportProject(req.params.sessionId, req.body)),
+  ),
+);
+router.get(
+  "/:sessionId/journal",
+  route(async (req, res) => res.json(await listJournal(req.params.sessionId))),
+);
+router.put(
+  "/:sessionId/tasks/:taskId/journal",
+  route(async (req, res) =>
+    res.json(
+      await saveJournal(req.params.sessionId, req.params.taskId, req.body),
+    ),
+  ),
+);
+router.post(
+  "/:sessionId/tasks/:taskId/hints",
+  route(async (req, res) =>
+    res.json(
+      await revealHint(req.params.sessionId, req.params.taskId, req.body),
+    ),
+  ),
+);
 router.get(
   "/:sessionId/proposals",
   route(async (req, res) =>
