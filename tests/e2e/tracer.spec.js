@@ -1,5 +1,78 @@
 import { test, expect } from "@playwright/test";
 
+test("Python-Werkzeug erscheint nur für eine geöffnete Python-Datei und erklärt den Einstieg", async ({
+  page,
+  request,
+}) => {
+  const session = await (
+    await request.post("/api/sessions", {
+      data: { title: "Sprachabhängige Werkzeuge", language: "javascript" },
+    })
+  ).json();
+  const base = `/api/workspaces/${session.id}`;
+  for (const [path, content] of [
+    ["index.html", "<h1>Hallo</h1>"],
+    ["helper.py", "x = 1\nprint(x)\n"],
+  ]) {
+    expect(
+      (await request.post(`${base}/files`, { data: { path, content } })).ok(),
+    ).toBeTruthy();
+  }
+  await request.patch(`/api/sessions/${session.id}`, {
+    data: { openFiles: ["main.js", "index.html", "helper.py"] },
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: session.title, exact: true })
+    .first()
+    .click();
+  await expect(page.locator("#trace-tools")).toBeHidden();
+  await page
+    .locator("#file-tabs")
+    .getByRole("button", { name: "index.html", exact: true })
+    .click();
+  await expect(page.locator("#trace-tools")).toBeHidden();
+  await page
+    .locator("#file-tabs")
+    .getByRole("button", { name: "helper.py", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Python Schritt für Schritt", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Python Schritt für Schritt",
+  });
+  await expect(dialog).toContainText("wie sich Variablen verändern");
+  await expect(dialog).toContainText("einmal ausgeführt");
+  await expect(dialog).toContainText("Datei: helper.py");
+  await expect(
+    dialog.getByRole("button", { name: "Schritt vor", exact: true }),
+  ).toBeHidden();
+  await expect(
+    dialog.getByRole("textbox", { name: "Programmeingabe", exact: false }),
+  ).toBeHidden();
+  await dialog
+    .getByText("Zusätzliche Dateien und Eingaben", { exact: true })
+    .click();
+  await expect(
+    dialog.getByRole("textbox", { name: "Programmeingabe", exact: false }),
+  ).toBeVisible();
+  await page.screenshot({ path: "test-results/python-step-introduction.png" });
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#trace-open")).toBeFocused();
+  await page
+    .locator("#file-tabs")
+    .getByRole("button", { name: "main.js", exact: true })
+    .click();
+  await expect(page.locator("#trace-tools")).toBeHidden();
+  await page.reload();
+  await page
+    .getByRole("button", { name: session.title, exact: true })
+    .first()
+    .click();
+  await expect(page.locator("#trace-tools")).toBeHidden();
+});
+
 test("Python-Ablauf offline wiedergeben, Vorhersage, Quellstand und Neuladen", async ({
   page,
   request,
@@ -36,20 +109,24 @@ test("Python-Ablauf offline wiedergeben, Vorhersage, Quellstand und Neuladen", a
     .click();
   await expect(page.locator("#file-path")).toHaveText(session.activeFile);
   await page
-    .getByRole("button", { name: "Ablauf ansehen", exact: true })
+    .getByRole("button", { name: "Python Schritt für Schritt", exact: true })
     .click();
-  const dialog = page.getByRole("dialog", { name: "Python-Ablauf ansehen" });
-  await dialog.getByRole("button", { name: "Neuen Lauf aufzeichnen" }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Python Schritt für Schritt",
+  });
+  await dialog
+    .getByRole("button", { name: "Python-Datei aufzeichnen" })
+    .click();
   await expect(dialog.getByRole("status")).toContainText(
     "Unbehandelter Programmfehler",
   );
-  await expect(dialog.getByText("Als Nächstes", { exact: false })).toHaveCount(
-    0,
+  await expect(dialog.locator(".trace-caption")).not.toContainText(
+    "Als Nächstes",
   ); // initial call event
   await dialog
     .getByRole("button", { name: "Schritt vor", exact: true })
     .click();
-  await expect(dialog).toContainText("Als Nächstes");
+  await expect(dialog.locator(".trace-caption")).toContainText("Als Nächstes");
   await dialog.getByRole("button", { name: "Zum Fehler" }).click();
   await expect(dialog).toContainText("Ausnahme: IndexError");
   await expect(dialog).toContainText("Aufrufstack");
@@ -83,7 +160,7 @@ test("Python-Ablauf offline wiedergeben, Vorhersage, Quellstand und Neuladen", a
     .first()
     .click();
   await page
-    .getByRole("button", { name: "Ablauf ansehen", exact: true })
+    .getByRole("button", { name: "Python Schritt für Schritt", exact: true })
     .click();
   await expect(dialog.getByRole("status")).toContainText("Original-Snapshot");
   await dialog
@@ -142,8 +219,12 @@ test("Sessionwechsel findet laufenden Trace wieder und fehlende Python-Freigabe 
     .first()
     .click();
   await page.locator("#trace-open").click();
-  const dialog = page.getByRole("dialog", { name: "Python-Ablauf ansehen" });
-  await dialog.getByRole("button", { name: "Neuen Lauf aufzeichnen" }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Python Schritt für Schritt",
+  });
+  await dialog
+    .getByRole("button", { name: "Python-Datei aufzeichnen" })
+    .click();
   await expect(dialog.getByRole("status")).toContainText("Aufzeichnung läuft");
   await dialog.getByRole("button", { name: "Schließen", exact: true }).click();
   await page
@@ -170,7 +251,7 @@ test("Sessionwechsel findet laufenden Trace wieder und fehlende Python-Freigabe 
       },
     });
     await dialog
-      .getByRole("button", { name: "Neuen Lauf aufzeichnen" })
+      .getByRole("button", { name: "Python-Datei aufzeichnen" })
       .click();
     await expect(dialog.getByRole("status")).toContainText("deaktiviert");
   } finally {

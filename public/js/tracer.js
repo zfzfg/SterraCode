@@ -1,5 +1,5 @@
 import { api, workspaceURL } from "./api.js";
-import { state, on } from "./state.js";
+import { state, on, emit } from "./state.js";
 import { flush, currentFile } from "./editor.js";
 import { node, toast } from "./ui.js";
 import { randomUUID } from "./uuid.js";
@@ -7,7 +7,7 @@ import { randomUUID } from "./uuid.js";
 export function initTracer() {
   const dialog = node("dialog", "trace-dialog");
   dialog.setAttribute("aria-labelledby", "trace-title");
-  const title = node("h2", "", "Python-Ablauf ansehen");
+  const title = node("h2", "", "Python Schritt für Schritt");
   title.id = "trace-title";
   const close = node("button", "", "Schließen");
   close.type = "button";
@@ -16,19 +16,36 @@ export function initTracer() {
   const help = node(
     "p",
     "",
-    "Aufgezeichneter Python-Hauptthread. Rückwärts zeigt gespeicherte Zustände. Dateiänderungen und andere Seiteneffekte werden dadurch nicht rückgängig gemacht. Native Bibliotheken, Threads und asynchrone Abläufe werden nicht vollständig beobachtet.",
+    "Sieh, welche Codezeile als Nächstes ausgeführt wird und wie sich Variablen verändern. Dafür wird deine Python-Datei einmal ausgeführt und der Lauf aufgezeichnet. Danach kannst du ihn in deinem Tempo durchgehen – auch rückwärts.",
+  );
+  const limitations = node("details");
+  limitations.append(
+    node("summary", "", "Was wird aufgezeichnet?"),
+    node(
+      "p",
+      "",
+      "Die Ansicht zeigt den aufgezeichneten Python-Hauptthread. Rückwärts zeigt frühere Zustände, macht aber keine Dateiänderungen rückgängig. Native Bibliotheken, Threads und asynchrone Abläufe werden nicht vollständig beobachtet.",
+    ),
   );
   const setup = node("fieldset");
-  setup.append(node("legend", "", "Quellstand und Eingabe"));
+  setup.append(node("legend", "", "Python-Datei aufzeichnen"));
+  const entryLabel = node("p");
+  const advanced = node("details");
+  advanced.append(node("summary", "", "Zusätzliche Dateien und Eingaben"));
   const files = node("div", "trace-files");
-  const stdinLabel = node("label", "", "Vorab festgelegte stdin-Eingabe");
+  const stdinLabel = node(
+    "label",
+    "",
+    "Programmeingabe (falls dein Code input() verwendet)",
+  );
   const stdin = node("textarea");
   stdin.rows = 2;
   stdin.maxLength = 65536;
   stdinLabel.append(stdin);
-  const start = node("button", "", "Neuen Lauf aufzeichnen");
+  const start = node("button", "", "Python-Datei aufzeichnen");
   start.type = "button";
-  setup.append(files, stdinLabel, start);
+  advanced.append(files, stdinLabel);
+  setup.append(entryLabel, advanced, start);
   const historyLabel = node("label", "", "Gespeicherte Läufe");
   const history = node("select");
   historyLabel.append(history);
@@ -49,7 +66,7 @@ export function initTracer() {
   timeline.value = "1";
   timeline.setAttribute("aria-label", "Trace-Schritt");
   controls.append(previous, play, next, errorButton, timeline);
-  const caption = node("p");
+  const caption = node("p", "trace-caption");
   caption.setAttribute("aria-live", "polite");
   const prediction = node("fieldset");
   prediction.append(
@@ -64,27 +81,30 @@ export function initTracer() {
   const result = node("p");
   prediction.append(variable, guess, result);
   const columns = node("div", "trace-columns");
+  const playback = node("section");
+  playback.hidden = true;
   const output = node("pre", "trace-output");
   output.setAttribute("aria-label", "Programmausgabe");
   const source = node("div", "trace-source");
   source.setAttribute("aria-label", "Unveränderlicher Quellstand");
   const data = node("div", "trace-data");
   columns.append(source, data);
+  playback.append(controls, caption, prediction, columns);
+  const programOutput = node("section");
+  programOutput.hidden = true;
+  programOutput.append(node("h3", "", "Programmausgabe"), output);
   dialog.append(
     title,
     close,
     help,
+    limitations,
     setup,
     historyLabel,
     discuss,
     stop,
     status,
-    controls,
-    caption,
-    prediction,
-    columns,
-    node("h3", "", "Programmausgabe"),
-    output,
+    playback,
+    programOutput,
   );
   document.body.append(dialog);
   let session,
@@ -128,13 +148,34 @@ export function initTracer() {
   close.onclick = () => dialog.close();
   dialog.addEventListener("close", () => {
     dispose();
-    document.getElementById("trace-open").focus();
+    document
+      .getElementById(
+        document.getElementById("trace-tools").hidden
+          ? "sidebar-toggle"
+          : "trace-open",
+      )
+      .focus();
   });
+  function updateAccess() {
+    const tools = document.getElementById("trace-tools");
+    const hidden = !state.session || !currentFile()?.endsWith(".py");
+    if (tools.hidden !== hidden) {
+      tools.hidden = hidden;
+      emit("layout");
+    }
+  }
   on("session-opened", () => {
+    updateAccess();
     if (dialog.open) dialog.close();
   });
+  on("file-active", updateAccess);
+  updateAccess();
   function show() {
     const event = events[index];
+    stop.hidden = !run;
+    discuss.hidden = !run;
+    playback.hidden = !event;
+    programOutput.hidden = !output.textContent;
     previous.disabled = !event || index === 0;
     next.disabled = !event || index >= events.length - 1;
     play.disabled = !event;
@@ -378,6 +419,7 @@ export function initTracer() {
         `${created.snapshot.entry} · ${new Date(created.createdAt).toLocaleTimeString("de-DE")}`,
       );
       option.value = created.traceRunId;
+      historyLabel.hidden = false;
       history.prepend(option);
       history.value = created.traceRunId;
       await select(created.traceRunId);
@@ -392,12 +434,20 @@ export function initTracer() {
   };
   document.getElementById("trace-open").onclick = async () => {
     if (!state.session) return toast("Bitte zuerst eine Session öffnen.");
+    if (!currentFile()?.endsWith(".py")) return;
     session = state.session.id;
     base = workspaceURL(session);
     run = null;
     events = [];
     index = 0;
     intent = null;
+    output.textContent = "";
+    result.textContent = "";
+    entryLabel.textContent = `Datei: ${currentFile()}`;
+    advanced.open = false;
+    limitations.open = false;
+    historyLabel.hidden = true;
+    show();
     dialog.showModal();
     const token = ++generation;
     status.textContent = "Quelldateien und gespeicherte Läufe laden …";
@@ -440,6 +490,7 @@ export function initTracer() {
         option.value = r.traceRunId;
         history.append(option);
       }
+      historyLabel.hidden = !runs.length;
       if (runs.length) {
         history.value = runs[0].traceRunId;
         await select(runs[0].traceRunId);

@@ -217,7 +217,12 @@
             </div>
             <div id="editor-container"></div>
             <div id="runtime-hint" class="runtime-hint"></div>
-            <button id="trace-open" type="button">Ablauf ansehen</button>
+            <div id="trace-tools" class="trace-tools" hidden>
+              <button id="trace-open" type="button" aria-haspopup="dialog">
+                Python Schritt für Schritt
+              </button>
+              <span>Codezeilen und Variablen nachvollziehen</span>
+            </div>
             <button
               id="preview-open"
               type="button"
