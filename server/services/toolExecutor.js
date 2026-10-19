@@ -1,3 +1,9 @@
+import {
+  taskAssessment,
+  startTaskTests,
+  getTaskTestResults,
+  completeTask,
+} from "./testRunner.js";
 import { randomUUID } from "node:crypto";
 import { AppError, getSettings } from "./storage.js";
 import { mutateSession, validatePlan, setLearningPlan } from "./sessions.js";
@@ -8,7 +14,7 @@ import {
   stopProcess,
   waitProcess,
 } from "./processes.js";
-import { getProfile, updateProfile } from "./profileManager.js";
+import { getProfile } from "./profileManager.js";
 import { getTrace, traceEvents } from "./traces.js";
 const text = (v, name) => {
   if (typeof v !== "string" || !v.trim() || v.length > 100000)
@@ -47,6 +53,16 @@ export async function executeTool(name, args, context) {
           )),
         };
       }
+      case "run_task_tests":
+        return {
+          type: name,
+          ...(await startTaskTests(sessionId, args.taskId, args, "ai")),
+        };
+      case "read_task_test_results":
+        return {
+          type: name,
+          ...(await getTaskTestResults(sessionId, args.testRunId)),
+        };
       case "list_files":
         return { type: name, files: await listWorkspace(sessionId) };
       case "read_file":
@@ -125,6 +141,7 @@ export async function executeTool(name, args, context) {
       case "create_task": {
         const task = {
           id: randomUUID(),
+          ...taskAssessment(args),
           title: text(args.title, "title"),
           description: text(args.description, "description"),
           difficulty: args.difficulty,
@@ -139,24 +156,13 @@ export async function executeTool(name, args, context) {
         return { type: name, task };
       }
       case "mark_task_done": {
-        await mutateSession(sessionId, (s) => {
-          if (!s.currentTask) throw new AppError("Keine aktive Aufgabe.");
-          s.currentTask.done = true;
-          s.currentTask.feedback = args.feedback;
-        });
-        const settings = await getSettings();
-        if (
-          settings.crossChatProfileEnabled &&
-          settings.autoUpdateProfileOnTaskDone
-        )
-          await updateProfile({
-            language: context.language,
-            newConcepts: [],
-            strengths: [],
-            weaknesses: [],
-            taskSucceeded: true,
-          });
-        return { type: name, feedback: args.feedback || "" };
+        const result = await completeTask(sessionId, args, context.language);
+        return {
+          type: name,
+          taskId: result.currentTask.id,
+          completion: result.currentTask.completion,
+          feedback: args.feedback || "",
+        };
       }
       case "add_explanation":
         return {

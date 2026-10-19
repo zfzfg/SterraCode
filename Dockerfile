@@ -13,6 +13,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY server ./server
 COPY runner/tracer ./runner/tracer
+COPY runner/grading ./runner/grading
 COPY public ./public
 COPY docker ./docker
 USER 10001:10001

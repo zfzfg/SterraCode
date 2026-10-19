@@ -75,6 +75,30 @@ afterEach(async () => {
 });
 
 describe("App-Runner-Anbindung", () => {
+  it("sendet einen expliziten Testauftrag samt Snapshot ohne lokalen Ersatzstart", async () => {
+    const sessionId = randomUUID(),
+      id = randomUUID();
+    const test = {
+      suite: { entry: { path: "main.py", function: "reverse_string" } },
+      files: [
+        { path: "main.py", content: "def reverse_string(s): return s[::-1]" },
+      ],
+    };
+    handler = async (req, res, record) =>
+      send(res, 200, { processId: record.body.id, exited: false });
+    expect(
+      (await processes.startProcess({ sessionId, test, idempotencyId: id }))
+        .processId,
+    ).toBe(id);
+    expect(requests[0].body).toMatchObject({
+      id,
+      sessionId,
+      type: "test",
+      language: "python",
+      test,
+    });
+    expect(local.startProcess).not.toHaveBeenCalled();
+  });
   it("liest Dienstauthentifizierung ausschließlich aus der Secret-Datei", async () => {
     expect(await runnerRequest("/v1/status")).toEqual({ protocolVersion: 1 });
     expect(requests[0].auth).toBe(`Bearer ${secret}`);

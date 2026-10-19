@@ -1,3 +1,5 @@
+import { runTests } from "../../runner/grading/adapter.js";
+import { validateTest } from "../../runner/grading/schema.js";
 import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import fs from "node:fs/promises";
@@ -82,12 +84,14 @@ export async function getRuntimes(probeFn = probe) {
           const enabled = settings.allowedLanguages.includes(language);
           return {
             language,
-            modes: language === "python" ? ["file", "trace"] : ["file"],
+            modes: language === "python" ? ["file", "trace", "test"] : ["file"],
+            testAdapterVersion: language === "python" ? 1 : null,
             traceAdapterVersion: language === "python" ? 1 : null,
             installed: true,
             enabled,
             available: enabled,
             command,
+            version: result.output?.trim() || "",
             prefix: command === "py" ? ["-3"] : [],
             sdkMajor:
               language === "csharp"
@@ -130,6 +134,15 @@ export async function killTree(child) {
   }
 }
 function append(job, chunk) {
+  if (job.testOutputRemaining !== undefined) {
+    const accepted = chunk.subarray(0, job.testOutputRemaining);
+    job.testOutputRemaining -= accepted.length;
+    if (chunk.length > accepted.length) job.testOutputTruncated = true;
+    job.output += job.decoder.write(accepted);
+    job.bytes = Buffer.byteLength(job.output);
+    return;
+  }
+
   const remaining = MAX_OUTPUT - job.bytes;
   if (remaining <= 0) return;
   const data = chunk.subarray(0, remaining);
@@ -287,11 +300,19 @@ export async function startProcess({
   file,
   language,
   actor = "user",
+  test,
   trace,
   idempotencyId,
 }) {
   const root = await getWorkspacePath(sessionId);
   const settings = await getSettings();
+  if (test) {
+    test = validateTest(test, (m) => {
+      throw new AppError(m);
+    });
+    file = test.suite.entry.path;
+    language = "python";
+  }
   if (trace) {
     trace = validateTrace(trace, (message) => {
       throw new AppError(message);
@@ -306,6 +327,7 @@ export async function startProcess({
     file,
     language,
     actor,
+    test,
     trace,
   });
   if (idempotencyId && jobs.has(idempotencyId)) {
@@ -345,7 +367,10 @@ export async function startProcess({
   )
     throw new AppError("Ein gültiger Befehl ist erforderlich.");
   await assertSessionWritable(sessionId);
-  if (trace && [...jobs.values()].filter((j) => !j.exited).length >= 4)
+  if (
+    (trace || test) &&
+    [...jobs.values()].filter((j) => !j.exited).length >= 4
+  )
     throw new AppError(
       "Die lokale Ausführung ist ausgelastet.",
       429,
@@ -371,27 +396,36 @@ export async function startProcess({
   jobs.set(job.id, job);
   job.done = (async () => {
     try {
-      job.exitCode = trace
-        ? await runTrace(
+      job.exitCode = test
+        ? await runTests(
             job,
-            trace,
+            test,
             runtime,
             path.join(DATA_DIR, "trace-processes"),
             (cmd, args, cwd, timeout) =>
               launch(job, cmd, args, { cwd, timeout }),
           )
-        : file
-          ? await runCode(job, root, file, language, runtime, settings)
-          : await launch(job, command, [], {
-              cwd: root,
-              shell: true,
-              timeout: settings.executionTimeout,
-            });
+        : trace
+          ? await runTrace(
+              job,
+              trace,
+              runtime,
+              path.join(DATA_DIR, "trace-processes"),
+              (cmd, args, cwd, timeout) =>
+                launch(job, cmd, args, { cwd, timeout }),
+            )
+          : file
+            ? await runCode(job, root, file, language, runtime, settings)
+            : await launch(job, command, [], {
+                cwd: root,
+                shell: true,
+                timeout: settings.executionTimeout,
+              });
     } catch (error) {
       append(job, Buffer.from(`\n${error.message}\n`));
       job.exitCode = -1;
     } finally {
-      if (trace)
+      if (trace || test)
         await fs
           .rm(path.join(DATA_DIR, "trace-processes", job.id), {
             recursive: true,
@@ -423,6 +457,7 @@ function snapshot(job, offset = 0) {
     exited: job.exited,
     exitCode: job.exitCode,
     reason: job.reason,
+    ...(job.testResults === undefined ? {} : { testResults: job.testResults }),
     ...(job.traceData === undefined ? {} : { traceData: job.traceData }),
   };
 }

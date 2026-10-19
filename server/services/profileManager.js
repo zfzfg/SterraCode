@@ -32,6 +32,7 @@ export async function updateProfile({
   strengths = [],
   weaknesses = [],
   taskSucceeded = true,
+  completionEvent,
 }) {
   return serial("profile", async () => {
     const profile = await getProfile();
@@ -50,6 +51,16 @@ export async function updateProfile({
     }
 
     const lang = profile.languages[language];
+    if (completionEvent) {
+      profile.completionEvents ||= {};
+      const previous = profile.completionEvents[completionEvent.eventId];
+      profile.completionEvents[completionEvent.eventId] = completionEvent;
+      if (previous) {
+        if (JSON.stringify(previous) !== JSON.stringify(completionEvent))
+          await writeJSON(PROFILE_PATH, profile);
+        return profile;
+      }
+    }
     lang.knownConcepts = [...new Set([...lang.knownConcepts, ...newConcepts])];
     lang.strengths = [...new Set([...lang.strengths, ...strengths])];
     lang.weaknesses = [...new Set([...lang.weaknesses, ...weaknesses])];

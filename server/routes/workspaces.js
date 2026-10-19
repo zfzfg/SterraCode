@@ -1,3 +1,11 @@
+import {
+  startTaskTests,
+  getTaskTestResults,
+  cancelTaskTests,
+  completeTask,
+  updateTask,
+  listTaskTestRuns,
+} from "../services/testRunner.js";
 import express from "express";
 import { route } from "./helpers.js";
 import {
@@ -18,6 +26,55 @@ import {
   listChanges,
 } from "../services/workspace.js";
 const router = express.Router();
+router.post(
+  "/:sessionId/tasks/:taskId/test-runs",
+  route(async (req, res) =>
+    res
+      .status(202)
+      .json(
+        await startTaskTests(req.params.sessionId, req.params.taskId, req.body),
+      ),
+  ),
+);
+router.get(
+  "/:sessionId/tasks/:taskId/test-runs",
+  route(async (req, res) =>
+    res.json(await listTaskTestRuns(req.params.sessionId, req.params.taskId)),
+  ),
+);
+router.patch(
+  "/:sessionId/tasks/:taskId",
+  route(async (req, res) =>
+    res.json(
+      await updateTask(req.params.sessionId, req.params.taskId, req.body),
+    ),
+  ),
+);
+router.post(
+  "/:sessionId/tasks/:taskId/complete",
+  route(async (req, res) =>
+    res.json(
+      await completeTask(req.params.sessionId, {
+        ...req.body,
+        taskId: req.params.taskId,
+      }),
+    ),
+  ),
+);
+router.get(
+  "/:sessionId/test-runs/:testRunId",
+  route(async (req, res) =>
+    res.json(
+      await getTaskTestResults(req.params.sessionId, req.params.testRunId),
+    ),
+  ),
+);
+router.post(
+  "/:sessionId/test-runs/:testRunId/cancel",
+  route(async (req, res) =>
+    res.json(await cancelTaskTests(req.params.sessionId, req.params.testRunId)),
+  ),
+);
 router.post(
   "/:sessionId/traces",
   route(async (req, res) =>

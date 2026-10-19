@@ -371,3 +371,9 @@ window.addEventListener("beforeunload", (event) => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) flush().catch((e) => toast(e.message, "error"));
 });
+
+export function revealLine(line) {
+  editor?.setPosition({ lineNumber: line, column: 1 });
+  editor?.revealLineInCenter(line);
+  editor?.focus();
+}

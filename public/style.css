@@ -1239,3 +1239,36 @@ dialog::backdrop {
     height: 280px;
   }
 }
+
+.task-test-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.task-tests {
+  min-width: 0;
+}
+.task-panel:has(.task-tests) {
+  max-height: 45vh;
+}
+.task-tests pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+}
+.task-tests select {
+  max-width: 100%;
+  display: block;
+}
+.task-tests details {
+  margin: 8px 0;
+}
+.task-tests summary {
+  cursor: pointer;
+}
+.task-tests details label {
+  display: block;
+  overflow-wrap: anywhere;
+}

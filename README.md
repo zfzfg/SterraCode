@@ -90,6 +90,27 @@ Lokale Ausführung und Docker-Runner verwenden denselben festen Wrapper unter `r
 
 Unter `traces/<Session-UUID>/` werden Metadaten und Operationsbelege getrennt von Quellsnapshot und Ereignis-/Ausgabeartefakten gespeichert. Ereignisse werden während des Laufs laufend gesichert. Abgebrochene oder beschädigte Aufzeichnungen bleiben ausdrücklich unvollständig. Fertige Artefakte verfallen nach 24 Stunden; beim Starten/Listen werden höchstens die neuesten 20 fertigen Artefakte erhalten, zusätzlich läuft stündlich eine Bereinigung. Aktive Vorgänge bleiben erhalten. Bei Ablauf verbleiben Status `expired`, Operationsbeleg und Dateimanifest. Beim Löschen einer Session werden Traces mitgesichert und aus den aktiven Daten entfernt. Der Tracer ist ein Diagnosewerkzeug und erweitert die Ausführungsisolation nicht.
 
+### Aufgaben mit Python-Funktionstests
+
+Aufgaben können über `create_task` eine sichtbare `testSuite` erhalten. Die Aufgabenkarte bietet **Lösung prüfen**, erwartete und erhaltene Werte samt Typ, Fehlernavigation, Abbruch, gespeicherte Läufe und **Aufgabe abschließen**. Das funktioniert ohne Modellverbindung. Unter „Python-Quelldateien im Snapshot auswählen“ werden die Einstiegsdatei und benötigte lokale Module ausgewählt. Die Oberfläche speichert offene Änderungen vor dem Start. Auf kleinen Fenstern liegt die Aufgabenkarte im Tab **KI-Tutor**. „Testergebnis im Chat vorbereiten“ übergibt die Lauf-ID freiwillig an den Tutor.
+
+Die Suite verwendet `schemaVersion: 1`, `version: 1`, `language: "python"`, `entry: {path: "main.py", function: "reverse_string"}`, `comparison: {kind: "strict-json"}` und `cases`. Jeder Fall enthält beispielsweise `{id: "word", name: "Wort", args: ["hello"], expected: "olleh", visibility: "public", required: true}`. Ein zweiter Randfall verwendet `args: [""]` und `expected: ""`. `conceptIds` und `assessmentMode: "tests"` sind optionale Aufgabenfelder. Alte Aufgaben ohne Suite behalten einen als `manual` gekennzeichneten Abschluss; historische Tutorabschlüsse erhalten keinen nachträglichen Testnachweis.
+
+Jeder Fall läuft in einem frischen Python-Prozess mit eigener Kopie desselben Quellsnapshots. Die ganze Suite reserviert einen Prozess-Slot. Grenzen: 20 Fälle, 256 KiB Suite/JSON-Daten, 20 Python-Quellen mit zusammen 1 MiB, zwei Sekunden je Fall und 30 Sekunden je Suite, jeweils 64 KiB Rückgabe und Programmausgabe pro Fall. Ausgabe wird gekürzt und weiter abgeleitet. Ein fester Wrapper außerhalb des Workspace schreibt Rückgabedaten getrennt von stdout; erwartete Werte vergleicht ausschließlich der Server. Strings und Reihenfolgen werden exakt verglichen, Boolesche Werte von Zahlen unterschieden. Unterstützt sind null, Boolesche Werte, Strings, endliche Zahlen im sicheren JSON-Bereich, Listen und Objekte mit Stringschlüsseln (Tiefe höchstens 20). Mengen, Tupel, Zyklen und nicht endliche Zahlen erzeugen einen Serialisierungsfehler. Interaktives `input()` und verdeckte Tests gehören nicht zu diesem Format.
+
+Die API unter `/api/workspaces/:sessionId` bietet:
+
+- `POST /tasks/:taskId/test-runs`: `operationId` (UUID), `taskVersion` und `expectedVersions` (Pfad → SHA-256); antwortet mit `202` und `testRunId`. Derselbe Auftrag startet auch nach einem Neustart keinen zweiten Lauf.
+- `GET /tasks/:taskId/test-runs`, `GET /test-runs/:testRunId` und `POST /test-runs/:testRunId/cancel`: Historie, freigegebene Ergebnisse und idempotenter Abbruch. `current: false` kennzeichnet veraltete Belege.
+- `PATCH /tasks/:taskId`: Änderungen mit der bisherigen `taskVersion`; Aufgaben-/Suiteversion werden erhöht, der vorherige Stand in `taskHistory` archiviert.
+- `POST /tasks/:taskId/complete`: `taskVersion`, bei Testaufgaben zusätzlich `testRunId`, optional `feedback`. Abschluss nur bei bestandenen erforderlichen Fällen und unverändertem Aufgaben-, Suite- und Quellstand; Konflikte liefern `409`.
+
+`run_task_tests` verwendet denselben Dienst und respektiert die Sperre für KI-Terminalausführung; `read_task_test_results` liest vorhandene Ergebnisse ohne Neustart. Kontextkomprimierung erhält Lauf-IDs und Wiederaufnahmehinweise. Abschlüsse erzeugen einen dauerhaften Session-/Aufgabenbeleg. Profilaktualisierungen respektieren das bestehende Opt-in, zählen dieselbe Aufgabe auch nach Versionswechseln nur einmal und werden nach einem unterbrochenen Profilcommit innerhalb einer Minute nachgeholt. Technische Fehler und bloße Versuche erhöhen die Erfolgsstatistik nicht.
+
+Unter `test-runs/<Session-UUID>/` bleiben Quellsnapshot, Definition und begrenzte Ergebnisse gespeichert. Fertige Artefakte verfallen nach 24 Stunden; höchstens die neuesten 20 fertigen Läufe behalten ihre großen Daten. Bereinigung erfolgt beim Starten/Listen und jede Minute. Operationsbeleg, Versionen, Zusammenfassung und Abschlussnachweis bleiben erhalten, abgelaufene Artefakte werden als `expired` angezeigt. Aktive Läufe werden nicht gelöscht. Session-Löschung sichert die Testläufe mit und entfernt sie aus den aktiven Daten.
+
+Lokal und im Docker-Runner heißt der Modus `test`, Fähigkeit `testAdapterVersion: 1`; App und Runner gemeinsam aktualisieren. Die vorhandenen Ausführungsrechte bleiben bestehen: Das Harness liefert Lernfeedback und ist kein manipulationssicheres Prüfungssystem.
+
 ## Tests
 
 ```powershell
@@ -99,6 +120,7 @@ npm run test:e2e
 npm run format:check
 npm run test:context:live
 node tests/docker/trace-smoke.mjs
+node tests/docker/grading-smoke.mjs
 ```
 
 Vitest prüft Migration, Pfadgrenzen, Schreibkonflikte, Rückgängig, Chat-Streaming mit simuliertem LM Studio und Prozesse. Installierte Sprachlaufzeiten erhalten echte Ausführungstests; fehlende Laufzeiten werden ausdrücklich übersprungen und zusätzlich über den Fehlerpfad geprüft.

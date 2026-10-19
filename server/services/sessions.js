@@ -414,6 +414,7 @@ export async function removeSession(id) {
         [contextDir, "context"],
         [path.join(DATA_DIR, "changes", id), "changes"],
         [path.join(DATA_DIR, "traces", id), "traces"],
+        [path.join(DATA_DIR, "test-runs", id), "test-runs"],
       ]) {
         try {
           await copySafe(origin, path.join(backup, target));
@@ -432,6 +433,9 @@ export async function removeSession(id) {
     await fs.rm(path.join(DATA_DIR, "changes", id), {
       recursive: true,
       force: true,
+    });
+    await removeSafe(path.join(DATA_DIR, "test-runs", id)).catch((e) => {
+      if (e.code !== "ENOENT") throw e;
     });
     await fs.rm(contextDir, { recursive: true, force: true });
     await fs.rm(path.join(DATA_DIR, "traces", id), {

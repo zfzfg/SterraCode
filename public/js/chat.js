@@ -1,3 +1,4 @@
+import { renderTaskTests } from "./taskTests.js";
 import { api, streamChat, workspaceURL, sessionURL } from "./api.js";
 import { state, emit, on } from "./state.js";
 import { $, node, markdown, toast, formDialog } from "./ui.js";
@@ -367,6 +368,10 @@ function renderTask() {
     details.append(node("summary", "", "Hinweise"));
     for (const hint of task.hints) details.append(node("p", "", hint));
     container.append(details);
+  }
+  if (task.testSuite) {
+    renderTaskTests(container, task, renderChat);
+    return;
   }
   const done = button(
     task.done ? "Aufgabe abgeschlossen" : "Aufgabe prüfen lassen",

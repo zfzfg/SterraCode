@@ -79,6 +79,8 @@ prüfen und sämtliche Sprach-Smokes auf der freizugebenden Architektur ausführ
 
 ## Prüfungen
 
+Python meldet neben `file` und `trace` den Modus `test` mit `testAdapterVersion: 1`. Der Auftrag `{type: "test", test: {suite, files}}` wird vor Reservierung validiert und belegt genau einen Session-/Runner-Slot. `runner/grading/adapter.js` startet pro Fall einen frischen Prozess über denselben Launcher mit höchstens zwei Sekunden, für die Suite insgesamt 30 Sekunden. Die festen Harness-Rückgabedaten erscheinen als begrenzte `testResults`, getrennt von stdout; Erfolg bewertet erst die App. Snapshot und Fallverzeichnisse werden nach Abschluss über die bestehende sichere Verzeichnisbereinigung entfernt. Abbruch und Runner-Neustart werden nicht automatisch wiederholt. Der Container-Nachweis `node tests/docker/grading-smoke.mjs` verwendet ein eigenes Compose-Projekt mit Wegwerf-Volumes.
+
 `npm test` führt die Runner-Vertrags-, Client- und Paketmanifesttests aus.
 `npm run test:docker` installiert und entfernt die optionalen Laufzeiten wirklich.
 Zusätzlich prüft `tests/docker/runner-live.mjs` im Runner echte Zeitlimits,

@@ -1,3 +1,4 @@
+import { getTaskTestResults } from "../testRunner.js";
 import { eventOf } from "./history.js";
 import { readProcess } from "../processes.js";
 import { getTrace } from "../traces.js";
@@ -20,7 +21,18 @@ export async function workflowState(session) {
     };
     let key;
     let record;
-    if (e.traceRunId) {
+    if (e.testRunId) {
+      key = `test:${e.testRunId}`;
+      record = {
+        ...common,
+        testRunId: e.testRunId,
+        taskId: e.taskId,
+        taskVersion: e.taskVersion,
+        status: e.status,
+        assessment: e.assessment,
+        recovery: { tool: "read_task_test_results", testRunId: e.testRunId },
+      };
+    } else if (e.traceRunId) {
       key = `trace:${e.traceRunId}`;
       record = {
         ...common,
@@ -73,6 +85,19 @@ export async function workflowState(session) {
   }
   return Promise.all(
     [...records.values()].map(async (record) => {
+      if (record.testRunId) {
+        try {
+          const r = await getTaskTestResults(session.id, record.testRunId);
+          return {
+            ...record,
+            status: r.status,
+            assessment: r.assessment,
+            current: r.current,
+          };
+        } catch {
+          return { ...record, status: "unavailable" };
+        }
+      }
       if (record.traceRunId) {
         try {
           const trace = await getTrace(session.id, record.traceRunId);

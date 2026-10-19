@@ -32,6 +32,12 @@ export async function getRuntimes(probeFn) {
   });
 }
 export async function startProcess(options) {
+  if (options.test)
+    options = {
+      ...options,
+      file: options.test.suite.entry.path,
+      language: "python",
+    };
   if (options.trace)
     options = { ...options, file: options.trace.entry, language: "python" };
   if (!runnerEnabled()) return local.startProcess(options);
@@ -54,11 +60,18 @@ export async function startProcess(options) {
   const payload = {
     id,
     sessionId: options.sessionId,
-    type: options.trace ? "trace" : options.file ? "file" : "command",
+    type: options.test
+      ? "test"
+      : options.trace
+        ? "trace"
+        : options.file
+          ? "file"
+          : "command",
     actor: options.actor || "user",
     ...(options.file
       ? { file: options.file, language: options.language }
       : { command: options.command }),
+    ...(options.test ? { test: options.test } : {}),
     executionTimeout: settings.executionTimeout,
     compilationTimeout: settings.compilationTimeout,
     ...(options.trace

@@ -2,7 +2,7 @@
 
 ## Fünf Kernideen mit Lernzielen, MVPs, Architektur und Abnahmekriterien
 
-**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Idee 1 ist inzwischen als beschriebener Python-MVP implementiert (Status und Nachweise in Abschnitt 2). Die übrigen Ideen sowie die ausdrücklich späteren Ausbaustufen bleiben vorgeschlagene Erweiterungen.
+**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Ideen 1 und 2 sind als beschriebene Python-MVPs implementiert (Status und Nachweise in Abschnitt 2 und 3). Ideen 3 bis 5 sowie die ausdrücklich späteren Ausbaustufen bleiben vorgeschlagene Erweiterungen.
 
 SterraCode soll Lernenden helfen, drei Fragen selbstständig zu beantworten: **Was macht mein Code? Woran erkenne ich, ob er die Aufgabe erfüllt? Was sollte ich als Nächstes üben?** Die fünf Kernideen bilden dafür einen zusammenhängenden Lernablauf: Code verstehen, Lösung prüfen, Änderungen nachvollziehen, Ergebnisse sehen und Wissen festigen.
 
@@ -212,6 +212,8 @@ Nachweise: `tests/traces.test.js`, `tests/e2e/tracer.spec.js` und `tests/docker/
 
 ## 3. Idee 2: Integriertes Test- und Grading-Harness für Aufgaben
 
+**Umgesetzt am 19. Oktober 2026:** Sichtbare Python-Funktionstests sind durch Aufgabe, lokale/Runner-Ausführung, Offline-Oberfläche, versionierte Ergebnisbelege und einmaligen Abschluss verbunden. API, Datenformat, Grenzen und Aufbewahrung stehen in [README.md](README.md#aufgaben-mit-python-funktionstests). Nachweise: `tests/grading.test.js`, `tests/e2e/grading.spec.js`, Runner-Vertragstests und `tests/docker/grading-smoke.mjs`. Die echte Linux-Docker-Abnahme auf dem dokumentierten Testrechner ist erfolgreich; siehe `docker/ABNAHME.md`. Die als „Nach dem MVP“ und „später“ bezeichneten Funktionen bleiben Ausblick.
+
 ### 3.1 Lernziel und Grenzen der Bewertung
 
 Aufgaben sollen überprüfbare Anforderungen enthalten. Statt eines bloßen „Sieht richtig aus“ erhält die Person beispielsweise: **„3 von 4 Prüfungen bestanden; beim leeren String liefert deine Funktion `None`.“**
@@ -298,7 +300,7 @@ flowchart TD
     I --> J["Aufgabe abschließen und Verständnis reflektieren"]
 ```
 
-Ein geplantes `server/services/testRunner.js` koordiniert Suite, Snapshot und Vergleich. Feste Harness-Adapter führen ausschließlich die definierte Funktion mit strukturierten Argumenten aus. Nutzerausgaben werden getrennt vom Ergebnisprotokoll erfasst; ein gedrucktes JSON mit `passed: true` ist kein Erfolgsnachweis.
+`server/services/testRunner.js` koordiniert Suite, Snapshot und Vergleich. Feste Harness-Adapter führen ausschließlich die definierte Funktion mit strukturierten Argumenten aus. Nutzerausgaben werden getrennt vom Ergebnisprotokoll erfasst; ein gedrucktes JSON mit `passed: true` ist kein Erfolgsnachweis.
 
 Pro Testfall startet ein frischer Prozess, damit globale Variablen und Importzustände nicht unbemerkt zwischen Fällen weiterwirken. Ein Suite-Auftrag reserviert dabei **einen** Session-Slot und führt Fälle nacheinander aus. Das darf weder parallele Starts außerhalb des Prozessdienstes noch verschachtelte Reservierungen desselben Slots erzeugen.
 
@@ -336,15 +338,15 @@ Der serverseitige Ergebnisnachweis enthält mindestens:
 
 Die konkreten Fallausgaben liegen als begrenztes Artefakt vor. Der Tutor und die Aufgabenkarte referenzieren denselben `testRunId`. Ein Browser oder LLM darf den Erfolgsstatus nicht selbst setzen.
 
-### 3.5 Vorgeschlagene API und Werkzeuge
+### 3.5 API und Werkzeuge
 
 | Schnittstelle                                                 | Zweck                                                                                                    |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `POST /api/workspaces/:sessionId/tasks/:taskId/test-runs`     | Mit `operationId`, `taskVersion` und erwarteten Quellversionen eine Suite starten; `202` mit `testRunId` |
 | `GET /api/workspaces/:sessionId/test-runs/:testRunId`         | Status und begrenzte, freigegebene Ergebnisansicht lesen                                                 |
 | `POST /api/workspaces/:sessionId/test-runs/:testRunId/cancel` | Suite einschließlich aktivem Kindprozess beenden                                                         |
-| Geplantes Tool `run_task_tests`                               | Über denselben Dienst eine freigegebene Suite starten                                                    |
-| Geplantes Tool `read_task_test_results`                       | Vorliegende Ergebnisse nachlesen; keine erneute Ausführung                                               |
+| Tool `run_task_tests`                                         | Über denselben Dienst eine freigegebene Suite starten                                                    |
+| Tool `read_task_test_results`                                 | Vorliegende Ergebnisse nachlesen; keine erneute Ausführung                                               |
 
 Die bisherigen Aufgabenwerkzeuge bleiben erhalten. `mark_task_done` bekommt eine eindeutige Bindung an Aufgabe und Version. Bei testbasierten Aufgaben benötigt der Abschluss einen passenden serverseitigen Erfolgsnachweis.
 
@@ -397,12 +399,12 @@ Tests bleiben ohne Modellverbindung nutzbar. Eine zusätzliche Tutorfrage ist fr
 
 ### 3.10 Abnahme
 
-- [ ] Eine korrekte Lösung besteht; typische Randwertfehler werden mit konkretem Feedback erkannt.
-- [ ] stdout-Inhalte, ungültiges Ergebnis-JSON und zusätzliche Ausgaben erzeugen keinen falschen Erfolg.
-- [ ] Aufgabenänderung oder Codeänderung entwertet die Abschlussberechtigung eines alten Laufs.
-- [ ] Wiederholter Abschluss, HTTP-Retry und Neustart erzeugen keine doppelten Profilereignisse.
-- [ ] Abbruch beendet die gesamte Suite; Infrastrukturfehler verändern den Lernstand nicht.
-- [ ] Der MVP funktioniert lokal und im Docker-Runner mit jeweils geprüfter Adapterunterstützung.
+- [x] Eine korrekte Lösung besteht; typische Randwertfehler werden mit konkretem Feedback erkannt.
+- [x] stdout-Inhalte, ungültiges Ergebnis-JSON und zusätzliche Ausgaben erzeugen keinen falschen Erfolg.
+- [x] Aufgabenänderung oder Codeänderung entwertet die Abschlussberechtigung eines alten Laufs.
+- [x] Wiederholter Abschluss, HTTP-Retry und Neustart erzeugen keine doppelten Profilereignisse.
+- [x] Abbruch beendet die gesamte Suite; Infrastrukturfehler verändern den Lernstand nicht.
+- [x] Der MVP funktioniert lokal und im Docker-Runner mit jeweils geprüfter Adapterunterstützung.
 
 ---
 
