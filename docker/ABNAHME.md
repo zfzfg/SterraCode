@@ -121,3 +121,10 @@ Neue Imageidentitäten:
 - Konsistente Sicherung vor dem Update unter `/home/zfzfg/sterracode-test/backups/pre-inline-openai-key-20261019`. App neu gebaut und ersetzt; Runner und persistente Volumes erhalten. Vorheriges App-Image unter `rollback-inline-key-20261019` verfügbar.
 - Live-Prüfung vom Windows-Rechner: ausgelieferte app.js enthält das neue Schlüsselfeld; `/api/health` erfolgreich. App und Runner healthy. Neues App-Image: `sha256:7428858fc0ff1946fb5a31b5e971b94a0684ba35e846d36906388336bddf88e8`. Keine kostenpflichtige OpenAI-Anfrage ausgeführt.
 
+## Update vom 19.10.2026: Terminal im Dateibereich
+
+- Commit `1730228fe3cd90711d3ba75d15aceb1cbeeafc0b` auf main veröffentlicht und in der bestehenden Ubuntu-Installation bereitgestellt. Terminal ausschließlich unter dem Editor; der KI-Tutor behält seine volle Höhe. Der untere Editorgriff öffnet, vergrößert und schließt das Terminal per Ziehen, Pfeiltasten und Enter/Leertaste. Der bestehende Terminalknopf funktioniert weiterhin und wechselt auf schmalen Fenstern direkt zum Editor.
+- **19/19 App-Browsertests** erfolgreich, einschließlich neuer Drag-/Tastaturprüfungen bei 1366 und 800 px. Unveränderte Layout-/Theme-Baselines bestanden; neue Terminal-Screenshots beider Fenstergrößen visuell geprüft. Geänderte Dateien formatiert und git diff --check erfolgreich.
+- Konsistente Sicherung vor dem Update: `/home/zfzfg/sterracode-test/backups/pre-editor-terminal-20261019`. Vorheriges App-Image unter `rollback-editor-terminal-20261019` erhalten. Nur App-Image neu gebaut; vorhandener Runner und Volumes weiterverwendet.
+- App und Runner nach Bereitstellung healthy. Vom Windows-Rechner `/api/health` erfolgreich und ausgelieferte Seite mit neuem Editorbereich geprüft. Neues App-Image: `sha256:b41ab03ad528dc8ab1ad2f36715c9fea466d9c59f569aa5e544d0a7f43dccd26`. Kein erneuter vollständiger Laufzeit-/Restore-Smoke für diese Layoutänderung.
+
