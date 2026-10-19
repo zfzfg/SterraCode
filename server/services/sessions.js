@@ -413,6 +413,7 @@ export async function removeSession(id) {
       for (const [origin, target] of [
         [contextDir, "context"],
         [path.join(DATA_DIR, "changes", id), "changes"],
+        [path.join(DATA_DIR, "proposals", id), "proposals"],
         [path.join(DATA_DIR, "traces", id), "traces"],
         [path.join(DATA_DIR, "test-runs", id), "test-runs"],
       ]) {
@@ -430,6 +431,10 @@ export async function removeSession(id) {
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
+    await fs.rm(path.join(DATA_DIR, "proposals", id), {
+      recursive: true,
+      force: true,
+    });
     await fs.rm(path.join(DATA_DIR, "changes", id), {
       recursive: true,
       force: true,

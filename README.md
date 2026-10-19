@@ -36,13 +36,45 @@ In LM Studio einen erreichbaren Server starten und ein Modell mit Tool-Unterstü
 - **Neue Session:** Sprache auswählen; die einmalige Lernplanfrage kann auch offline beantwortet werden.
 - **Dateien:** Dateien und Ordner erstellen, öffnen, umbenennen und löschen. Änderungen werden automatisch gespeichert. `Strg+S` speichert sofort; Datei- und Sessionwechsel warten auf das Speichern.
 - **Speicherkonflikte:** Der Speicherstatus öffnet einen Vergleich. Lokale Änderungen können als separate Datei gesichert werden. Neuere Serverstände werden nicht still überschrieben. Ungespeicherter Text wird zusätzlich im lokalen Browserspeicher gesichert.
-- **KI-Änderungen:** Direkt in der jeweiligen Chatkarte rückgängig machen. Das Rückgängig-Symbol neben dem Speicherstatus öffnet die unabhängige Änderungshistorie, auch nach dem Entfernen von Chatnachrichten.
+- **KI-Änderungen:** Unter **Einstellungen → KI-Dateiänderungen** zwischen **Auto Accept – direkt einfügen** (Standard) und **Review – vor Übernahme prüfen** wählen. Chatkarten und das Rückgängig-Symbol neben dem Speicherstatus öffnen historische Diffs beziehungsweise gespeicherte Vorschläge. Die unabhängige Historie bleibt auch nach dem Entfernen von Chatnachrichten erreichbar.
 - **Ausführen:** `Strg+Enter` führt die aktive Datei im Workspace aus. Das Terminal unterstützt Befehle, Programmeingaben und das Stoppen vollständiger Prozessbäume. Beim Löschen einer Session werden deren Prozesse beendet.
 - **Ablauf ansehen:** Zeichnet die aktuelle Python-Datei nach dem Speichern auf, optional mit ausdrücklich ausgewählten lokalen Hilfsdateien und vorab festgelegter stdin-Eingabe. Zeitleiste, Wiedergabe, Vorwärts-/Rückwärtsschritte, Fehlersprung, Aufrufstack und Variablen zeigen den unveränderlichen Originalstand. Eine freiwillige Vorhersage funktioniert ohne KI; „Trace im Chat vorbereiten“ legt eine Frage zum gespeicherten Lauf in das Eingabefeld.
 - **Web-Vorschau:** Eine HTML-Datei öffnen und **Web-Vorschau** wählen. Lokale Stylesheets und klassische JavaScript-Dateien, DOM-Ereignisse, Canvas und eingebettetes SVG funktionieren ohne KI. Erfolgreiches Autosave aktualisiert nach kurzer Verzögerung; automatische Aktualisierung lässt sich pausieren. **Neu laden** erzeugt einen neuen Snapshot und leert das Log. Fehlerverweise öffnen die Quelle; **Im Chat vorbereiten** legt ausschließlich einen Entwurf an.
 - **Lernplan:** Themen selbst oder mit dem KI-Tutor bearbeiten und abhaken. Nach Abschluss erscheint einmalig eine Anschlussfrage.
 - **Layout:** Bereiche per Maus oder fokussierter Trennlinie mit Pfeiltasten anpassen. Unter 1280 px wird die Seitenleiste überlagert; unter 960 px sind Editor und Chat umschaltbare Ansichten.
 - **Kontext:** `/usage` zeigt die Modellnutzung und Messqualität; das funktioniert auch offline mit gekennzeichneten Schätzwerten. `/compact` oder `/compress` komprimiert ältere Gesprächsabschnitte ohne Tutorantwort. Der vollständige Chat und alle Werkzeugergebnisse bleiben gespeichert. Der Editor-Menüpunkt zur Zusammenfassung verwendet dieselbe Aktion.
+
+## Diff-Inspector und KI-Vorschläge
+
+**Auto Accept** schreibt KI-Dateiänderungen unmittelbar; **Review** speichert zunächst nur einen Vorschlag. Beide Modi verwenden dieselben Versionsprüfungen und dieselbe Rücknahmehistorie. Die Einstellung gilt für folgende `write_file`-Aufrufe; bereits offene Vorschläge bleiben zur Entscheidung erhalten. Sie betrifft Dateiwerkzeuge, nicht die separat freigegebene Ausführung von Terminalbefehlen.
+
+**Änderung ansehen** öffnet einen schreibgeschützten Monaco-Vergleich: nebeneinander in breiten Fenstern, zusammengeführt unter 900 px. „Nächster Unterschied“, die Hunk-Auswahl und alle Entscheidungen sind per Tastatur erreichbar; Escape schließt die Ansicht und gibt den Fokus zurück. Eigene Vergleichsmodelle werden beim Schließen freigegeben. Die vier Themes werden übernommen.
+
+Im Review lassen sich alle oder einzelne **Teiländerungen** auswählen und gemeinsam übernehmen oder der Vorschlag ablehnen. Vor Übernahme speichert die Oberfläche offene Editoränderungen. Stimmen Datei und ursprüngliche Basis anschließend nicht mehr überein, folgt ein Konflikt statt eines automatischen Merges. Umbenannte, gelöschte oder zurückgenommene Dateien überschreibt der Vorschlag ebenfalls nicht. Nach Teilübernahme sind die übrigen Hunks geschlossen; weitere Änderungen benötigen einen neuen Vorschlag auf dem aktuellen Stand. Eine Übernahme erzeugt genau einen KI-Historieneintrag mit sicherem Undo.
+
+Der Server berechnet feste Hunks aus den gespeicherten Texten. Änderungen mit weniger als sechs unveränderten Zwischenzeilen bilden einen gemeinsamen Block. Neu eingeführte Bezeichner, die in anderen Blöcken vorkommen, erzeugen konservative Auswahlabhängigkeiten. Diese Prüfung ersetzt keine semantische Codeanalyse; insbesondere nach Teilübernahme selbst prüfen und vorhandene Tests ausführen. Begründungen sind Erklärungen des Tutors, keine Korrektheitsbeweise. Der Client übermittelt ausschließlich Hunk-IDs, keine Patchtexte oder Zeilenpositionen.
+
+Neue Änderungseinträge (Schema 2) bewahren Vorher- und Nachher-Inhalt, ursprünglichen Pfad, KI-Herkunft, Übernahmeaktion und gegebenenfalls Vorschlags-ID. Spätere Dateiänderungen verändern den historischen Vergleich nicht. Alte Einträge bleiben lesbar: Nur wenn der aktuelle Dateiinhalt die gespeicherte Nachher-Version besitzt, wird er als Nachher-Inhalt verwendet; andernfalls erscheint ein Hinweis auf die fehlende historische Grundlage.
+
+Vorschläge (Schema 1) liegen unter `proposals/<Session-UUID>/`, Änderungen unter `changes/<Session-UUID>/` im Datenverzeichnis. Beide bleiben bis zur Sessionlöschung erhalten und werden mit deren Sicherung aufbewahrt. Vorschläge enthalten unveränderliche Basis- und Zieltexte, Hunks, Statusereignisse und einen Wiederaufnahmebeleg für die Übernahme. Neuladen oder ein neuer Serverprozess startet keinen zusätzlichen Schreibvorgang. Nach einem unterbrochenen Commit wird ein vorhandener Historieneintrag anhand seiner ID und Version zugeordnet. Abgelehnte und bereits entschiedene Vorschläge werden nicht erneut angewendet. Die Listenansicht liefert bis zu 100 Vorschläge, offene zuerst; einzelne IDs bleiben direkt abrufbar.
+
+Grenzen: UTF-8-Text, höchstens 2 MiB pro Datei. Bei mehr als 1.000.000 Vergleichszellen oder insgesamt 10.000 Zeilen wird die Änderung als ein vollständiger Hunk angeboten. Monaco erhält maximal zwei Sekunden für die Diff-Berechnung. Mehrdatei-Transaktionen, semantische Refactorings und automatische Dreiwege-Merges sind nicht enthalten.
+
+API unter `/api/workspaces/:sessionId` (bestehender Authentifizierungs-, Origin- und Pfadschutz gilt):
+
+| Methode und Pfad                     | Bedeutung                                                                   |
+| ------------------------------------ | --------------------------------------------------------------------------- |
+| `GET /changes`                       | Historienübersicht                                                          |
+| `GET /changes/:changeId`             | Historische Snapshots, `diffAvailable` und `historicalPath`                 |
+| `POST /changes/:changeId/undo`       | Versionsgeprüfte, wiederholbare Rücknahme                                   |
+| `GET /proposals`                     | Offene und zuletzt bearbeitete Vorschläge                                   |
+| `GET /proposals/:proposalId`         | Basis, Zieltext, Hunks, Abhängigkeiten und aktueller Status                 |
+| `POST /proposals/:proposalId/apply`  | `{operationId, expectedVersion, selectedHunkIds?}`; ohne Auswahl alle Hunks |
+| `POST /proposals/:proposalId/reject` | Vorschlag dauerhaft ablehnen; identische Wiederholung bleibt wirkungsgleich |
+
+`operationId` bei Übernahme ist eine UUID. Derselbe Vorgang mit identischer Auswahl schreibt höchstens einmal; eine anders verwendete Kennung oder eine veraltete Basis ergibt `409`. Eine explizite Auswahl muss gültig, eindeutig, nicht leer und abhängigkeitsvollständig sein. Eine nur teilweise übernommene Änderung meldet `partially_applied`; weitere Zustände sind `pending_review`, `applied`, `rejected`, `stale` und `undone`. Ein unveränderter Vorschlag ohne Hunks kann abgelehnt werden.
+
+Der Tutor erhält im Review ausdrücklich `status: "proposed"`, `proposalId`, Pfad und Basisversion statt einer behaupteten Dateischreibung. Sein Turn kann danach enden; es bleibt keine Verbindung für die Entscheidung offen. Aktuelle Vorschlagszustände werden auch nach Kontextkomprimierung aus den dauerhaften Datensätzen gelesen. Tests beziehen sich stets auf die tatsächlich gespeicherten Dateien. Ein neuer Tutor-Turn sieht die inzwischen getroffene Entscheidung; eine automatische Fortsetzung wird nicht gestartet.
 
 ## Kontextkomprimierung
 

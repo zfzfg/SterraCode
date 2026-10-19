@@ -364,6 +364,7 @@ export async function runTeacher({
                 });
                 emit("tool", { tool: call.function.name, turnId });
                 value = await executeTool(call.function.name, args, {
+                  toolCallId: call.id,
                   ...context,
                   signal: executionSignal,
                 });

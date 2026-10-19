@@ -1,3 +1,4 @@
+import { inspectDiff, showDiffHistory } from "./diffInspector.js";
 import { renderTaskTests } from "./taskTests.js";
 import { api, streamChat, workspaceURL, sessionURL } from "./api.js";
 import { state, emit, on } from "./state.js";
@@ -100,7 +101,16 @@ function eventCard(event, sessionId) {
       `event-card${event.type === "tool_error" ? " error" : ""}`,
     ),
     heading = node("div", "event-heading");
-  heading.append(createIcon(info[0]), node("span", "", event.title || info[1]));
+  heading.append(
+    createIcon(info[0]),
+    node(
+      "span",
+      "",
+      event.status === "proposed"
+        ? "Dateiänderung vorgeschlagen"
+        : event.title || info[1],
+    ),
+  );
   card.append(heading);
   if (event.path) card.append(node("p", "", event.path));
   if (event.reason) card.append(node("p", "muted", event.reason));
@@ -155,6 +165,17 @@ function eventCard(event, sessionId) {
     card.append(node("p", "", event.goal));
   if (event.type === "mark_task_done" && event.feedback)
     card.append(node("p", "", event.feedback));
+  if (event.type === "write_file" && (event.changeId || event.proposalId)) {
+    card.append(
+      button("Änderung ansehen", "file", () =>
+        inspectDiff(
+          sessionId,
+          event.proposalId || event.changeId,
+          Boolean(event.proposalId),
+        ),
+      ),
+    );
+  }
   if (event.type === "write_file" && event.changeId) {
     const b = button(
       event.undone ? "Rückgängig gemacht" : "Rückgängig",
@@ -549,39 +570,8 @@ export async function sendMessage(
     await loadSessions().catch((e) => toast(e.message, "error"));
   }
 }
-export async function showChanges() {
-  if (!state.session) throw new Error("Bitte zuerst eine Session auswählen.");
-  const id = state.session.id,
-    changes = (await api(`${workspaceURL(id)}/changes`)).filter(
-      (c) => c.status !== "undone",
-    );
-  if (!changes.length) {
-    toast("Keine offenen KI-Dateiänderungen vorhanden.");
-    return;
-  }
-  const result = await formDialog({
-    title: "KI-Dateiänderungen",
-    description:
-      "Die Änderungshistorie bleibt auch nach dem Bearbeiten oder Löschen von Chatnachrichten erhalten. Neuere Dateistände werden durch Versionsprüfungen geschützt.",
-    fields: [
-      {
-        name: "changeId",
-        label: "Änderung",
-        type: "select",
-        options: changes.map((c) => ({
-          value: c.changeId,
-          label: `${c.path} · ${c.reason || "KI-Änderung"}`,
-        })),
-      },
-    ],
-    submit: "Rückgängig machen",
-  });
-  if (result)
-    await undo(
-      changes.find((c) => c.changeId === result.changeId),
-      id,
-    );
-}
+export const showChanges = showDiffHistory;
+window.addEventListener("diff-decided", () => renderChat());
 async function editMessage(message) {
   await flush();
   const result = await formDialog({

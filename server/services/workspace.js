@@ -146,68 +146,92 @@ export async function writeFile(
   input,
   content,
   expectedVersion,
-  { actor = "user", reason = "", turnId = null } = {},
+  options = {},
+) {
+  await getWorkspacePath(sessionId);
+  return serial(`workspace:${sessionId}`, () =>
+    writeFileUnlocked(sessionId, input, content, expectedVersion, options),
+  );
+}
+// Internal commit path; caller must hold the workspace lock exactly once.
+export async function writeFileUnlocked(
+  sessionId,
+  input,
+  content,
+  expectedVersion,
+  options = {},
 ) {
   if (
     typeof content !== "string" ||
     Buffer.byteLength(content) > 2 * 1024 * 1024
   )
     throw new AppError("Ungültiger oder zu großer Dateiinhalt.", 413);
+  const {
+    actor = "user",
+    reason = "",
+    turnId = null,
+    proposalId = null,
+    changeId = randomUUID(),
+  } = options;
   const root = await getWorkspacePath(sessionId);
-  return serial(`workspace:${sessionId}`, async () => {
-    await assertSessionWritable(sessionId);
-    const relative = normalizePath(input);
-    return withSafeEntry(
-      root,
-      relative,
-      async (full) => {
-        const before = await existing(full);
-        if (expectedVersion === undefined || expectedVersion !== before.version)
-          throw new AppError(
-            "Datei inzwischen verändert. Bitte vergleichen oder neu laden; deine Änderungen bleiben im Editor.",
-            409,
-            "CONFLICT",
-          );
-        const version = hash(content);
-        let change = null;
-        if (actor === "ai") {
-          change = {
-            id: randomUUID(),
-            sessionId,
-            path: relative,
-            before,
-            afterVersion: version,
-            reason,
-            turnId,
-            status: "pending",
-            createdAt: new Date().toISOString(),
-          };
-          await writeJSON(
-            path.join(DATA_DIR, "changes", sessionId, `${change.id}.json`),
-            change,
-          );
-        }
-        await atomicText(full, content);
-        if (change) {
-          change.status = "applied";
-          await writeJSON(
-            path.join(DATA_DIR, "changes", sessionId, `${change.id}.json`),
-            change,
-          );
-        }
-        return {
-          type: "write_file",
+  await assertSessionWritable(sessionId);
+  const relative = normalizePath(input);
+  return withSafeEntry(
+    root,
+    relative,
+    async (full) => {
+      const before = await existing(full);
+      if (expectedVersion === undefined || expectedVersion !== before.version)
+        throw new AppError(
+          "Datei inzwischen verändert. Bitte vergleichen oder neu laden; deine Änderungen bleiben im Editor.",
+          409,
+          "CONFLICT",
+        );
+      const version = hash(content);
+      let change = null;
+      if (actor === "ai") {
+        change = {
+          id: changeId,
+          schemaVersion: 2,
+          origin: "ai",
+          acceptedBy: proposalId ? "user" : "direct",
+          proposalId,
+          originalPath: relative,
+          after: { exists: true, content, version },
+          sessionId,
           path: relative,
-          content,
-          version,
-          changeId: change?.id,
+          before,
+          afterVersion: version,
           reason,
-          status: "applied",
+          turnId,
+          status: "pending",
+          createdAt: new Date().toISOString(),
         };
-      },
-      { parents: true },
-    );
-  });
+        await writeJSON(
+          path.join(DATA_DIR, "changes", sessionId, `${change.id}.json`),
+          change,
+        );
+      }
+      await atomicText(full, content);
+      if (change) {
+        change.status = "applied";
+        await writeJSON(
+          path.join(DATA_DIR, "changes", sessionId, `${change.id}.json`),
+          change,
+        );
+      }
+      return {
+        type: "write_file",
+        path: relative,
+        content,
+        version,
+        changeId: change?.id,
+        reason,
+        status: "applied",
+      };
+    },
+    { parents: true },
+  );
 }
 export async function undoChange(sessionId, changeId) {
   validateSessionId(changeId);
@@ -264,6 +288,29 @@ export async function undoChange(sessionId, changeId) {
       };
     });
   });
+}
+export async function getChange(sessionId, changeId) {
+  validateSessionId(changeId);
+  await getWorkspacePath(sessionId);
+  const record = await readJSON(
+    path.join(DATA_DIR, "changes", sessionId, `${changeId}.json`),
+  );
+  let after = record.after;
+  if (!after) {
+    try {
+      const current = await readFile(sessionId, record.path);
+      if (current.version === record.afterVersion) after = current;
+    } catch (error) {
+      if (error.code !== "ENOENT" && ![404, 413, 415].includes(error.status))
+        throw error;
+    }
+  }
+  return {
+    ...record,
+    after,
+    diffAvailable: Boolean(after),
+    historicalPath: record.originalPath || record.path,
+  };
 }
 export async function listChanges(sessionId) {
   await getWorkspacePath(sessionId);

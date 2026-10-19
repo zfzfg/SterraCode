@@ -398,6 +398,17 @@ async function openSettings() {
       value: s.allowAITerminalCommands,
     },
     {
+      name: "reviewAIChanges",
+      label: "KI-Dateiänderungen",
+      type: "select",
+      value: String(Boolean(s.reviewAIChanges)),
+      options: [
+        { value: "false", label: "Auto Accept – direkt einfügen" },
+        { value: "true", label: "Review – vor Übernahme prüfen" },
+      ],
+      help: "Auto Accept ist der Standard. Diff und Rücknahme bleiben in beiden Modi verfügbar.",
+    },
+    {
       name: "streaming",
       label: "Antworten während der Erstellung anzeigen",
       type: "checkbox",
@@ -585,6 +596,7 @@ async function openSettings() {
       const updates = {
         ...values,
         activeModel: values.activeModel || null,
+        reviewAIChanges: values.reviewAIChanges === "true",
         allowedLanguages: languageOptions
           .filter((l) => values[`enabled-${l.value}`])
           .map((l) => l.value),

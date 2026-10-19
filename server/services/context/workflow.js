@@ -1,12 +1,18 @@
+import { listProposals } from "../proposals.js";
 import { getTaskTestResults } from "../testRunner.js";
 import { eventOf } from "./history.js";
 import { readProcess } from "../processes.js";
 import { getTrace } from "../traces.js";
 
 const unresolved = (record) =>
-  ["starting", "running", "open", "unavailable", "unknown"].includes(
-    record.status,
-  );
+  [
+    "pending_review",
+    "starting",
+    "running",
+    "open",
+    "unavailable",
+    "unknown",
+  ].includes(record.status);
 
 // Kept independently of model-generated prose. Updates replace older status.
 export async function workflowState(session) {
@@ -82,6 +88,16 @@ export async function workflowState(session) {
       records.delete(key);
       records.set(key, record);
     }
+  }
+  for (const p of await listProposals(session.id)) {
+    records.set(`proposal:${p.proposalId}`, {
+      type: "write_file",
+      proposalId: p.proposalId,
+      path: p.path,
+      baseVersion: p.baseVersion,
+      status: p.status,
+      changeId: p.changeId,
+    });
   }
   return Promise.all(
     [...records.values()].map(async (record) => {

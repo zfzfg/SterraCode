@@ -79,11 +79,14 @@ const mock = http.createServer(async (req, res) => {
             name: "write_file",
 
             arguments: JSON.stringify({
-              path: "uebung.py",
+              path: user.includes("REVIEW_HUNKS:") ? "review.py" : "uebung.py",
 
-              code: 'print("Grüße aus SterraCode")\n',
+              code: user.includes("REVIEW_HUNKS:")
+                ? "A\n" + "context\n".repeat(8) + "B\n"
+                : 'print("Grüße aus SterraCode")\n',
 
-              expectedVersion: null,
+              expectedVersion:
+                user.match(/REVIEW_HUNKS:([a-f0-9]{64})/)?.[1] || null,
 
               reason: "Deine erste Übung",
             }),

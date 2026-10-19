@@ -1398,3 +1398,47 @@ dialog::backdrop {
     border-left: 1px solid var(--border);
   }
 }
+
+.diff-dialog {
+  width: min(1200px, 96vw);
+  max-width: 96vw;
+  max-height: 94vh;
+  overflow: auto;
+}
+.diff-editor {
+  height: min(36vh, 380px);
+  min-height: 180px;
+  width: 100%;
+  border: 1px solid var(--border);
+}
+.diff-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.8rem 0;
+}
+.diff-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.diff-history button {
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.diff-hunk {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+}
+
+.diff-dialog p {
+  margin: 0.6rem 0;
+}
+.diff-dialog fieldset {
+  max-height: 140px;
+  overflow: auto;
+  margin-top: 0.6rem;
+}

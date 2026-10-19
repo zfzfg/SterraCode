@@ -1,3 +1,4 @@
+import { proposeFile } from "./proposals.js";
 import {
   taskAssessment,
   startTaskTests,
@@ -68,7 +69,9 @@ export async function executeTool(name, args, context) {
       case "read_file":
         return { type: name, ...(await readFile(sessionId, args.path)) };
       case "write_file":
-        return await writeFile(
+        return await (
+          (await getSettings()).reviewAIChanges ? proposeFile : writeFile
+        )(
           sessionId,
           args.path,
           args.code,
@@ -76,7 +79,14 @@ export async function executeTool(name, args, context) {
           // It can never be a SHA-256 file version; the normal version guard
           // still rejects null for every existing file.
           args.expectedVersion === "null" ? null : args.expectedVersion,
-          { actor: "ai", reason: text(args.reason, "reason"), turnId },
+          {
+            actor: "ai",
+            reason: text(args.reason, "reason"),
+            turnId,
+            operationId: context.toolCallId
+              ? `${turnId}:${context.toolCallId}`
+              : `${turnId}:${args.path}:${args.expectedVersion}`,
+          },
         );
       case "run_terminal_command": {
         const job = await startProcess({

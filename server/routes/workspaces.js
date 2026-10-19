@@ -1,4 +1,9 @@
 import {
+  listProposals,
+  getProposal,
+  decideProposal,
+} from "../services/proposals.js";
+import {
   startTaskTests,
   getTaskTestResults,
   cancelTaskTests,
@@ -30,8 +35,52 @@ import {
   deletePath,
   undoChange,
   listChanges,
+  getChange,
 } from "../services/workspace.js";
 const router = express.Router();
+router.get(
+  "/:sessionId/proposals",
+  route(async (req, res) =>
+    res.json(await listProposals(req.params.sessionId)),
+  ),
+);
+router.get(
+  "/:sessionId/proposals/:proposalId",
+  route(async (req, res) =>
+    res.json(await getProposal(req.params.sessionId, req.params.proposalId)),
+  ),
+);
+router.post(
+  "/:sessionId/proposals/:proposalId/apply",
+  route(async (req, res) =>
+    res.json(
+      await decideProposal(
+        req.params.sessionId,
+        req.params.proposalId,
+        "apply",
+        req.body,
+      ),
+    ),
+  ),
+);
+router.post(
+  "/:sessionId/proposals/:proposalId/reject",
+  route(async (req, res) =>
+    res.json(
+      await decideProposal(
+        req.params.sessionId,
+        req.params.proposalId,
+        "reject",
+      ),
+    ),
+  ),
+);
+router.get(
+  "/:sessionId/changes/:changeId",
+  route(async (req, res) =>
+    res.json(await getChange(req.params.sessionId, req.params.changeId)),
+  ),
+);
 router.post(
   "/:sessionId/preview-runs",
   route(async (req, res) =>

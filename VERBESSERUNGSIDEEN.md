@@ -2,7 +2,7 @@
 
 ## Fünf Kernideen mit Lernzielen, MVPs, Architektur und Abnahmekriterien
 
-**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Ideen 1 und 2 sind als beschriebene Python-MVPs implementiert (Status und Nachweise in Abschnitt 2 und 3). Idee 3 ist mit Konzeptansicht, belegtem Lernprofil und freiwilligen Leitner-Wiederholungen umgesetzt (Abschnitt 4). Idee 4 ist als statische, isolierte Web-Vorschau umgesetzt (Abschnitt 5). Idee 5 sowie die ausdrücklich späteren Ausbaustufen bleiben vorgeschlagene Erweiterungen.
+**Planungsstand: 19. Oktober 2026.** Dieser Plan erweitert die ursprünglichen fünf Ideen und gleicht sie mit dem aktuellen Repository ab. Ideen 1 und 2 sind als beschriebene Python-MVPs implementiert (Status und Nachweise in Abschnitt 2 und 3). Idee 3 ist mit Konzeptansicht, belegtem Lernprofil und freiwilligen Leitner-Wiederholungen umgesetzt (Abschnitt 4). Idee 4 ist als statische, isolierte Web-Vorschau umgesetzt (Abschnitt 5). Idee 5 ist mit historischem Diff, optionalem Review und selektiver Übernahme umgesetzt (Abschnitt 6). Die ausdrücklich späteren Ausbaustufen bleiben vorgeschlagene Erweiterungen.
 
 SterraCode soll Lernenden helfen, drei Fragen selbstständig zu beantworten: **Was macht mein Code? Woran erkenne ich, ob er die Aufgabe erfüllt? Was sollte ich als Nächstes üben?** Die fünf Kernideen bilden dafür einen zusammenhängenden Lernablauf: Code verstehen, Lösung prüfen, Änderungen nachvollziehen, Ergebnisse sehen und Wissen festigen.
 
@@ -656,6 +656,8 @@ Vorgeschlagene Startgrenzen sind 200 sichtbare Logeinträge und ein begrenzter P
 
 ## 6. Idee 5: Diff-Inspector und selektive Übernahme von KI-Vorschlägen
 
+**Umgesetzt am 19. Oktober 2026:** Alle drei beschriebenen Stufen A–C sind enthalten. **Auto Accept – direkt einfügen** bleibt Standard; **Review – vor Übernahme prüfen** ist in den Einstellungen wählbar. Versionierte historische Snapshots, persistente Vorschläge mit Statusereignissen, exakte serverseitige Hunks, konservative Bezeichnerabhängigkeiten, einmalige Übernahme und sichere Rücknahme sind implementiert. Wiederaufnahmebelege ordnen unterbrochene Commits der bestehenden Historie zu. Monaco-Diff, Tastaturbedienung, alle vier Themes und schmale Ansichten sind abgedeckt. Bedienung, API, Aufbewahrung und Grenzen stehen in [README.md](README.md#diff-inspector-und-ki-vorschläge). Nachweise: `tests/proposals.test.js`, `tests/e2e/diff-inspector.spec.js` sowie die bestehende Workspace-, Kontext- und Browser-Suite. Semantische Refactorings, Mehrdatei-Transaktionen und automatische Merges bleiben ausdrücklich spätere Erweiterungen.
+
 ### 6.1 Lernziel und Verhältnis zum bestehenden Workflow
 
 Die Person soll sehen können, **welche Zeilen die KI verändert hat und welche Anforderung damit erfüllt werden soll**. Der erste Nutzen entsteht bereits durch einen lesbaren Vergleich in der vorhandenen Änderungshistorie.
@@ -769,12 +771,12 @@ Die installierte Monaco-Version enthält `createDiffEditor`. Für die erste Stuf
 
 ### 6.8 Abnahme
 
-- [ ] Ein historischer Diff zeigt den ursprünglichen Nachher-Stand auch nach späteren Dateiänderungen.
-- [ ] Review-Modus verändert Dateien erst nach Übernahme; Standardmodus bleibt direkt wirksam.
-- [ ] Konflikte mit Autosave, Umbenennen, Löschen und Undo überschreiben keine neueren Inhalte.
-- [ ] Wiederholtes Übernehmen schreibt nur einmal und erzeugt genau einen Historieneintrag.
-- [ ] Teilübernahme arbeitet auf identischer Basis und erhält eine sichere Rücknahme.
-- [ ] Der Tutor unterscheidet gespeicherte Vorschläge von angewendeten Änderungen.
+- [x] Ein historischer Diff zeigt den ursprünglichen Nachher-Stand auch nach späteren Dateiänderungen.
+- [x] Review-Modus verändert Dateien erst nach Übernahme; Standardmodus bleibt direkt wirksam.
+- [x] Konflikte mit Autosave, Umbenennen, Löschen und Undo überschreiben keine neueren Inhalte.
+- [x] Wiederholtes Übernehmen schreibt nur einmal und erzeugt genau einen Historieneintrag.
+- [x] Teilübernahme arbeitet auf identischer Basis und erhält eine sichere Rücknahme.
+- [x] Der Tutor unterscheidet gespeicherte Vorschläge von angewendeten Änderungen.
 
 ---
 

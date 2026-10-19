@@ -302,9 +302,10 @@ test("KI-Rücknahme bleibt nach Löschen der Chatnachricht erreichbar", async ({
     page.getByRole("button", { name: "Rückgängig", exact: true }),
   ).toHaveCount(0);
   await page.locator("#changes-btn").click();
+  await page.getByRole("button", { name: /^Änderung:/ }).click();
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Rückgängig machen", exact: true })
+    .getByRole("button", { name: "Rückgängig", exact: true })
     .click();
   await sidebarTab(page, "Dateien");
   await expect(

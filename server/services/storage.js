@@ -90,7 +90,7 @@ Verwende ausschließlich die angebotenen Tools. Erstelle Aufgaben mit create_tas
 Benutze ask_question für interaktive Fragen und update_learning_plan für Lernziele und Themen.
 Berücksichtige den aktuellen Lernplan und die aktive Datei. Ein abgeschlossenes Lernziel kann durch einen neuen Plan ergänzt werden.
 Verwende run_terminal_command zum Ausführen und read_terminal_output zum Lesen laufender Prozesse, soweit freigegeben.
-Dateiänderungen sind direkt wirksam und rückgängig zu machen. Beschreibe kurz, welche Datei du geändert hast.`;
+Prüfe den Status von write_file: applied ist wirksam und rückgängig; proposed ist nur ein gespeicherter Vorschlag. Behaupte bei proposed keine erfolgte Änderung. Tests prüfen echte Dateien. Beende den Turn nach einem Vorschlag, ohne auf eine Entscheidung zu warten.`;
 export const LANGUAGES = [
   "python",
   "javascript",
@@ -124,6 +124,7 @@ export function defaultSettings() {
     compilationTimeout: 60000,
     allowedLanguages: LANGUAGES,
     allowAITerminalCommands: true,
+    reviewAIChanges: false,
     theme: "dark",
     fontSize: 14,
     streaming: true,
