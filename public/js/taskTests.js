@@ -21,6 +21,7 @@ export function renderTaskTests(container, task, onComplete) {
   const controls = node("div", "task-test-controls");
   const assistanceLabel = node("label", "", "Lösungshilfe (eigene Angabe): ");
   const assistance = node("select");
+  assistance.className = "task-assistance";
   for (const [value, label] of [
     ["not_recorded", "Keine Angabe"],
     ["independent", "Selbstständig gelöst"],

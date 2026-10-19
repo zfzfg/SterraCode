@@ -251,3 +251,61 @@ test("Python-Fehlerkarte zeigt Offline-Erklärung und sichere Quellnavigation", 
   );
   await page.screenshot({ path: "test-results/learning-error-desktop.png" });
 });
+
+for (const [label, expected] of [
+  [
+    "Abgeschlossen – nächste Aufgabe",
+    "nächste passende Aufgabe in meinem Lernplan",
+  ],
+  [
+    "Abgeschlossen – andere Aufgabe zum gleichen Thema",
+    "andere Aufgabe zum gleichen Thema",
+  ],
+]) {
+  test(`Aufgabe einklappen und weiterlernen: ${label}`, async ({
+    page,
+    request,
+  }, testInfo) => {
+    const s = await (
+      await request.post("/api/projects/import", {
+        data: {
+          templateId: "small-website",
+          operationId: crypto.randomUUID(),
+        },
+      })
+    ).json();
+    await page.goto("/");
+    await openSession(page, s);
+    const panel = page.locator("#task-panel");
+    const hints = panel.locator(".hint-ladder");
+    await hints.locator(":scope > summary").click();
+    await expect(hints).not.toHaveAttribute("open", "");
+    await page.locator("#refresh-models").click();
+    await expect(hints).not.toHaveAttribute("open", "");
+    await hints.locator(":scope > summary").click();
+    await panel
+      .getByRole("button", { name: "Nächsten Hinweis öffnen" })
+      .click();
+    await expect(hints).toContainText("Hinweise: 1/4");
+    await expect(hints).toHaveAttribute("open", "");
+    const details = panel.locator(".task-details");
+    await details.locator(":scope > summary").click();
+    await expect(details).not.toHaveAttribute("open", "");
+    await page.locator("#refresh-models").click();
+    await expect(details).not.toHaveAttribute("open", "");
+    const sent = page.waitForRequest((r) =>
+      r.url().endsWith("/api/chat/stream"),
+    );
+    await panel.getByRole("button", { name: label, exact: true }).click();
+    const message = (await sent).postDataJSON().userMessage;
+    expect(message).toContain(s.currentTask.title);
+    expect(message).toContain(expected);
+    await expect(page.locator("#send-btn")).toBeEnabled();
+    const saved = await (await request.get(`/api/sessions/${s.id}`)).json();
+    expect(saved.currentTask.done).toBe(true);
+    expect(saved.currentTask.completion.evidence.kind).toBe("manual");
+    expect(saved.currentTask.completion.evidence.hintsUsed).toBe(1);
+    await expect(details).not.toHaveAttribute("open", "");
+    await page.screenshot({ path: testInfo.outputPath("task-collapsed.png") });
+  });
+}

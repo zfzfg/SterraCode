@@ -1,6 +1,7 @@
 import { inspectDiff, showDiffHistory } from "./diffInspector.js";
 import { renderTaskTests } from "./taskTests.js";
 import { renderLearningSupport } from "./learningSupport.js";
+import { taskSection } from "./taskSections.js";
 import { api, streamChat, workspaceURL, sessionURL } from "./api.js";
 import { state, emit, on } from "./state.js";
 import { $, node, markdown, toast, formDialog } from "./ui.js";
@@ -12,6 +13,7 @@ import { attachProcess } from "./terminal.js";
 import { randomUUID } from "./uuid.js";
 
 let controller;
+let continuingTask = false;
 function usageText(usage) {
   if (!usage) return "Kontext bereit";
   const number = (n) =>
@@ -384,14 +386,13 @@ export function renderChat(forceBottom = false) {
   updateChatState();
 }
 function renderTask() {
-  const container = $("task-panel"),
+  const panel = $("task-panel"),
     task = state.session?.currentTask;
-  container.hidden = !task;
+  panel.hidden = !task;
   if (!task) return;
-  container.replaceChildren(
-    node("strong", "", task.title),
-    node("p", "", task.description),
-  );
+  const container = taskSection(task, "task-details", task.title);
+  container.append(node("p", "", task.description));
+  panel.replaceChildren(container);
   if (state.session.project?.checklist?.length) {
     const checklist = node("details");
     checklist.append(node("summary", "", "Projektprüfliste"));
@@ -404,23 +405,103 @@ function renderTask() {
   renderLearningSupport(container, task, renderTask);
   if (task.testSuite) {
     renderTaskTests(container, task, renderChat);
-    return;
+  } else {
+    const done = button(
+      task.done ? "Aufgabe abgeschlossen" : "Aufgabe prüfen lassen",
+      "check",
+      () =>
+        sendMessage(
+          "Ich habe die Aufgabe abgeschlossen. Bitte prüfe meine Dateien und gib mir Feedback.",
+        ),
+    );
+    done.disabled = task.done || state.busy || !state.ready;
+    container.append(done);
   }
-  const done = button(
-    task.done ? "Aufgabe abgeschlossen" : "Aufgabe prüfen lassen",
-    "check",
-    () =>
-      sendMessage(
-        "Ich habe die Aufgabe abgeschlossen. Bitte prüfe meine Dateien und gib mir Feedback.",
-      ),
-  );
-  done.disabled = task.done || state.busy || !state.ready;
-  container.append(done);
+  const actions = node("div", "task-continuation");
+  for (const [kind, label] of [
+    ["next", "Abgeschlossen – nächste Aufgabe"],
+    ["same", "Abgeschlossen – andere Aufgabe zum gleichen Thema"],
+  ]) {
+    const next = button(label, null, () => continueTask(task, kind));
+    next.disabled = continuingTask || state.busy || !state.ready;
+    actions.append(next);
+  }
+  panel.append(actions);
+}
+async function continueTask(task, kind) {
+  if (continuingTask || state.busy || !state.ready) return;
+  const sessionId = state.session.id;
+  const version = task.taskVersion || 1;
+  const assistance =
+    document.querySelector(".task-assistance")?.value || "not_recorded";
+  const current = () =>
+    state.session?.id === sessionId &&
+    state.session.currentTask?.id === task.id &&
+    (state.session.currentTask.taskVersion || 1) === version;
+  continuingTask = true;
+  renderTask();
+  updateChatState();
+  try {
+    await flush();
+    if (!current()) return;
+    if (!state.session.currentTask.done) {
+      const base = `${workspaceURL(sessionId)}/tasks/${encodeURIComponent(task.id)}`;
+      let testRunId;
+      if (task.testSuite) {
+        const runs = await api(`${base}/test-runs`);
+        if (!current()) return;
+        if (runs.length) {
+          const run = await api(
+            `${workspaceURL(sessionId)}/test-runs/${encodeURIComponent(runs[0].testRunId)}`,
+          );
+          if (!current()) return;
+          if (
+            run.current &&
+            run.status === "finished" &&
+            run.assessment === "passed"
+          )
+            testRunId = run.testRunId;
+        }
+        if (!testRunId)
+          throw new Error(
+            "Bitte zuerst die aktuelle Lösung prüfen und alle erforderlichen Tests bestehen.",
+          );
+      }
+      const result = await api(`${base}/complete`, {
+        method: "POST",
+        body: {
+          taskVersion: version,
+          assistance,
+          ...(testRunId ? { testRunId } : {}),
+        },
+      });
+      if (!current()) return;
+      state.session = result;
+      renderChat();
+    }
+    if (!current()) return;
+    await sendMessage(
+      `Ich habe die Aufgabe „${task.title}“ abgeschlossen. ${
+        kind === "same"
+          ? "Bitte gib mir eine andere Aufgabe zum gleichen Thema, um es weiter zu üben."
+          : "Bitte gib mir die nächste passende Aufgabe in meinem Lernplan."
+      }`,
+      { taskContinuation: true },
+    );
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    continuingTask = false;
+    renderTask();
+    updateChatState();
+  }
 }
 export function updateChatState() {
+  for (const button of document.querySelectorAll(".task-continuation button"))
+    button.disabled = continuingTask || state.busy || !state.ready;
   const usage = /^\/usage$/i.test($("chat-input").value.trim());
   $("send-btn").disabled =
-    !state.session || (!state.ready && !usage) || state.busy;
+    !state.session || (!state.ready && !usage) || state.busy || continuingTask;
   $("stop-chat-btn").hidden = !state.busy;
   $("app").classList.toggle("chat-busy", state.busy);
   $("chat-state").textContent = state.busy
@@ -448,9 +529,14 @@ async function answer(questionId, text, sessionId) {
 }
 export async function sendMessage(
   text,
-  { existingUserMessageId, retryOf, contextAction } = {},
+  {
+    existingUserMessageId,
+    retryOf,
+    contextAction,
+    taskContinuation = false,
+  } = {},
 ) {
-  if (state.busy) return;
+  if (state.busy || (continuingTask && !taskContinuation)) return;
   if (!state.session) throw new Error("Bitte zuerst eine Session auswählen.");
   contextAction ||=
     !existingUserMessageId && !retryOf

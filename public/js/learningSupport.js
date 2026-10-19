@@ -1,6 +1,7 @@
 import { api, workspaceURL } from "./api.js";
 import { state } from "./state.js";
 import { node, toast } from "./ui.js";
+import { taskSection } from "./taskSections.js";
 
 const drafts = new Map();
 
@@ -15,12 +16,14 @@ export function renderLearningSupport(container, task, rerender) {
     (state.session.currentTask.taskVersion || 1) === version;
   const base = `${workspaceURL(sessionId)}/tasks/${encodeURIComponent(task.id)}`;
   const section = node("section", "learning-support");
-  const hints = node("div", "hint-ladder");
   const opened = task.hintUsage?.count || 0;
+  const hints = taskSection(
+    task,
+    "hint-ladder",
+    `Hinweise: ${opened}/${task.hints?.length || 0} geöffnet`,
+  );
+  hints.hidden = !task.hints?.length;
   if (task.hints?.length) {
-    hints.append(
-      node("strong", "", `Hinweise: ${opened}/${task.hints.length} geöffnet`),
-    );
     task.hints.slice(0, opened).forEach((hint, index) => {
       const detail = node("details");
       detail.open = index === opened - 1;

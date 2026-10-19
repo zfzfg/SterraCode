@@ -828,6 +828,24 @@ a {
 .task-panel p {
   margin: 6px 0 10px;
 }
+.task-details > summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.task-continuation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.task-continuation button {
+  min-width: 0;
+  white-space: normal;
+  text-align: left;
+}
+.hint-ladder > summary {
+  cursor: pointer;
+}
 .chat-input-area {
   padding: 12px;
   border-top: 1px solid var(--border);
