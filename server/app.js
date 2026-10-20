@@ -32,6 +32,13 @@ import { createUpdateService, applicationVersion } from "./services/updates.js";
 import { createUpdatesRouter } from "./routes/updates.js";
 import { activeTurnCount } from "./services/teacher.js";
 import { localizeFields } from "./services/messageOutput.js";
+import codebaseImports, {
+  codebaseSessionTreeRouter,
+} from "./routes/codebaseImports.js";
+import codebase from "./routes/codebase.js";
+import gitCredentials from "./routes/gitCredentials.js";
+import codebaseDemos from "./routes/codebaseDemos.js";
+import { listActiveCodebaseJobs } from "./services/codebaseJobs.js";
 
 export function createApp({
   config = loadConfig(),
@@ -56,7 +63,10 @@ export function createApp({
       else if (req.body.action !== "status")
         return res.status(400).json({ error: "Unknown action." });
       res.json({
-        busy: activeMutations > 0 || activeTurnCount() > 0,
+        busy:
+          activeMutations > 0 ||
+          activeTurnCount() > 0 ||
+          listActiveCodebaseJobs().length > 0,
         version: applicationVersion,
       });
     }),
@@ -113,7 +123,16 @@ export function createApp({
     if (
       ["POST", "PUT", "PATCH", "DELETE"].includes(req.method) &&
       req.path.startsWith("/api") &&
-      !req.is("application/json")
+      !req.is("application/json") &&
+      !(
+        ((req.method === "PUT" &&
+          /^\/api\/codebase\/imports\/[a-f0-9-]{36}\/upload$/.test(req.path)) ||
+          (req.method === "POST" &&
+            /^\/api\/codebase\/imports\/[a-f0-9-]{36}\/archive$/.test(
+              req.path,
+            ))) &&
+        req.is("application/zip")
+      )
     )
       return res.status(415).json({
         error: req.t("errors:http.json"),
@@ -166,6 +185,11 @@ export function createApp({
   app.use("/api/provider", provider);
   app.use("/api/profile", profile);
   app.use("/api/projects", projects);
+  app.use("/api/codebase/imports", codebaseImports);
+  app.use("/api/codebase/sessions", codebase);
+  app.use("/api/codebase/sessions", codebaseSessionTreeRouter);
+  app.use("/api/codebase", codebaseDemos);
+  app.use("/api/git-credentials", gitCredentials);
   app.use("/api/chat", chat);
   app.use("/api/models", models);
   app.use("/api/sessions", sessions);

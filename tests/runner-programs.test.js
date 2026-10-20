@@ -86,6 +86,28 @@ function record(extra = {}) {
   };
 }
 const python = PROGRAMS.find((p) => p.id === "python");
+it("deduplicates durable program action IDs after a lost response and controller restart", async () => {
+  vi.spyOn(manager, "process").mockResolvedValue();
+  const options = {
+    action: "install",
+    operationId: randomUUID(),
+    stopRunning: false,
+    clearCache: false,
+  };
+  const first = await manager.action("python", options);
+  expect((await manager.action("python", options)).job.id).toBe(first.job.id);
+  await expect(manager.action("rust", options)).rejects.toMatchObject({
+    code: "IDEMPOTENCY_CONFLICT",
+  });
+  const restarted = makeManager();
+  await expect(restarted.initialize()).rejects.toMatchObject({
+    code: "PACKAGE_REPAIR_REQUIRED",
+  });
+  expect((await restarted.action("python", options)).job).toMatchObject({
+    id: first.job.id,
+    state: "interrupted",
+  });
+});
 it("stellt eine alte Java-Rezeptur mit ihren gespeicherten Paketwurzeln wieder her", async () => {
   const java = PROGRAMS.find((p) => p.id === "java");
   const legacy = {

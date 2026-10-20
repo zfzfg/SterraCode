@@ -63,6 +63,56 @@ async function request(url, { method, body, signal, keepalive }) {
 }
 export const sessionURL = (id) => `/api/sessions/${encodeURIComponent(id)}`;
 export const workspaceURL = (id) => `/api/workspaces/${encodeURIComponent(id)}`;
+export function uploadZip(url, file, { signal, onProgress } = {}) {
+  pendingMutations++;
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", "application/zip");
+    xhr.setRequestHeader("Accept-Language", getLocale());
+    const abort = () => xhr.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    xhr.upload.onprogress = (event) =>
+      onProgress?.(event.loaded, event.lengthComputable ? event.total : null);
+    xhr.onload = () => {
+      let data;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        reject(
+          new APIError(
+            t("common:network.invalid"),
+            xhr.status,
+            "INVALID_RESPONSE",
+          ),
+        );
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else {
+        if (xhr.status === 401 || data.code === "SETUP_REQUIRED")
+          window.dispatchEvent(new CustomEvent("auth-required"));
+        reject(
+          new APIError(
+            translateMessage(data, data.error || xhr.statusText),
+            xhr.status,
+            data.code,
+            data,
+          ),
+        );
+      }
+    };
+    xhr.onerror = () =>
+      reject(new APIError(t("common:network.unavailable"), 0, "NETWORK"));
+    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+    xhr.onloadend = () => {
+      pendingMutations--;
+      signal?.removeEventListener("abort", abort);
+    };
+    if (signal?.aborted) xhr.abort();
+    else xhr.send(file);
+  });
+}
 export async function streamChat(body, onEvent, signal) {
   let response;
   try {

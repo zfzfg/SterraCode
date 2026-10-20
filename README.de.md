@@ -1,5 +1,12 @@
 # SterraCode
 
+Codeprojekte lassen sich über **Codeprojekt importieren** aus ZIP oder einem
+Git-Commit übernehmen. Dateiauswahl, Code/Verstehen, manuelle Analyse, geprüfte
+Codeverweise und gespeicherte Tour ergänzen die vorhandenen Lern-Sessions.
+Import und Navigation starten keine KI-Anfrage. Betriebsgrenzen, Git-Zugänge,
+separate Demos und Wiederherstellung beschreibt die
+[Explorer-Dokumentation](docs/CODEBASE-EXPLORER.md).
+
 Coding-Lernumgebung mit Monaco-Editor, Dateiverwaltung, Lernplan, Terminal und einem KI-Tutor über LM Studio oder die OpenAI API. Lokal per npm oder als geschützter Docker-Server im LAN. Die Oberfläche verwendet lokale SVG-Icons und vier Themes.
 
 ## Docker-Server unter Windows und Linux

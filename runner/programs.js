@@ -5,7 +5,13 @@ import { randomUUID, createHash } from "node:crypto";
 import { createReadStream, createWriteStream, constants } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { RunnerError, atomicJSON, readJSON, freeSpace } from "./common.js";
+import {
+  RunnerError,
+  atomicJSON,
+  readJSON,
+  freeSpace,
+  UUID,
+} from "./common.js";
 import { PROGRAMS, LOCK } from "./catalog.js";
 import { runtimes, probe, TOOL_PATH } from "./runtime.js";
 
@@ -546,6 +552,11 @@ export class ProgramManager {
     return this.publicJob(job);
   }
   async action(id, options) {
+    if (options?.operationId !== undefined && !UUID.test(options.operationId))
+      throw new RunnerError("Invalid operation ID.", 400, "INVALID_REQUEST", {
+        messageKey: "runner:programs.actionInvalid",
+        params: {},
+      });
     if (
       !this.manifest ||
       this.manifest.schema !== 1 ||
@@ -595,6 +606,27 @@ export class ProgramManager {
         { messageKey: "runner:programs.base", params: {} },
       );
     return this.jobs.serial(async () => {
+      if (options.operationId) {
+        const previous = this.operations.get(options.operationId);
+        if (previous) {
+          if (
+            previous.programId !== id ||
+            previous.action !== options.action ||
+            previous.stopRunning !== (options.stopRunning === true) ||
+            previous.clearCache !== (options.clearCache === true)
+          )
+            throw new RunnerError(
+              "Operation ID has different data.",
+              409,
+              "IDEMPOTENCY_CONFLICT",
+              {
+                messageKey: "runner:job.idempotency",
+                params: {},
+              },
+            );
+          return { job: this.publicJob(previous) };
+        }
+      }
       if (this.activeJob && !TERMINAL.has(this.activeJob.state)) {
         if (
           this.activeJob.state === "queued" &&
@@ -629,7 +661,7 @@ export class ProgramManager {
         await this.save();
       }
       const job = {
-        id: randomUUID(),
+        id: options.operationId || randomUUID(),
         programId: id,
         action: options.action,
         stopRunning: options.stopRunning === true,

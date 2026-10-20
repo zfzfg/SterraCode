@@ -297,6 +297,27 @@ function eventCard(event, sessionId) {
   if (event.type === "create_task")
     card.append(node("p", "", event.task?.title || ""));
   if (event.type === "add_explanation") card.append(markdown(event.content));
+  if (event.type === "add_explanation" && Array.isArray(event.references)) {
+    const references = node("div", "codebase-references");
+    for (const reference of event.references.slice(0, 20)) {
+      if (
+        typeof reference.path !== "string" ||
+        typeof reference.fileVersion !== "string" ||
+        !Number.isInteger(reference.startLine) ||
+        !Number.isInteger(reference.endLine) ||
+        (reference.sessionId && reference.sessionId !== sessionId)
+      )
+        continue;
+      const control = button(
+        `${reference.path}:${reference.startLine}–${reference.endLine}`,
+        "file",
+        () => emit("codebase-reference", { ...reference, sessionId }),
+        "text-button",
+      );
+      references.append(control);
+    }
+    card.append(references);
+  }
   if (event.type === "update_learning_plan")
     card.append(node("p", "", event.goal));
   if (event.type === "mark_task_done" && event.feedback)
@@ -677,6 +698,7 @@ export async function sendMessage(
     existingUserMessageId,
     retryOf,
     contextAction,
+    codeReference,
     taskContinuation = false,
   } = {},
 ) {
@@ -778,6 +800,7 @@ export async function sendMessage(
       existingUserMessageId,
       retryOf,
       contextAction,
+      codeReference,
     };
     const result =
       state.settings.streaming !== false

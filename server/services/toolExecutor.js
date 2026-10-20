@@ -7,7 +7,20 @@ import {
 } from "./testRunner.js";
 import { randomUUID } from "node:crypto";
 import { AppError, getSettings } from "./storage.js";
-import { mutateSession, validatePlan, setLearningPlan } from "./sessions.js";
+import {
+  loadSession,
+  mutateSession,
+  validatePlan,
+  setLearningPlan,
+} from "./sessions.js";
+import { CODEBASE_READ_TOOLS } from "./tools.js";
+import { workspaceTreePage } from "./codebaseTree.js";
+import {
+  currentAnalysis,
+  searchCodebase,
+  readCodebaseFile,
+  resolveCodeReference,
+} from "./codebaseAnalyzer.js";
 import { readFile, writeFile, listWorkspace } from "./workspace.js";
 import { startProcess, stopProcess, waitProcess } from "./processes.js";
 import { getProfile, profileToPromptText } from "./profileManager.js";
@@ -33,6 +46,17 @@ const text = (v, name) => {
 export async function executeTool(name, args, context) {
   const { sessionId, turnId, signal } = context;
   try {
+    const session = await loadSession(sessionId);
+    if (session.mode === "codebase" && !CODEBASE_READ_TOOLS.has(name))
+      throw new AppError(
+        "This tool is unavailable in explanation mode.",
+        403,
+        "CAPABILITY_DENIED",
+        {
+          messageKey: "features:codebase.errors.analysis",
+          params: { reason: "CAPABILITY_DENIED" },
+        },
+      );
     if (signal?.aborted)
       throw new AppError("Abgebrochen.", undefined, undefined, {
         messageKey: "serverFeature:tools.aborted",
@@ -83,9 +107,71 @@ export async function executeTool(name, args, context) {
           ...(await getTaskTestResults(sessionId, args.testRunId)),
         };
       case "list_files":
-        return { type: name, files: await listWorkspace(sessionId) };
+        return session.mode === "codebase"
+          ? {
+              type: name,
+              ...(await workspaceTreePage(sessionId, { limit: 200 })),
+            }
+          : { type: name, files: await listWorkspace(sessionId) };
+      case "browse_files":
+        return { type: name, ...(await workspaceTreePage(sessionId, args)) };
+      case "search_code":
+        return {
+          type: name,
+          ...(await searchCodebase(sessionId, { ...args, signal })),
+        };
+      case "read_codebase_overview": {
+        const overview = await currentAnalysis(sessionId, { inventory: false });
+        return { type: name, ...overview };
+      }
+      case "list_programs": {
+        const { getExecutionCapabilities } = await import("./codebaseDemos.js");
+        return { type: name, ...(await getExecutionCapabilities()) };
+      }
+      case "create_demo": {
+        const { createCodebaseDemo } = await import("./codebaseDemos.js");
+        return {
+          type: name,
+          ...(await createCodebaseDemo(
+            sessionId,
+            {
+              ...args,
+              operationId: `${turnId}:${context.toolCallId || "demo"}`,
+            },
+            context,
+          )),
+        };
+      }
+      case "request_program_installation": {
+        const { requestRuntimeInstallation } =
+          await import("./codebaseDemos.js");
+        return {
+          type: name,
+          ...(await requestRuntimeInstallation(sessionId, args.demoId, {
+            ...args,
+            operationId: `${turnId}:${context.toolCallId || "runtime"}`,
+          })),
+        };
+      }
+      case "run_demo": {
+        const { requestDemoExecution } = await import("./codebaseDemos.js");
+        return {
+          type: name,
+          ...(await requestDemoExecution(sessionId, args.demoId, {
+            fileVersion: args.fileVersion,
+            operationId: `${turnId}:${context.toolCallId || "run"}`,
+          })),
+        };
+      }
       case "read_file":
-        return { type: name, ...(await readFile(sessionId, args.path, args)) };
+        return {
+          type: name,
+          ...(await (session.mode === "codebase" ? readCodebaseFile : readFile)(
+            sessionId,
+            args.path,
+            args,
+          )),
+        };
       case "write_file":
         return await (
           (await getSettings()).reviewAIChanges ? proposeFile : writeFile
@@ -214,12 +300,26 @@ export async function executeTool(name, args, context) {
           feedback: args.feedback || "",
         };
       }
-      case "add_explanation":
+      case "add_explanation": {
+        let references;
+        if (session.mode === "codebase" && args.references !== undefined) {
+          if (!Array.isArray(args.references) || args.references.length > 20)
+            throw new AppError(
+              "Invalid source references.",
+              400,
+              "INVALID_REQUEST",
+            );
+          references = [];
+          for (const reference of args.references)
+            references.push(await resolveCodeReference(sessionId, reference));
+        }
         return {
           type: name,
           title: text(args.title, "title"),
           content: text(args.content, "content"),
+          ...(references ? { references } : {}),
         };
+      }
       case "get_language_profile": {
         if (!(await getSettings()).crossChatProfileEnabled)
           throw new AppError(

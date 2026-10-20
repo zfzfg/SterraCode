@@ -54,6 +54,28 @@ export async function serial(key, operation) {
 export async function readJSON(file) {
   return JSON.parse(await fs.readFile(file, "utf8"));
 }
+async function replaceJSONFile(source, target) {
+  // Windows can briefly deny an atomic replacement while another request (or
+  // the virus scanner) has the previous file open. Retain both complete files
+  // and retry the rename; unlinking the previous version would lose atomicity.
+  const deadline = Date.now() + 2000;
+  let delay = 10;
+  for (;;) {
+    try {
+      await fs.rename(source, target);
+      return;
+    } catch (error) {
+      if (
+        process.platform !== "win32" ||
+        !["EPERM", "EACCES", "EBUSY"].includes(error.code) ||
+        Date.now() >= deadline
+      )
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay = Math.min(200, delay * 2);
+    }
+  }
+}
 export async function writeJSON(file, data) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${randomUUID()}.tmp`;
@@ -65,7 +87,7 @@ export async function writeJSON(file, data) {
     } finally {
       await handle.close();
     }
-    await fs.rename(temp, file);
+    await replaceJSONFile(temp, file);
     if (process.platform !== "win32") {
       const directory = await fs.open(path.dirname(file), "r");
       try {

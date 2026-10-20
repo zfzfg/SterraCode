@@ -272,6 +272,8 @@ async function poll() {
 }
 export async function runCode() {
   if (!state.session) throw new Error(t("features:shared.selectSession"));
+  if (["codebase", "demo"].includes(state.session.mode))
+    throw new Error(t("features:codebase.useDemo"));
   await flush();
   const file = currentFile();
   if (!file) throw new Error(t("features:terminal.openFile"));
@@ -302,14 +304,20 @@ function runtimeLanguage() {
 export function updateRunState() {
   const runtime = state.runtimes.find((r) => r.language === runtimeLanguage());
   $("run-btn").disabled =
-    !state.session || !currentFile() || !runtime?.available;
+    !state.session ||
+    state.session.mode === "codebase" ||
+    state.session.mode === "demo" ||
+    !currentFile() ||
+    !runtime?.available;
   $("runtime-hint").textContent =
-    state.session && currentFile() && !runtime?.available
-      ? translateMessage(
-          { messageKey: runtime?.reasonKey, params: runtime?.reasonParams },
-          runtime?.reason || t("features:terminal.checkingAll"),
-        )
-      : "";
+    state.session?.mode === "codebase" || state.session?.mode === "demo"
+      ? t("features:codebase.useDemo")
+      : state.session && currentFile() && !runtime?.available
+        ? translateMessage(
+            { messageKey: runtime?.reasonKey, params: runtime?.reasonParams },
+            runtime?.reason || t("features:terminal.checkingAll"),
+          )
+        : "";
 }
 export function initTerminal() {
   diagnostics = document.createElement("div");

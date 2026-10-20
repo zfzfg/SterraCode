@@ -23,6 +23,12 @@ export async function loadSessions() {
 export function renderSessions() {
   const list = $("sessions-list");
   list.replaceChildren();
+  const importButton = button(t("features:codebase.import"), "folder", () =>
+    emit("codebase-import"),
+  );
+  importButton.id = "codebase-import-btn";
+  importButton.setAttribute("aria-haspopup", "dialog");
+  list.append(importButton);
   for (const s of state.sessions) {
     const row = node(
         "div",
@@ -34,7 +40,7 @@ export function renderSessions() {
       node(
         "span",
         "session-meta",
-        `${languageOptions.find((l) => l.value === s.language)?.label || s.language} · ${formatDate(s.updatedAt)}`,
+        `${s.mode === "codebase" ? t("features:codebase.project") : languageOptions.find((l) => l.value === s.language)?.label || s.language} · ${formatDate(s.updatedAt)}`,
       ),
     );
     if (s.deleting) {
@@ -113,6 +119,7 @@ export async function openSession(id) {
   document.title = `${session.title} – SterraCode`;
   $("session-title").textContent = session.title;
   $("language-select").value = session.language;
+  $("language-select").hidden = session.mode === "codebase";
   $("welcome").hidden = true;
   $("panes").hidden = false;
   $("compact-tabs").hidden = false;
@@ -169,10 +176,18 @@ async function manageSession(session) {
   if (!result) return;
   if (result.action === "delete") {
     if (state.busy) throw new Error(t("sessions:delete.stop"));
+    const demos =
+      session.mode === "codebase"
+        ? (
+            await api(
+              `/api/codebase/sessions/${encodeURIComponent(session.id)}/demos`,
+            )
+          ).demos || []
+        : [];
     if (
       !(await confirmDialog(
         t("sessions:delete.confirm"),
-        t("sessions:delete.description", { title: session.title }),
+        `${t("sessions:delete.description", { title: session.title })}${session.mode === "codebase" ? ` ${t("features:codebase.deletionBackups")} ${t("features:codebase.retainedDemos", { count: demos.length })}` : ""}`,
       ))
     )
       return;

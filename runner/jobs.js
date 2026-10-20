@@ -19,6 +19,7 @@ import {
 } from "./common.js";
 import { LANGUAGES, childEnvironment, runtimes, runFile } from "./runtime.js";
 import { runTrace, validateTrace } from "./tracer/adapter.js";
+import { runIsolatedDemo, validateIsolatedDemo } from "./isolatedDemo.js";
 
 export const MAX_OUTPUT = 1024 * 1024;
 const FINAL = new Set([
@@ -46,7 +47,7 @@ export function validatePayload(value) {
     });
   sessionId(value.sessionId);
   const type = value.type || (value.file ? "file" : "command");
-  if (!["file", "command", "trace", "test"].includes(type))
+  if (!["file", "command", "trace", "test", "demo"].includes(type))
     throw new RunnerError("Unbekannte Auftragsart.", 400, "INVALID_REQUEST", {
       messageKey: "runner:job.type",
       params: {},
@@ -87,7 +88,7 @@ export function validatePayload(value) {
     });
     result.language = "python";
     result.executionTimeout = 10000;
-  } else if (type === "file") {
+  } else if (type === "file" || type === "demo") {
     result.file = relativePath(value.file);
     if (!LANGUAGES.includes(value.language))
       throw new RunnerError(
@@ -97,6 +98,8 @@ export function validatePayload(value) {
         { messageKey: "runner:job.language", params: {} },
       );
     result.language = value.language;
+    if (type === "demo")
+      result.isolatedDemo = validateIsolatedDemo(value.isolatedDemo);
   } else {
     if (
       typeof value.command !== "string" ||
@@ -181,6 +184,10 @@ export class JobManager {
     // This directory is a dedicated execution volume; never clean workspaces.
     for (const item of await fs.readdir(this.config.tempDir))
       await removeTree(this.config.tempDir, item);
+    const demoSnapshots = path.join(this.config.stateDir, "demo-snapshots");
+    await fs.mkdir(demoSnapshots, { recursive: true, mode: 0o700 });
+    for (const item of await fs.readdir(demoSnapshots))
+      await removeTree(demoSnapshots, item);
     for (const file of await fs.readdir(
       path.join(this.config.stateDir, "jobs"),
     )) {
@@ -367,7 +374,7 @@ export class JobManager {
       await handle.close();
       await freeSpace(this.config.tempDir, 16 * 1024 * 1024);
       let runtime;
-      if (["file", "trace", "test"].includes(payload.type)) {
+      if (["file", "trace", "test", "demo"].includes(payload.type)) {
         runtime = (await runtimes()).find(
           (r) => r.language === payload.language,
         );
@@ -453,15 +460,17 @@ export class JobManager {
                   this.launch(job, cmd, args, cwd, timeout),
                 true,
               )
-            : job.payload.type === "file"
-              ? await runFile(this, job, root, runtime)
-              : await this.launch(
-                  job,
-                  "bash",
-                  ["--noprofile", "--norc", "-c", job.payload.command],
-                  root,
-                  job.payload.executionTimeout,
-                );
+            : job.payload.type === "demo"
+              ? await runIsolatedDemo(this, job, root, runtime)
+              : job.payload.type === "file"
+                ? await runFile(this, job, root, runtime)
+                : await this.launch(
+                    job,
+                    "bash",
+                    ["--noprofile", "--norc", "-c", job.payload.command],
+                    root,
+                    job.payload.executionTimeout,
+                  );
       if (job.exitCode === 137 && !job.reason)
         job.reason = "resource_limit_or_sigkill";
       job.state =
@@ -511,7 +520,7 @@ export class JobManager {
     }
     return this.snapshot(job);
   }
-  async launch(job, command, args, cwd, timeout) {
+  async launch(job, command, args, cwd, timeout, options = {}) {
     if (job.stopping) return -1;
     // Persist 'running' before spawn. A crash in this window is deliberately
     // interrupted on restart, never implicitly replayed.
@@ -519,10 +528,26 @@ export class JobManager {
     await this.persist(job);
     if (job.stopping) return -1;
     return new Promise((resolve) => {
-      const child = spawn(this.config.launcher, [cwd, command, ...args], {
-        env: childEnvironment(this.config, cwd),
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      const child = spawn(
+        this.config.launcher,
+        [
+          ...(options.isolatedDemo ? ["--isolated-demo"] : []),
+          cwd,
+          command,
+          ...args,
+        ],
+        {
+          env: options.isolatedDemo
+            ? { PATH: "/usr/bin:/bin", LANG: "C.UTF-8" }
+            : childEnvironment(this.config, cwd),
+          stdio: [
+            "pipe",
+            "pipe",
+            "pipe",
+            ...(options.isolatedDemo ? [options.sourceFd] : []),
+          ],
+        },
+      );
       job.child = child;
       child.stdin.on("error", () => {});
       const timer =

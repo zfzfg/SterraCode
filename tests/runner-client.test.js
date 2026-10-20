@@ -15,6 +15,10 @@ vi.mock("../server/services/localProcesses.js", async (original) => ({
     throw new Error("Unexpected local fallback");
   }),
 }));
+vi.mock("../server/services/sessions.js", async (original) => ({
+  ...(await original()),
+  loadSession: vi.fn(async () => ({ mode: "learn" })),
+}));
 vi.mock("../server/services/storage.js", async (original) => ({
   ...(await original()),
   assertSessionWritable: vi.fn(async () => {}),

@@ -7,6 +7,7 @@ import {
 } from "./storage.js";
 import * as local from "./localProcesses.js";
 import { describeProcess } from "./processReasons.js";
+import { loadSession } from "./sessions.js";
 import {
   runnerEnabled,
   runnerRequest,
@@ -17,6 +18,10 @@ import {
 export const MAX_OUTPUT = local.MAX_OUTPUT;
 export const probe = local.probe;
 export const killTree = local.killTree;
+const isolatedDemoAuthorization = Symbol("isolated demo authorization");
+export function startIsolatedDemoProcess(options) {
+  return startProcess({ ...options, [isolatedDemoAuthorization]: true });
+}
 export async function getRuntimes(probeFn) {
   if (!runnerEnabled()) return local.getRuntimes(probeFn);
   const settings = await getSettings();
@@ -39,6 +44,25 @@ export async function getRuntimes(probeFn) {
   });
 }
 export async function startProcess(options) {
+  validateSessionId(options.sessionId);
+  await assertSessionWritable(options.sessionId);
+  const session = await loadSession(options.sessionId);
+  const isolatedDemo =
+    options[isolatedDemoAuthorization] === true &&
+    session.mode === "demo" &&
+    session.project?.kind === "codebase-demo" &&
+    runnerEnabled();
+  if (
+    session.mode === "codebase" ||
+    ((session.mode === "demo" || session.project?.kind === "codebase-demo") &&
+      !isolatedDemo)
+  )
+    throw new AppError(
+      "An isolated demo execution adapter is required.",
+      409,
+      "DEMO_ISOLATION_REQUIRED",
+      { messageKey: "serverFeature:demo.isolation", params: {} },
+    );
   if (options.test)
     options = {
       ...options,
@@ -69,14 +93,17 @@ export async function startProcess(options) {
   const payload = {
     id,
     sessionId: options.sessionId,
-    type: options.test
-      ? "test"
-      : options.trace
-        ? "trace"
-        : options.file
-          ? "file"
-          : "command",
+    type: isolatedDemo
+      ? "demo"
+      : options.test
+        ? "test"
+        : options.trace
+          ? "trace"
+          : options.file
+            ? "file"
+            : "command",
     actor: options.actor || "user",
+    ...(isolatedDemo ? { isolatedDemo: options.isolatedDemo } : {}),
     ...(options.file
       ? { file: options.file, language: options.language }
       : { command: options.command }),

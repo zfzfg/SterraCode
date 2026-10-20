@@ -26,6 +26,10 @@ import {
 } from "../services/learningSupport.js";
 import { exportProject, projectFiles } from "../services/projects.js";
 import {
+  workspaceTreePage,
+  workspaceMetadata,
+} from "../services/codebaseTree.js";
+import {
   startPreview,
   getPreview,
   previewDocument,
@@ -51,6 +55,18 @@ import {
   getChange,
 } from "../services/workspace.js";
 const router = express.Router();
+router.get(
+  "/:sessionId/tree",
+  route(async (req, res) =>
+    res.json(await workspaceTreePage(req.params.sessionId, req.query)),
+  ),
+);
+router.get(
+  "/:sessionId/files/metadata",
+  route(async (req, res) =>
+    res.json(await workspaceMetadata(req.params.sessionId, req.query.path)),
+  ),
+);
 router.get(
   "/:sessionId/project-files",
   route(async (req, res) => res.json(await projectFiles(req.params.sessionId))),

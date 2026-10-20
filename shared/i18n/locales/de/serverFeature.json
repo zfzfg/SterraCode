@@ -235,5 +235,39 @@
   "models": {
     "openAIOffline": "OpenAI ist nicht erreichbar. API-Schlüssel, Internetzugang und Berechtigung prüfen.",
     "lmStudioOffline": "LM Studio ist nicht erreichbar. Server in LM Studio starten, URL und Secret-Datei prüfen."
+  },
+  "git": {
+    "storage": "Der Git-Zugangsspeicher ist ungueltig.",
+    "key": "Der Git-Hauptschluessel fehlt oder kann die Daten nicht entschluesseln.",
+    "host": "Dieses Git-Ziel ist administrativ nicht freigegeben.",
+    "credential": "Ungueltige Git-Zugangsdaten.",
+    "hostKey": "Ein vertrauenswuerdig gepruefter SSH-Hostschluessel ist erforderlich.",
+    "notFound": "Git-Zugang nicht gefunden.",
+    "conflict": "Die Git-Zugangsdaten wurden inzwischen geaendert. Bitte neu laden.",
+    "binding": "Diese Zugangsdaten gelten nicht fuer dieses Repository.",
+    "transport": "Neue Geheimnisse duerfen nur ueber HTTPS oder Loopback eingegeben werden.",
+    "source": "Nur freigegebene HTTPS- oder SSH-Repository-URLs ohne Token, Passwort oder Query sind erlaubt.",
+    "ref": "Ungueltiger Git-Branch oder Git-Tag.",
+    "network": "Das Git-Ziel ist nicht erreichbar.",
+    "cancelled": "Git-Import abgebrochen.",
+    "timeout": "Der Git-Import hat sein Zeitlimit erreicht.",
+    "limit": "Der Git-Import ueberschreitet das konfigurierte Ressourcenbudget.",
+    "unavailable": "Git ist nicht verfuegbar. ZIP-Import bleibt nutzbar.",
+    "failed": "Der Git-Import ist fehlgeschlagen. URL, Berechtigung und Hostschluessel pruefen.",
+    "path": "Das Repository enthaelt einen nicht unterstuetzten Pfad oder Dateityp."
+  },
+  "demo": {
+    "parent": "Demos benoetigen eine Codebase-Session.",
+    "notFound": "Demo oder Aktionsanfrage nicht gefunden.",
+    "isolation": "Die isolierte Demoausfuehrung ist auf diesem Runner nicht nachgewiesen. Der Code kann weiterhin angesehen werden.",
+    "invalid": "Ungueltige Demo oder Aktion.",
+    "conflict": "Die Vorgangskennung gehoert zu anderen Daten.",
+    "local": "Automatische Programminstallation steht nur im Dockerbetrieb zur Verfuegung.",
+    "disabled": "Diese Demoaktion ist in den Einstellungen deaktiviert.",
+    "decided": "Diese Aktion wurde bereits anders entschieden.",
+    "expired": "Die Freigabeanfrage ist abgelaufen. Bitte eine neue Aktion anfordern.",
+    "changed": "Die Demo wurde seit der Anfrage geaendert. Bitte den aktuellen Code neu freigeben.",
+    "catalog": "Der Programmkatalog wurde geaendert. Bitte eine neue Aktion anfordern.",
+    "runtime": "Die freigegebene Laufzeit ist nicht verfuegbar."
   }
 }

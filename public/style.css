@@ -581,6 +581,211 @@ a {
   min-height: 0;
   overflow: hidden;
 }
+.codebase-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.codebase-tabs [aria-selected="true"] {
+  box-shadow: inset 0 -2px var(--accent);
+}
+.codebase-cockpit {
+  overflow: auto;
+  padding: 20px;
+  min-height: 0;
+  flex: 1;
+}
+.codebase-cockpit h2 {
+  margin-top: 0;
+}
+.codebase-section {
+  margin: 24px 0;
+}
+.codebase-section article,
+.codebase-decision {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 10px 0;
+}
+.codebase-section h4 {
+  margin: 0 0 6px;
+}
+.codebase-section p {
+  white-space: pre-line;
+}
+.codebase-actions,
+.codebase-references,
+.codebase-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.codebase-editor-actions {
+  padding: 6px 12px;
+  flex-shrink: 0;
+}
+.codebase-references .text-button {
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.codebase-status {
+  color: var(--muted);
+}
+.codebase-tree {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.codebase-tree ul {
+  padding-left: 16px;
+}
+.codebase-tree li {
+  min-width: 0;
+}
+.codebase-tree small {
+  display: block;
+  padding-left: 10px;
+}
+.codebase-tree-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 34px;
+}
+.codebase-tree-row input {
+  flex: 0 0 auto;
+}
+.codebase-tree-row .tree-open {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.codebase-tree-row small {
+  max-width: 38%;
+  font-size: 11px;
+}
+.codebase-search {
+  margin: 8px 0;
+  width: 100%;
+}
+.codebase-file-info {
+  padding: 20px;
+  overflow: auto;
+  flex: 1;
+}
+.codebase-data,
+.codebase-file-info pre,
+.codebase-import-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+#editor-panel:has(.codebase-file-info) #editor-container {
+  display: none;
+}
+#editor-panel.codebase-understanding
+  > :not(.codebase-tabs):not(.codebase-cockpit) {
+  display: none;
+}
+.codebase-tour-list button[aria-current="true"] {
+  box-shadow: inset 3px 0 var(--accent);
+}
+.codebase-import-dialog {
+  width: min(1000px, calc(100vw - 32px));
+  max-width: 1000px;
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+}
+.codebase-import-form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 40px);
+  min-height: min(560px, calc(100dvh - 40px));
+}
+.codebase-import-form > .dialog-heading,
+.codebase-import-form > .form-error,
+.codebase-import-form > .muted {
+  margin: 0;
+  padding: 12px 20px;
+  flex-shrink: 0;
+}
+.codebase-import-content {
+  padding: 12px 20px;
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+}
+.codebase-import-content > .field {
+  margin-bottom: 12px;
+}
+.codebase-import-columns {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  min-height: 230px;
+  margin-top: 12px;
+  gap: 16px;
+}
+.codebase-import-tree {
+  max-height: 320px;
+  overflow: auto;
+}
+.codebase-import-preview {
+  min-width: 0;
+  max-height: 320px;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
+.codebase-import-preview h3 {
+  overflow-wrap: anywhere;
+}
+.codebase-import-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.codebase-import-footer > span {
+  flex: 1;
+  font-size: 12px;
+}
+.codebase-drop {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  margin: 20px 0;
+}
+@media (max-width: 600px) {
+  .codebase-cockpit {
+    padding: 12px;
+  }
+  .codebase-import-dialog {
+    width: calc(100vw - 12px);
+    max-height: calc(100dvh - 12px);
+  }
+  .codebase-import-form {
+    max-height: calc(100dvh - 20px);
+  }
+  .codebase-import-columns {
+    grid-template-columns: 1fr;
+  }
+  .codebase-import-preview {
+    max-height: 160px;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+  }
+  .codebase-import-footer > span {
+    flex-basis: 100%;
+  }
+}
 .runtime-hint {
   padding: 4px 12px;
   color: var(--warning);

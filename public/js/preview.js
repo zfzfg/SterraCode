@@ -334,6 +334,10 @@ export function initPreview() {
   on("files-changed", schedule);
   on("session-opened", hide);
   function updateAccess() {
+    if (state.session?.mode === "codebase") {
+      document.getElementById("preview-open").hidden = true;
+      return;
+    }
     document.getElementById("preview-open").hidden =
       panel.hidden &&
       !/\.html?$/i.test(currentFile() || "") &&

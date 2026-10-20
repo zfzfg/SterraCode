@@ -7,9 +7,23 @@ import { loadConfig } from "./config.js";
 import { createAuthService } from "./services/auth.js";
 import { abortAllTurns } from "./services/teacher.js";
 import { drainServer, writeShutdownState } from "./services/shutdown.js";
+import { recoverCodebasePublications } from "./services/sessions.js";
+import {
+  recoverCodebaseImports,
+  startCodebaseImportCleanup,
+} from "./services/codebaseImports.js";
+import {
+  interruptCodebaseJobs,
+  waitForCodebaseJobs,
+} from "./services/codebaseJobs.js";
+import { initializeGitCredentials } from "./services/gitCredentials.js";
 const config = loadConfig();
 process.umask(0o002);
 await ensureDataDirs();
+await initializeGitCredentials();
+await recoverCodebasePublications();
+await recoverCodebaseImports();
+const stopImportCleanup = startCodebaseImportCleanup();
 const prune = () =>
   prunePreviews().catch((error) =>
     console.error("Vorschau-Bereinigung fehlgeschlagen", { code: error.code }),
@@ -41,12 +55,16 @@ let stopping = false;
 async function shutdown() {
   if (stopping) return;
   stopping = true;
+  stopImportCleanup();
   const confirmed = await drainServer({
     app,
     server,
     dataDir: config.dataDir,
     abortChats: abortAllTurns,
-    stopJobs: stopAllProcesses,
+    stopJobs: async () => {
+      interruptCodebaseJobs();
+      await Promise.all([stopAllProcesses(), waitForCodebaseJobs()]);
+    },
   });
   if (!confirmed)
     console.warn(

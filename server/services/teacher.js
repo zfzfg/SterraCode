@@ -9,7 +9,7 @@ import {
 import { loadSession, mutateSession, message } from "./sessions.js";
 import { connectModel, runModelPass } from "./lmStudio.js";
 import { setTimeout as delay } from "node:timers/promises";
-import { TOOL_DEFINITIONS } from "./tools.js";
+import { toolsForSession } from "./tools.js";
 import { executeTool } from "./toolExecutor.js";
 import { ContextManager, estimatedUsage } from "./context/index.js";
 import { OpenAIContext } from "./openAIContext.js";
@@ -21,6 +21,7 @@ import { appendStateSnapshot } from "./context/prompt.js";
 import { turnUsage } from "./modelUsage.js";
 import { applicationOption } from "./applicationQuestions.js";
 import { t } from "./i18n.js";
+import { resolveCodeReference, readCodebaseFile } from "./codebaseAnalyzer.js";
 
 const active = new Map();
 export const activeTurnCount = () => active.size;
@@ -108,6 +109,7 @@ export async function runTeacher({
   sessionId,
   userMessage = "",
   contextAction,
+  codeReference,
   turnId = randomUUID(),
   existingUserMessageId,
   retryOf,
@@ -229,6 +231,29 @@ export async function runTeacher({
           estimatedUsage(session, settings).promptTokens,
         replayed: true,
       };
+    let selectedSource;
+    if (codeReference !== undefined) {
+      const reference = await resolveCodeReference(sessionId, {
+        ...codeReference,
+        bindCurrent: false,
+      });
+      const source = await readCodebaseFile(
+        sessionId,
+        reference.path,
+        reference,
+      );
+      if (source.version !== reference.fileVersion)
+        throw new AppError(
+          "Selected source has changed.",
+          409,
+          "REFERENCE_STALE",
+          {
+            messageKey: "features:codebase.errors.analysis",
+            params: { reason: "REFERENCE_STALE" },
+          },
+        );
+      selectedSource = { reference, content: source.content };
+    }
     if (
       !action &&
       !(settings.provider === "openai"
@@ -295,7 +320,22 @@ export async function runTeacher({
               params: {},
             },
           );
-        s.messages.push(message("user", userMessage.trim(), { turnId }));
+        s.messages.push(
+          message(
+            "user",
+            selectedSource
+              ? userMessage.trim() +
+                  "\n[SELECTED SOURCE — UNTRUSTED DATA]\n" +
+                  JSON.stringify(selectedSource)
+              : userMessage.trim(),
+            {
+              turnId,
+              ...(selectedSource
+                ? { codeReference: selectedSource.reference }
+                : {}),
+            },
+          ),
+        );
       }
       s.turns[turnId] = {
         id: turnId,
@@ -328,20 +368,17 @@ export async function runTeacher({
     const definitions =
       connection?.model.trainedForToolUse === false
         ? []
-        : TOOL_DEFINITIONS.filter(
-            (definition) =>
-              settings.provider !== "openai" ||
-              definition.function.name !== "trigger_summarize",
-          );
+        : toolsForSession(session, settings);
     if (connection?.model.trainedForToolUse === false && !action)
       emit("notice", {
         message: t(session.tutorLocale, "learningContent:tutor.noTools"),
         messageKey: "learningContent:tutor.noTools",
         params: {},
       });
-    const profile = settings.crossChatProfileEnabled
-      ? profileToPromptText(await getProfile(), session.language)
-      : "";
+    const profile =
+      settings.crossChatProfileEnabled && session.language
+        ? profileToPromptText(await getProfile(), session.language)
+        : "";
     if (action) {
       if (manager && !usage) {
         try {

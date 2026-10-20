@@ -4,11 +4,44 @@
 >
 > **Stand:** 20. Oktober 2026 · Überarbeitung nach Prüfung des bestehenden Quellcodes
 >
-> **Status:** Planung, keine Implementierung oder Betriebsfreigabe
+> **Status:** Implementierung und Abnahme; tatsächliche Plattformfreigaben siehe [docker/ABNAHME.md](docker/ABNAHME.md).
 >
 > **Ziel:** Bestehende Projekte sicher importieren, ihre Struktur verstehen und sie mit einem KI-Tutor schrittweise erkunden.
 
 Die im bisherigen Interview festgehaltenen Präferenzen bleiben die Grundlage. Dieses Dokument trennt sie von neuen Umsetzungsempfehlungen, benennt Konflikte mit der heutigen Anwendung und legt überprüfbare Abläufe fest. **„Empfohlen“ bezeichnet eine begründete Planungsentscheidung, keine nachträglich vom Nutzer bestätigte Präferenz.**
+
+## Umsetzungsnachweis
+
+Die folgenden Abschnitte bleiben als ursprüngliche Anforderungen erhalten. Die
+konkreten Verträge, konfigurierbaren Standardbudgets und Betriebsgrenzen stehen
+jetzt in [docs/CODEBASE-EXPLORER.md](docs/CODEBASE-EXPLORER.md).
+
+| Bereich                          | Implementierung                                                                                                                                     | Nachweis                                                                                                      |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Modus/Schema/Veröffentlichung    | `sessions.js`: Codebase-Modus ohne Pflichtsprache, vorbereiteter Workspace, dauerhaftes Veröffentlichungsjournal                                    | Import-/Analyse-Regressionen; Schema 2 plus Codebase-Schema 1                                                 |
+| ZIP/Große Projekte/Auswahl       | `codebaseImports.js`, `codebaseTree.js`: Streaming, CRC/Pfade/Budgets, Versionen/Digest, gebundene 500-MB-Bestätigung, TTL, SSE/Polling             | `tests/codebase-imports.test.js`; 10.000-Einträge-Benchmark                                                   |
+| Oberfläche                       | Importdialog, paginierte Bäume, Code/Verstehen, Metadaten/Vorschau, vier Themes, DE/EN/ES                                                           | `tests/e2e/codebase.spec.js`; bestehende Layoutbaselines unverändert                                          |
+| Manuelle Analyse/Tour/Referenzen | `codebaseAnalyzer.js`: begrenzter Providerkontext, Schemaprüfung, Quellhashes, Abbruch, vorheriges Ergebnis, separate Tourversionen                 | `tests/codebase-analysis.test.js`; Offline-Provider und E2E-Zähler                                            |
+| Tutorberechtigungen              | Angebot und Executor prüfen Codebase-Capabilities; begrenzte lesende Tools, strukturierte geprüfte Erklärverweise                                   | Executor-/Prompt-Injection-Regressionen                                                                       |
+| Git und Secrets                  | Appseitiger Snapshotimport, Ziel-/DNS-Bindung, private Credentials verschlüsselt und hostgebunden, SSH-Hostschlüssel/Unlock/Generierung             | `tests/git-imports.test.js`; `tests/docker/git.mjs` mit synthetischem HTTPS/PAT/SSH-Server                    |
+| Demos/Runtimeentscheidungen      | Separate Demo-Sessions, Review, dauerhafte einmalige Installations-/Ausführungskarten, gemeinsamer Prozessdienst, geprüfter Bubblewrap-Adapter      | `tests/codebase-demos.test.js`, `tests/isolated-demos.test.js`; tatsächliche Host-Capability gesondert prüfen |
+| Wartung/Löschen/Restore          | Aktive Jobs im Drain, Sperrreihenfolge und Abbruch, Sicherung persistenter Daten, temporäre Quellen ausgeschlossen, keine automatische Wiederholung | `tests/docker/codebase.mjs`; native Plattformresultate im Abnahmeprotokoll                                    |
+
+**Bewusste Vertragsentscheidungen:** Der ZIP-Upload verwendet einen exakt begrenzten
+`PUT .../upload` mit `application/zip` statt Multipart; Authentifizierung und
+Originprüfung bleiben unverändert vorgeschaltet. Alte JSON-Routen bleiben auf
+4 MiB begrenzt. Die vorhandene Session-Schemaversion 2 bleibt bestehen; die
+Explorer-Erweiterung hat eine eigene Version. Bekannte Geheimnisdateien werden
+nicht veröffentlicht. Laufzeitinstallation und Demoausführung sind getrennte
+Entscheidungen. Ohne nachgewiesene Hostisolation bleibt Demoausführung gesperrt;
+eine gesicherte Session ist kein Sandboxnachweis.
+
+Die Gesamtfreigabe am Dokumentende bleibt eine Abnahmebedingung. Nicht durchgeführte
+native Plattform-, Benutzerstudien- oder reale Providerprüfungen werden nicht durch
+Mocktests ersetzt. Es wurden keine GitHub-Releases oder öffentlichen Installer
+veröffentlicht. Die Aktualisierung des bestehenden Ubuntu-Quellpaket-Stacks wurde
+im Chat ausdrücklich zusätzlich autorisiert und wird mit eigenem Sicherungs- und
+Deploymentnachweis dokumentiert.
 
 ## Inhalt
 

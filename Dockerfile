@@ -11,7 +11,8 @@ LABEL org.opencontainers.image.version="${APP_VERSION}"
 LABEL org.opencontainers.image.source="https://github.com/zfzfg/SterraCode"
 ENV NODE_ENV=production STERRACODE_MODE=docker STERRACODE_DATA_DIR=/data STERRACODE_WORKSPACE_DIR=/workspaces
 WORKDIR /app
-RUN groupadd --gid 10001 sterracode && useradd --uid 10001 --gid 10001 --no-create-home sterracode
+RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client ca-certificates && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 sterracode && useradd --uid 10001 --gid 10001 --no-create-home sterracode
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY server ./server

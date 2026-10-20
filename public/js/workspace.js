@@ -5,6 +5,7 @@ import { $, node, formDialog, confirmDialog } from "./ui.js";
 import { createIcon, button } from "./icons.js";
 import { flush, openEditorFile, currentFile } from "./editor.js";
 import { randomUUID } from "./uuid.js";
+import { isCodebase, loadCodebaseTree } from "./codebaseTree.js";
 const expanded = new Set();
 export const captureWorkspaceState = () => [...expanded];
 export function restoreWorkspaceState(saved) {
@@ -34,6 +35,7 @@ async function selectFileNow(id, file) {
   renderTabs();
   await loadFiles();
   emit("close-sidebar");
+  emit("file-selected", file);
 }
 export function renderTabs() {
   const container = $("file-tabs");
@@ -84,6 +86,8 @@ export async function loadFiles() {
     );
     return;
   }
+  if (isCodebase(session)) return loadCodebaseTree();
+  container.setAttribute("role", "tree");
   const files = await api(`${workspaceURL(session.id)}/files`);
   if (state.session?.id !== session.id) return;
   container.replaceChildren();
@@ -238,6 +242,7 @@ async function remove(path) {
   );
   await refreshWorkspace();
 }
+export { rename as renameFile, remove as removeFile };
 export async function refreshWorkspace() {
   const id = state.session?.id;
   if (!id) return;

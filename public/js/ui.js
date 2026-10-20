@@ -195,7 +195,7 @@ export function formDialog({
       "close",
       () => {
         for (const { input, field } of controls.values())
-          if (field.type === "password") input.value = "";
+          if (field.type === "password" || field.secret) input.value = "";
         dialog.removeEventListener("cancel", preventCancel);
         resolve(result);
       },
@@ -223,11 +223,25 @@ export function markdown(text) {
   let code = null,
     list = null;
   function inline(parent, value) {
-    const pattern = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+    const pattern =
+      /(`[^`]+`|\*\*[^*]+\*\*|(?<![\w:/])(?:[\w.-]+\/)*[\w.-]+\.[\w]+#L\d+(?:-L\d+)?)/g;
     let start = 0;
     for (const match of value.matchAll(pattern)) {
       parent.append(document.createTextNode(value.slice(start, match.index)));
       const raw = match[0];
+      if (!raw.startsWith("`") && !raw.startsWith("**")) {
+        const candidate = node("span", "code-reference-candidate", raw);
+        parent.append(candidate);
+        queueMicrotask(() =>
+          window.dispatchEvent(
+            new CustomEvent("code-reference-discovery", {
+              detail: { element: candidate, text: raw },
+            }),
+          ),
+        );
+        start = match.index + raw.length;
+        continue;
+      }
       parent.append(
         node(
           raw.startsWith("`") ? "code" : "strong",

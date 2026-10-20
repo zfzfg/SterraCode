@@ -1,7 +1,7 @@
 import { t, getLocale, LOCALES } from "./i18n.js";
 import { api, workspaceURL } from "./api.js";
 import { state, emit } from "./state.js";
-import { $, toast, formDialog } from "./ui.js";
+import { $, node, toast, formDialog } from "./ui.js";
 
 const models = new Map();
 export const hasUnsavedChanges = () =>
@@ -25,6 +25,25 @@ const languages = {
   md: "markdown",
   html: "html",
   css: "css",
+  jsx: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  tsx: "typescript",
+  c: "c",
+  cc: "cpp",
+  hpp: "cpp",
+  yml: "yaml",
+  yaml: "yaml",
+  toml: "ini",
+  xml: "xml",
+  rb: "ruby",
+  php: "php",
+  kt: "kotlin",
+  kts: "kotlin",
+  swift: "swift",
+  sql: "sql",
+  scss: "scss",
+  vue: "html",
 };
 export const fileLanguage = (file) =>
   languages[file?.split(".").pop()?.toLowerCase()] || "plaintext";
@@ -104,8 +123,15 @@ export function initEditor() {
           contextMenuGroupId: "navigation",
           run: (ed) => {
             const text = ed.getModel()?.getValueInRange(ed.getSelection());
-            if (text?.trim()) emit("explain-code", text);
+            if (text?.trim()) explainSelection();
+            else toast(t("features:codebase.selectCode"));
           },
+        });
+        editor.addAction({
+          id: "explain-project-context",
+          label: t("features:codebase.explainContext"),
+          contextMenuGroupId: "navigation",
+          run: () => explainSelection(true),
         });
         updateEditorTheme();
         resolve();
@@ -213,6 +239,7 @@ export async function openEditorFile(sessionId, file) {
   if (!file) {
     current = null;
     editor.setModel(null);
+    $("codebase-file-info")?.remove();
     $("file-path").textContent = t("features:editor.noFile");
     status();
     return true;
@@ -223,9 +250,47 @@ export async function openEditorFile(sessionId, file) {
       `${workspaceURL(sessionId)}/files/content?path=${encodeURIComponent(file)}`,
     );
   } catch (error) {
-    if (error.code !== "TEXT_REQUIRED") throw error;
+    if (
+      error.code !== "TEXT_REQUIRED" &&
+      !([413, 415].includes(error.status) && state.session?.mode === "codebase")
+    )
+      throw error;
     if (state.session?.id !== sessionId || request !== navigationVersion)
       return false;
+    if (state.session?.mode === "codebase") {
+      const metadata = await api(
+        `/api/codebase/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(file)}`,
+      );
+      if (state.session?.id !== sessionId || request !== navigationVersion)
+        return false;
+      current = null;
+      editor.setModel(null);
+      $("codebase-file-info")?.remove();
+      const info = node("section", "codebase-file-info");
+      info.id = "codebase-file-info";
+      info.append(
+        node("h3", "", file),
+        node(
+          "p",
+          "",
+          t(
+            metadata.kind === "binary"
+              ? "features:codebase.binaryInfo"
+              : "features:codebase.largeInfo",
+          ),
+        ),
+        node(
+          "p",
+          "muted",
+          t("features:codebase.fileBytes", { bytes: metadata.bytes }),
+        ),
+      );
+      if (metadata.preview) info.append(node("pre", "", metadata.preview));
+      $("editor-container").after(info);
+      $("file-path").textContent = file;
+      emit("file-active", file);
+      return true;
+    }
     const name = file.split("/").pop();
     const isJavaClass = /\.class$/i.test(file);
     await formDialog({
@@ -289,6 +354,7 @@ export async function openEditorFile(sessionId, file) {
     record.loading = false;
   }
   current = record;
+  $("codebase-file-info")?.remove();
   editor.setModel(record.model);
   $("file-path").textContent = file;
   status();
@@ -412,4 +478,43 @@ export function revealLine(line) {
   editor?.setPosition({ lineNumber: line, column: 1 });
   editor?.revealLineInCenter(line);
   editor?.focus();
+}
+export function revealRange(startLine, endLine = startLine) {
+  const count = editor?.getModel()?.getLineCount();
+  if (
+    !count ||
+    !Number.isInteger(startLine) ||
+    !Number.isInteger(endLine) ||
+    startLine < 1 ||
+    endLine < startLine ||
+    endLine > count
+  )
+    throw new Error(t("features:codebase.invalidRange"));
+  editor.setSelection({
+    startLineNumber: startLine,
+    startColumn: 1,
+    endLineNumber: endLine,
+    endColumn: editor.getModel().getLineMaxColumn(endLine),
+  });
+  editor.revealLinesInCenter(startLine, endLine);
+  editor.focus();
+}
+export function explainSelection(projectContext = false) {
+  const selection = editor?.getSelection();
+  if (!current || !selection || selection.isEmpty())
+    return toast(t("features:codebase.selectCode"));
+  const reference = {
+    sessionId: current.sessionId,
+    path: current.path,
+    startLine: selection.startLineNumber,
+    endLine: selection.endLineNumber,
+    fileVersion: current.version,
+  };
+  if (state.session?.mode === "codebase")
+    emit("explain-code-reference", {
+      reference,
+      projectContext,
+      draft: current.dirty,
+    });
+  else emit("explain-code", current.model.getValueInRange(selection));
 }

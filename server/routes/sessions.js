@@ -22,6 +22,8 @@ import {
 } from "../services/storage.js";
 import { normalizePath } from "../services/workspace.js";
 import { LOCALES } from "../../shared/i18n/locale.js";
+import { cancelCodebaseJobsForSession } from "../services/codebaseJobs.js";
+import { waitForSessionAnalyses } from "../services/codebaseAnalyzer.js";
 const router = express.Router();
 router.get(
   "/",
@@ -88,7 +90,7 @@ router.patch(
             s.title = b.title.trim();
           }
           if (b.language !== undefined) {
-            if (!LANGUAGES.includes(b.language))
+            if (s.mode === "codebase" || !LANGUAGES.includes(b.language))
               throw new AppError("Ungültige Sprache.", 400, "INVALID_REQUEST", {
                 messageKey: "errors:session.language",
               });
@@ -165,6 +167,8 @@ router.delete(
           });
         });
       });
+      cancelCodebaseJobsForSession(id);
+      await waitForSessionAnalyses(id);
       if (
         process.env.STERRACODE_MODE === "docker" ||
         process.env.STERRACODE_RUNNER_URL
@@ -188,7 +192,9 @@ router.delete(
           );
         }
       } else await stopSessionProcesses(id);
-      await serial(`workspace:${id}`, () => removeSession(id));
+      await serial(`codebase-demo:${id}`, () =>
+        serial(`workspace:${id}`, () => removeSession(id)),
+      );
     });
     res.json({ ok: true });
   }),

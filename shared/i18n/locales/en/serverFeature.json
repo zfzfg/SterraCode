@@ -235,5 +235,39 @@
   "models": {
     "openAIOffline": "OpenAI is unreachable. Check the API key, internet access and permissions.",
     "lmStudioOffline": "LM Studio is unreachable. Start its server and check the URL and secret file."
+  },
+  "git": {
+    "storage": "The Git credential store is invalid.",
+    "key": "The Git master key is missing or cannot decrypt the data.",
+    "host": "This Git destination is not administratively allowed.",
+    "credential": "Invalid Git credentials.",
+    "hostKey": "A trusted, independently verified SSH host key is required.",
+    "notFound": "Git credential not found.",
+    "conflict": "The Git credentials have changed. Reload them.",
+    "binding": "These credentials are not bound to this repository.",
+    "transport": "New secrets may only be entered over HTTPS or loopback.",
+    "source": "Only allowed HTTPS or SSH repository URLs without tokens, passwords or queries are accepted.",
+    "ref": "Invalid Git branch or tag.",
+    "network": "The Git destination is unreachable.",
+    "cancelled": "Git import cancelled.",
+    "timeout": "The Git import reached its time limit.",
+    "limit": "The Git import exceeds its configured resource budget.",
+    "unavailable": "Git is unavailable. ZIP import remains available.",
+    "failed": "Git import failed. Check the URL, access and host key.",
+    "path": "The repository contains an unsupported path or file type."
+  },
+  "demo": {
+    "parent": "Demos require a codebase session.",
+    "notFound": "Demo or action request not found.",
+    "isolation": "Isolated demo execution is not verified on this runner. You can still view the code.",
+    "invalid": "Invalid demo or action.",
+    "conflict": "The operation ID is bound to different data.",
+    "local": "Automatic runtime installation is available only in Docker mode.",
+    "disabled": "This demo action is disabled in settings.",
+    "decided": "This action already has a different decision.",
+    "expired": "The authorization request expired. Request a new action.",
+    "changed": "The demo changed after the request. Authorize its current code again.",
+    "catalog": "The runtime catalog changed. Request a new action.",
+    "runtime": "The authorized runtime is unavailable."
   }
 }

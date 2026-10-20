@@ -32,6 +32,9 @@ import { initTracer } from "./js/tracer.js";
 import { initPreview } from "./js/preview.js";
 import { openProfile } from "./js/profile.js";
 import { openProjects, openExport, openJournal } from "./js/projects.js";
+import { initCodebase } from "./js/codebase.js";
+import { openCodebaseImport } from "./js/codebaseImport.js";
+import { openGitCredentials } from "./js/gitCredentials.js";
 
 for (const [id, open] of [
   ["projects-btn", openProjects],
@@ -598,6 +601,12 @@ async function openSettings() {
     title: t("app:static.settings"),
     actions: [
       {
+        label: t("features:codebase.gitCredentials"),
+        onClick: () => {
+          nextAction = openGitCredentials;
+        },
+      },
+      {
         label: t("updates:title"),
         onClick: () => {
           nextAction = openUpdateSettings;
@@ -737,6 +746,14 @@ async function init() {
   initTerminal();
   initTracer();
   initPreview();
+  initCodebase();
+  on("codebase-import", openCodebaseImport);
+  for (const id of ["welcome-codebase-import"]) {
+    $(id).disabled = false;
+    $(id).addEventListener("click", () =>
+      openCodebaseImport().catch((e) => toast(e.message, "error")),
+    );
+  }
   initLocaleSwitch({ openSession });
   $("changes-btn").addEventListener("click", () =>
     showChanges().catch((e) => toast(e.message, "error")),

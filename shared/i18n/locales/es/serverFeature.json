@@ -235,5 +235,39 @@
   "models": {
     "openAIOffline": "No se puede acceder a OpenAI. Comprueba la clave de API, el acceso a Internet y los permisos.",
     "lmStudioOffline": "No se puede acceder a LM Studio. Inicia su servidor y comprueba la URL y el archivo secreto."
+  },
+  "git": {
+    "storage": "El almacen de credenciales Git no es valido.",
+    "key": "Falta la clave maestra Git o no puede descifrar los datos.",
+    "host": "Este destino Git no esta autorizado por la administracion.",
+    "credential": "Credenciales Git no validas.",
+    "hostKey": "Se requiere una clave SSH del servidor verificada de forma independiente.",
+    "notFound": "No se encontro la credencial Git.",
+    "conflict": "Las credenciales Git han cambiado. Vuelve a cargarlas.",
+    "binding": "Estas credenciales no corresponden a este repositorio.",
+    "transport": "Los secretos nuevos solo pueden introducirse por HTTPS o loopback.",
+    "source": "Solo se aceptan URL HTTPS o SSH autorizadas sin tokens, contrasenas ni consultas.",
+    "ref": "Rama o etiqueta Git no valida.",
+    "network": "No se puede acceder al destino Git.",
+    "cancelled": "Importacion Git cancelada.",
+    "timeout": "La importacion Git alcanzo su limite de tiempo.",
+    "limit": "La importacion Git supera su presupuesto de recursos configurado.",
+    "unavailable": "Git no esta disponible. Puedes seguir importando ZIP.",
+    "failed": "La importacion Git fallo. Revisa la URL, los permisos y la clave del servidor.",
+    "path": "El repositorio contiene una ruta o un tipo de archivo no admitido."
+  },
+  "demo": {
+    "parent": "Las demos requieren una sesion de base de codigo.",
+    "notFound": "No se encontro la demo o solicitud de accion.",
+    "isolation": "La ejecucion aislada de demos no esta verificada en este runner. Puedes seguir viendo el codigo.",
+    "invalid": "Demo o accion no valida.",
+    "conflict": "El identificador de operacion corresponde a otros datos.",
+    "local": "La instalacion automatica de entornos solo esta disponible en modo Docker.",
+    "disabled": "Esta accion de demo esta desactivada en los ajustes.",
+    "decided": "Esta accion ya tiene otra decision.",
+    "expired": "La solicitud de autorizacion ha caducado. Solicita una accion nueva.",
+    "changed": "La demo cambio despues de la solicitud. Autoriza de nuevo su codigo actual.",
+    "catalog": "El catalogo de entornos cambio. Solicita una accion nueva.",
+    "runtime": "El entorno autorizado no esta disponible."
   }
 }

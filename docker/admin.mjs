@@ -13,6 +13,17 @@ const roots = {
   "app-key": "/app-key",
   "runner-key": "/runner-key",
 };
+export function codebaseBackupExclusions(volume) {
+  if (volume === "app-data")
+    return [
+      "./codebase-imports/*/archive.zip",
+      "./codebase-imports/*/manifest.jsonl",
+      "./codebase-imports/*/git",
+      "./codebase-publications",
+    ];
+  if (volume === "workspaces") return ["./.codebase-staging"];
+  return [];
+}
 const maxBytes = Number(
   process.env.STERRACODE_ARCHIVE_MAX_BYTES || 100 * 1024 ** 3,
 );
@@ -376,6 +387,7 @@ async function backup() {
     await run("tar", [
       "--format=posix",
       "--numeric-owner",
+      ...codebaseBackupExclusions(name).map((entry) => `--exclude=${entry}`),
       "-cf",
       target,
       "-C",

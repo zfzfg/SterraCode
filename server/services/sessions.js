@@ -101,7 +101,7 @@ export function setLearningPlan(session, plan) {
 }
 export { copySafe } from "./safeFiles.js";
 async function migrate(session) {
-  if (session.schemaVersion === 2) return session;
+  if (session.schemaVersion >= 2) return session;
   const originalDigest = createHash("sha256")
     .update(JSON.stringify(session))
     .digest("hex");
@@ -308,6 +308,9 @@ export async function mutateSession(id, change, expectedRevision) {
       );
     const contextKey = (s) =>
       JSON.stringify([
+        s.mode,
+        s.codebase?.analysis?.analysisId,
+        s.codebase?.focus,
         s.language,
         s.tutorLocale,
         s.activeFile,
@@ -346,7 +349,8 @@ export async function createSession(
     typeof title !== "string" ||
     !title.trim() ||
     title.length > 200 ||
-    !LANGUAGES.includes(language)
+    (!(seed.mode === "codebase" && language === null) &&
+      !LANGUAGES.includes(language))
   )
     throw new AppError(
       "Ungültiger Sessionname oder ungültige Sprache.",
@@ -360,12 +364,16 @@ export async function createSession(
     });
   const id = seed.id || randomUUID();
   const now = new Date().toISOString();
-  const file = seed.activeFile || seed.files?.[0]?.path || entryFile(language);
+  const file =
+    seed.mode === "codebase"
+      ? null
+      : seed.activeFile || seed.files?.[0]?.path || entryFile(language);
   const question = materializeApplicationQuestion("onboarding", tutorLocale);
   const session = {
     id,
     title: title.trim(),
     language,
+    ...(seed.mode ? { mode: seed.mode } : {}),
     tutorLocale,
     localeSchemaVersion: 1,
     schemaVersion: 2,
@@ -373,23 +381,38 @@ export async function createSession(
     createdAt: now,
     updatedAt: now,
     activeFile: file,
-    openFiles: [file],
-    messages: [message("event", "", { event: question })],
+    openFiles: file ? [file] : [],
+    messages:
+      seed.mode === "codebase"
+        ? []
+        : [message("event", "", { event: question })],
     summaries: [],
     contextVersion: CONTEXT_VERSION,
     contextUsage: null,
     turns: {},
     currentTask: seed.task || null,
     ...(seed.project ? { project: seed.project } : {}),
+    ...(seed.codebase ? { codebase: seed.codebase } : {}),
     learningPlan: null,
     onboardingAsked: true,
   };
-  await fs.mkdir(path.join(WORKSPACE_DIR, id), {
-    mode: 0o2770,
-  });
+  const publicationFile = path.join(
+    DATA_DIR,
+    "codebase-publications",
+    `${validateSessionId(id)}.json`,
+  );
+  if (seed.preparation) {
+    await writeJSON(publicationFile, {
+      session,
+      importId: seed.codebase.importId,
+      phase: "prepared",
+    });
+    await fs.rename(seed.preparation, path.join(WORKSPACE_DIR, id));
+  } else await fs.mkdir(path.join(WORKSPACE_DIR, id), { mode: 0o2770 });
   if (process.platform !== "win32")
     await fs.chmod(path.join(WORKSPACE_DIR, id), 0o2770);
-  for (const source of seed.files || [{ path: file, content: "" }]) {
+  for (const source of seed.files ||
+    (file ? [{ path: file, content: "" }] : [])) {
     const full = path.join(WORKSPACE_DIR, id, source.path);
     await fs.mkdir(path.dirname(full), { recursive: true, mode: 0o2770 });
     await fs.writeFile(full, source.content, { mode: 0o660, flag: "wx" });
@@ -401,7 +424,127 @@ export async function createSession(
       }),
     ];
   await writeJSON(sessionFile(id), session);
+  if (seed.preparation) await fs.rm(publicationFile, { force: true });
   return session;
+}
+
+// The publication journal spans the workspace rename and session JSON commit.
+// It contains no source contents and can complete only its own fixed target.
+export async function recoverCodebasePublications() {
+  for (const file of await listFiles(
+    path.join(DATA_DIR, "codebase-publications"),
+  )) {
+    const journal = await readJSON(file);
+    const id = validateSessionId(journal.session?.id);
+    await serial(`lifecycle:${id}`, async () => {
+      // A deletion marker owns this snapshot, including when a preceding
+      // publication was committed but journal cleanup was interrupted.
+      try {
+        await assertSessionWritable(id);
+      } catch (error) {
+        if (error.code === "SESSION_DELETING") return;
+        throw error;
+      }
+      if (
+        journal.session.mode !== "codebase" ||
+        journal.importId !== journal.session.codebase?.importId
+      )
+        throw new AppError(
+          "Invalid publication journal.",
+          409,
+          "IMPORT_INTERRUPTED",
+        );
+      try {
+        const stat = await fs.lstat(path.join(WORKSPACE_DIR, id));
+        if (!stat.isDirectory() || stat.isSymbolicLink())
+          throw new AppError(
+            "Invalid publication workspace.",
+            409,
+            "IMPORT_INTERRUPTED",
+          );
+      } catch (error) {
+        if (error.code === "ENOENT") return;
+        throw error;
+      }
+      try {
+        const existing = await readJSON(sessionFile(id));
+        if (
+          existing.id !== id ||
+          existing.codebase?.importId !== journal.importId
+        )
+          throw new AppError(
+            "Publication target belongs to another import.",
+            409,
+            "IDEMPOTENCY_CONFLICT",
+          );
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+        await writeJSON(sessionFile(id), journal.session);
+      }
+      await fs.rm(file, { force: true });
+    });
+  }
+}
+
+export async function createCodebaseSession(
+  { title, tutorLocale = DEFAULT_LOCALE, source },
+  { id = randomUUID(), preparation, importId, summary = {} } = {},
+) {
+  validateSessionId(id);
+  validateSessionId(importId);
+  const expected = path.join(WORKSPACE_DIR, ".codebase-staging", importId);
+  if (path.resolve(preparation || "") !== expected)
+    throw new AppError("Invalid import preparation.", 403, "PATH_DENIED");
+  return serial(`lifecycle:${id}`, async () => {
+    await assertSessionWritable(id);
+    try {
+      const existing = await readJSON(sessionFile(id));
+      if (
+        existing.id !== id ||
+        existing.mode !== "codebase" ||
+        existing.codebase?.importId !== importId
+      )
+        throw new AppError(
+          "Publication target belongs to another import.",
+          409,
+          "IDEMPOTENCY_CONFLICT",
+        );
+      return existing;
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    if (
+      !(await fs.lstat(expected)).isDirectory() ||
+      (await fs.lstat(expected)).isSymbolicLink() ||
+      (await fs.lstat(path.dirname(expected))).isSymbolicLink()
+    )
+      throw new AppError("Invalid import preparation.", 403, "PATH_DENIED");
+    const codebase = {
+      schemaVersion: 1,
+      importId,
+      source,
+      inventory: summary,
+      workspaceGeneration: 0,
+      analysis: { analysisId: null, freshness: "not_analyzed" },
+      tour: {
+        version: 0,
+        analysisId: null,
+        currentStepId: null,
+        visitedStepIds: [],
+        understoodStepIds: [],
+      },
+    };
+    return createSession(
+      { title, tutorLocale, language: null },
+      {
+        id,
+        mode: "codebase",
+        codebase,
+        preparation,
+        files: [],
+      },
+    );
+  });
 }
 export async function listSessions() {
   const result = [];
@@ -411,6 +554,15 @@ export async function listSessions() {
       id: s.id,
       title: s.title,
       language: s.language,
+      ...(s.mode ? { mode: s.mode } : {}),
+      ...(s.codebase
+        ? {
+            codebase: {
+              inventory: s.codebase.inventory,
+              analysis: s.codebase.analysis,
+            },
+          }
+        : {}),
       tutorLocale: normalizeLocale(s.tutorLocale, null),
       updatedAt: s.updatedAt,
       createdAt: s.createdAt,
@@ -467,6 +619,8 @@ export async function removeSession(id) {
         [path.join(DATA_DIR, "proposals", id), "proposals"],
         [path.join(DATA_DIR, "traces", id), "traces"],
         [path.join(DATA_DIR, "test-runs", id), "test-runs"],
+        [path.join(DATA_DIR, "codebases", id), "codebase"],
+        [path.join(DATA_DIR, "codebase-demos", id), "codebase-demos"],
       ]) {
         try {
           await copySafe(origin, path.join(backup, target));
@@ -499,6 +653,17 @@ export async function removeSession(id) {
       force: true,
     });
     await fs.unlink(sessionFile(id));
+    await fs.rm(path.join(DATA_DIR, "codebase-publications", `${id}.json`), {
+      force: true,
+    });
+    await removeSafe(path.join(DATA_DIR, "codebases", id)).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+    await removeSafe(path.join(DATA_DIR, "codebase-demos", id)).catch(
+      (error) => {
+        if (error.code !== "ENOENT") throw error;
+      },
+    );
     await fs.rm(marker, { force: true });
   });
   // Preview readers acquire the session queue while collecting source files.

@@ -11,7 +11,7 @@ import {
   validateSessionId,
   assertSessionWritable,
 } from "./storage.js";
-import { mutateSession } from "./sessions.js";
+import { loadSession, mutateSession } from "./sessions.js";
 import {
   withSafeEntry,
   withSafeDirectory,
@@ -23,6 +23,13 @@ import {
 } from "./safeFiles.js";
 
 const hash = (content) => createHash("sha256").update(content).digest("hex");
+function markWorkspaceChanged(session) {
+  if (!session.codebase) return;
+  session.codebase.workspaceGeneration =
+    (session.codebase.workspaceGeneration || 0) + 1;
+  if (session.codebase.analysis?.analysisId)
+    session.codebase.analysis.freshness = "stale";
+}
 export function normalizePath(input) {
   if (
     typeof input !== "string" ||
@@ -280,6 +287,8 @@ export async function writeFileUnlocked(
         );
       }
       await atomicText(full, content);
+      if ((await loadSession(sessionId)).mode === "codebase")
+        await mutateSession(sessionId, markWorkspaceChanged);
       if (change) {
         change.status = "applied";
         await writeJSON(
@@ -338,6 +347,7 @@ export async function undoChange(sessionId, changeId) {
       change.status = "undone";
       await writeJSON(record, change);
       await mutateSession(sessionId, (s) => {
+        markWorkspaceChanged(s);
         for (const m of s.messages) {
           if (m.event?.changeId === changeId) m.event.undone = true;
           if (m.role === "tool") {
@@ -472,6 +482,8 @@ export async function createFolder(sessionId, input) {
           });
         throw e;
       }
+      if ((await loadSession(sessionId)).mode === "codebase")
+        await mutateSession(sessionId, markWorkspaceChanged);
       return { ok: true };
     });
   });
@@ -531,6 +543,7 @@ export async function renamePath(sessionId, oldPath, newPath) {
           }
         }
         await mutateSession(sessionId, (s) => {
+          markWorkspaceChanged(s);
           for (const m of s.messages) {
             if (m.event?.changeId) m.event.path = replace(m.event.path);
             if (m.role === "tool") {
@@ -568,6 +581,7 @@ export async function deletePath(sessionId, input) {
       await copySafe(full, path.join(backup, path.basename(relative)));
       await removeSafe(full);
       await mutateSession(sessionId, (s) => {
+        markWorkspaceChanged(s);
         const keep = (p) => p !== relative && !p.startsWith(relative + "/");
         s.openFiles = s.openFiles.filter(keep);
         if (s.activeFile && !keep(s.activeFile))

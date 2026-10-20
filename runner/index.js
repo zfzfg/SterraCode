@@ -7,6 +7,7 @@ import { JobManager } from "./jobs.js";
 import { ProgramManager } from "./programs.js";
 import { RunnerError, UUID } from "./common.js";
 import { runtimes } from "./runtime.js";
+import { isolatedDemoCapabilities } from "./isolatedDemo.js";
 
 export function configuration(env = process.env) {
   return {
@@ -103,6 +104,8 @@ export async function createRunner(config = configuration(), overrides = {}) {
         method = req.method;
       if (route === "/v1/health" && method === "GET")
         return send(res, 200, { ok: true });
+      if (route === "/v1/demo-capabilities" && method === "GET")
+        return send(res, 200, await isolatedDemoCapabilities(config));
       if (route === "/v1/status" && method === "GET")
         return send(res, 200, {
           protocolVersion: 1,

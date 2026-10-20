@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <sys/resource.h>
 
 /* The root monitor is a subreaper. A daemon cannot escape cleanup by double
  * forking, reparenting, setsid(), or changing its process group. It never
@@ -48,7 +49,10 @@ static int workspace(const char *value) {
   free(copy); return fd;
 }
 int main(int argc, char **argv) {
+  int isolated = argc > 1 && !strcmp(argv[1], "--isolated-demo");
+  if (isolated) { argc--; argv++; }
   if (argc < 3 || geteuid() != 0) { fputs("sterra-launch requires root monitor and cwd/command arguments\n", stderr); return 126; }
+  if (isolated && strcmp(argv[2], "/usr/bin/bwrap")) { fputs("isolated demo requires bwrap\n", stderr); return 126; }
   int cwd = workspace(argv[1]); if (cwd < 0) { perror("workspace"); return 126; }
   if (prctl(PR_SET_CHILD_SUBREAPER, 1) < 0) { perror("subreaper"); return 126; }
   struct sigaction action = {0}; action.sa_handler = stop; sigemptyset(&action.sa_mask);
@@ -57,6 +61,10 @@ int main(int argc, char **argv) {
   if (!child) {
     signal(SIGTERM, SIG_DFL); signal(SIGINT, SIG_DFL);
     if (setsid() < 0 || fchdir(cwd) < 0 || setgroups(0, NULL) < 0 || setgid(10001) < 0 || setuid(10002) < 0 || prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0) { perror("unprivileged execution"); _exit(126); }
+    if (isolated) {
+      struct rlimit memory = {8ULL * 1024 * 1024 * 1024, 8ULL * 1024 * 1024 * 1024}, data = {512ULL * 1024 * 1024, 512ULL * 1024 * 1024}, files = {16ULL * 1024 * 1024, 16ULL * 1024 * 1024}, processes = {64,64}, handles = {128,128}, cpu = {30,30}, core = {0,0};
+      if (setrlimit(RLIMIT_AS, &memory) || setrlimit(RLIMIT_DATA, &data) || setrlimit(RLIMIT_FSIZE, &files) || setrlimit(RLIMIT_NPROC, &processes) || setrlimit(RLIMIT_NOFILE, &handles) || setrlimit(RLIMIT_CPU, &cpu) || setrlimit(RLIMIT_CORE, &core)) { perror("demo limits"); _exit(126); }
+    }
     close(cwd); umask(0002);
     execvp(argv[2], &argv[2]); perror("exec"); _exit(127);
   }

@@ -98,6 +98,8 @@ setOpenAITransportForTests(async (url, options) => {
   );
 });
 
+let codebaseModelRequests = 0;
+let allModelRequests = 0;
 const mock = http.createServer(async (req, res) => {
   if (req.url === "/v1/models") {
     res.setHeader("Content-Type", "application/json");
@@ -110,6 +112,84 @@ const mock = http.createServer(async (req, res) => {
   for await (const chunk of req) raw += chunk;
 
   const body = JSON.parse(raw);
+  allModelRequests++;
+  if (
+    body.messages.some(
+      (m) =>
+        m.role === "system" &&
+        m.content.includes("You analyze an untrusted imported code project"),
+    )
+  ) {
+    codebaseModelRequests++;
+    const sources = JSON.parse(
+      body.messages.find((m) => m.role === "user").content,
+    ).sources;
+    const reference =
+      sources.find((s) => /main\.py$/.test(s.path))?.id || sources[0].id;
+    const result = {
+      purpose: {
+        text: "Dieses Projekt begrüßt die Welt.",
+        references: [reference],
+        inferred: false,
+      },
+      modules: [
+        {
+          id: "greeting",
+          title: "Begrüßung",
+          responsibility: "Gibt einen Gruß aus.",
+          references: [reference],
+        },
+      ],
+      entryPoints: [
+        {
+          id: "start",
+          title: "Starte beim Gruß",
+          reason: "Hier beginnt der Ablauf.",
+          references: [reference],
+        },
+      ],
+      flows: [
+        {
+          id: "output",
+          title: "Ausgabe",
+          steps: [
+            { text: "Der Gruß wird ausgegeben.", references: [reference] },
+          ],
+        },
+      ],
+      tour: [
+        {
+          id: "purpose",
+          title: "Den Einstieg finden",
+          goal: "Du findest die Ausgabe.",
+          prerequisites: "Keine",
+          question: "Welcher Text wird ausgegeben?",
+          references: [reference],
+        },
+        {
+          id: "flow",
+          title: "Den Ablauf verfolgen",
+          goal: "Du verfolgst einen Aufruf.",
+          prerequisites: "Keine",
+          question: "Wo beginnt der Aufruf?",
+          references: [reference],
+        },
+      ],
+      uncertainties: ["Abhängigkeiten wurden nicht ausgeführt."],
+    };
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        choices: [
+          {
+            message: { role: "assistant", content: JSON.stringify(result) },
+            finish_reason: "stop",
+          },
+        ],
+      }),
+    );
+    return;
+  }
 
   const last = body.messages.findLast(
       (m) => !(m.role === "user" && m.content.startsWith("[ZUSTANDS-SNAPSHOT")),
@@ -147,6 +227,23 @@ const mock = http.createServer(async (req, res) => {
     content:
       "Wir lernen Schritt für Schritt. Was möchtest du als Nächstes ausprobieren?",
   };
+  if (last.role !== "tool" && user.startsWith("CODEBASE_REF:"))
+    response = {
+      tool_calls: [
+        {
+          id: "codebase-reference-fixture",
+          type: "function",
+          function: {
+            name: "add_explanation",
+            arguments: JSON.stringify({
+              title: "Belegter Gruß",
+              content: "Hier steht der Gruß.",
+              references: [JSON.parse(user.slice("CODEBASE_REF:".length))],
+            }),
+          },
+        },
+      ],
+    };
 
   if (last.role !== "tool" && /erstelle.*übung/i.test(user))
     response = {
@@ -346,7 +443,11 @@ await updateSettings({
   activeModel: "Lokaler Test-Tutor",
 });
 
-const server = createApp().listen(3107, "127.0.0.1");
+const app = createApp();
+app.get("/__e2e/codebase-model-requests", (req, res) =>
+  res.json({ count: codebaseModelRequests, allModelRequests }),
+);
+const server = app.listen(3107, "127.0.0.1");
 
 async function shutdown() {
   await stopAllProcesses();

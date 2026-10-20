@@ -51,6 +51,14 @@ For OpenAI, choose the provider in Settings, save a key using the credential con
 
 ## Exercises, projects, and journals
 
+**Import code project** opens a ZIP or a Git commit snapshot in a separate,
+language-independent session. Review files before publishing, then use **Code /
+Understand**, explicit AI analysis, source references and a saved guided tour.
+Importing, browsing and changing tour steps never starts a model request.
+Git credentials and separate demo/runtime decisions are managed explicitly.
+See the [Codebase Explorer guide](docs/CODEBASE-EXPLORER.md) for security,
+resource limits, recovery and conditional isolated demo execution.
+
 The project workshop includes Number guessing game, Text analysis, and My small website. Each opens a new session without installing software or executing commands. New content is materialized once in the selected language. Files, task versions, and test contracts then become original project data. Required function names and literal test values remain unchanged, including the number game's German return strings.
 
 Python tasks can have visible function tests. Each case uses a fresh process with a two-second limit; a suite has a 30-second limit. Source snapshots, versions, suite digests, and results are stored. Completion requires a current passing run. Historical/expired results do not certify today's editor content. Runs can be canceled; interrupted jobs are not automatically repeated. This is learning feedback, not a tamper-resistant examination system.
