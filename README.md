@@ -103,3 +103,7 @@ Tests use temporary data and provider fixtures. Available host runtimes receive 
 Docker checks use disposable Compose projects. `STERRACODE_DOCKER_FULL=1 npm run test:docker` exercises all optional runtimes. Additional checks: `node tests/docker/trace-smoke.mjs` and `node tests/docker/grading-smoke.mjs`. Normal tests do not send paid or LAN model requests. Actual results and limitations are recorded in [docker/ABNAHME.md](docker/ABNAHME.md).
 
 `public/` contains the browser UI; `server/routes/` thin HTTP handlers; `server/services/` domain behavior and process adapters; `shared/i18n/` catalogs/contracts; `runner/` execution/packages; `tests/` regression, browser, and container suites.
+
+## License
+
+SterraCode is licensed under the [MIT License](LICENSE).
