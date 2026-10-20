@@ -7,6 +7,12 @@ import http from "node:http";
 let server, directory, baseURL, setupKey, auth, setOpenAITransportForTests;
 const password = "Browser-Testpasswort-2026";
 let openAIGenerations = 0;
+// This legacy German workflow uses a random origin outside storageState.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("sterracode.uiLocale", "de"),
+  );
+});
 test.beforeAll(async () => {
   directory = await fs.mkdtemp(
     path.join(os.tmpdir(), "sterracode-auth-browser-"),

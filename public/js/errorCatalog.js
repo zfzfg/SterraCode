@@ -1,60 +1,59 @@
-const catalog = {
+import { t } from "./i18n.js";
+const catalog = () => ({
   IndexError: [
-    "Index außerhalb des gültigen Bereichs",
-    "Ein Zugriff liegt außerhalb der vorhandenen Positionen. Prüfe Listenlänge und Schleifenrand.",
+    t("features:errorCatalog.indexTitle"),
+    t("features:errorCatalog.indexHelp"),
   ],
   KeyError: [
-    "Schlüssel fehlt",
-    "Der angefragte Schlüssel ist im Dictionary nicht vorhanden. Prüfe Eingabe und Schlüssel vor dem Zugriff.",
+    t("features:errorCatalog.keyTitle"),
+    t("features:errorCatalog.keyHelp"),
   ],
   NameError: [
-    "Name ist nicht definiert",
-    "Prüfe Schreibweise und ob die Variable vor ihrer Verwendung einen Wert erhält.",
+    t("features:errorCatalog.nameTitle"),
+    t("features:errorCatalog.nameHelp"),
   ],
   ReferenceError: [
-    "Name ist nicht verfügbar",
-    "Prüfe Schreibweise, Deklaration und den Gültigkeitsbereich der Variable.",
+    t("features:errorCatalog.referenceTitle"),
+    t("features:errorCatalog.referenceHelp"),
   ],
   TypeError: [
-    "Datentypen passen nicht",
-    "Prüfe die beteiligten Datentypen und die erwarteten Argumente dieser Operation.",
+    t("features:errorCatalog.typeTitle"),
+    t("features:errorCatalog.typeHelp"),
   ],
   ValueError: [
-    "Wert passt nicht zur Operation",
-    "Der Datentyp kann stimmen, aber der konkrete Wert ist für diese Operation ungeeignet.",
+    t("features:errorCatalog.valueTitle"),
+    t("features:errorCatalog.valueHelp"),
   ],
   ZeroDivisionError: [
-    "Division durch null",
-    "Prüfe den Nenner und entscheide, wie dein Programm den Wert null behandeln soll.",
+    t("features:errorCatalog.divisionTitle"),
+    t("features:errorCatalog.divisionHelp"),
   ],
   SyntaxError: [
-    "Syntax prüfen",
-    "Der Quelltext kann nicht eingelesen werden. Prüfe die markierte Zeile und die Zeile davor auf Klammern, Anführungszeichen und fehlende Zeichen.",
+    t("features:errorCatalog.syntaxTitle"),
+    t("features:errorCatalog.syntaxHelp"),
   ],
   IndentationError: [
-    "Einrückung prüfen",
-    "Zusammengehörige Python-Blöcke brauchen eine konsistente Einrückung.",
+    t("features:errorCatalog.indentTitle"),
+    t("features:errorCatalog.indentHelp"),
   ],
   TabError: [
-    "Tabs und Leerzeichen gemischt",
-    "Verwende innerhalb eines Python-Blocks einheitliche Einrückungen.",
+    t("features:errorCatalog.tabTitle"),
+    t("features:errorCatalog.tabHelp"),
   ],
-};
+});
 
 export function explainError({ message = "", kind, reason } = {}) {
   if (kind === "serialization_error")
     return {
-      category: "Rückgabeformat",
-      title: "Rückgabe nicht vergleichbar",
-      explanation:
-        "Die sichtbaren Tests vergleichen JSON-Werte. Prüfe, ob deine Rückgabe einen unterstützten Datentyp enthält und keine Zyklen oder nicht endlichen Zahlen besitzt.",
+      category: t("features:errorCatalog.returnCategory"),
+      title: t("features:errorCatalog.serializationTitle"),
+      explanation: t("features:errorCatalog.serializationHelp"),
     };
   if (kind === "return")
     return {
-      category: "Abweichendes Ergebnis",
-      title: "Rückgabewert prüfen",
-      explanation:
-        "Vergleiche erhaltenen Wert, Datentyp und erwartetes Ergebnis. Prüfe auch leere Eingaben und Randfälle.",
+      category: t("features:errorCatalog.resultCategory"),
+      title: t("features:errorCatalog.returnTitle"),
+      explanation: t("features:errorCatalog.returnHelp"),
     };
   if (
     [
@@ -67,31 +66,29 @@ export function explainError({ message = "", kind, reason } = {}) {
     reason
   )
     return {
-      category: "Ausführung / Infrastruktur",
+      category: t("features:errorCatalog.execution"),
       title:
         kind === "timeout" || reason === "timeout"
-          ? "Zeitlimit erreicht"
-          : "Lauf nicht vollständig auswertbar",
-      explanation:
-        "Prüfe den originalen Abschlussgrund. Ein abgebrochener Lauf oder ein Infrastrukturproblem belegt keine falsche Lösung.",
+          ? t("features:shared.timeout")
+          : t("features:shared.inconclusive"),
+      explanation: t("features:errorCatalog.executionHelp"),
     };
   const match = String(message).match(
     /(?:^|\n)(?:Uncaught\s+)?(IndexError|KeyError|NameError|ReferenceError|TypeError|ValueError|ZeroDivisionError|SyntaxError|IndentationError|TabError):/,
   );
   if (!match)
     return {
-      category: "Unbekannter Fehler",
-      title: "Originalmeldung prüfen",
-      explanation:
-        "Für diese Meldung ist keine eindeutige Offline-Erklärung hinterlegt. Lies die Originalmeldung und prüfe die Quellstelle, falls vorhanden.",
+      category: t("features:errorCatalog.unknown"),
+      title: t("features:errorCatalog.originalTitle"),
+      explanation: t("features:errorCatalog.originalHelp"),
     };
   const type = match[1];
   return {
     category: ["SyntaxError", "IndentationError", "TabError"].includes(type)
-      ? "Syntaxfehler"
-      : "Laufzeitfehler",
-    title: catalog[type][0],
-    explanation: catalog[type][1],
+      ? t("features:errorCatalog.syntaxCategory")
+      : t("features:errorCatalog.runtimeCategory"),
+    title: catalog()[type][0],
+    explanation: catalog()[type][1],
   };
 }
 

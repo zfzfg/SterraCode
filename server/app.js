@@ -21,6 +21,14 @@ import programs from "./routes/programs.js";
 import provider from "./routes/provider.js";
 import profile from "./routes/profile.js";
 import projects from "./routes/projects.js";
+import {
+  localeMiddleware,
+  namespaces,
+  catalogRoot,
+  errorPayload,
+} from "./services/i18n.js";
+import { LOCALES } from "../shared/i18n/locale.js";
+import { localizeFields } from "./services/messageOutput.js";
 
 export function createApp({
   config = loadConfig(),
@@ -28,6 +36,7 @@ export function createApp({
 } = {}) {
   const app = express();
   app.disable("x-powered-by");
+  app.use(localeMiddleware);
   let maintenance = false;
   app.locals.beginMaintenance = () => {
     maintenance = true;
@@ -45,9 +54,12 @@ export function createApp({
     });
     const host = normalizeHost(req.hostname);
     if (!config.allowedHosts.has(host))
-      return res
-        .status(403)
-        .json({ error: "Unzulässiger Host.", code: "HOST_DENIED" });
+      return res.status(403).json({
+        error: req.t("errors:http.host"),
+        messageKey: "errors:http.host",
+        params: {},
+        code: "HOST_DENIED",
+      });
     const origin = req.get("origin");
     const proxyTrusted = app.get("trust proxy fn")(req.socket.remoteAddress, 0);
     const requestHost =
@@ -62,12 +74,16 @@ export function createApp({
         (config.authRequired && !config.allowedOrigins.has(origin)))
     )
       return res.status(403).json({
-        error: "Zugriff nur vom Ursprung der Anwendung erlaubt.",
+        error: req.t("errors:http.origin"),
+        messageKey: "errors:http.origin",
+        params: {},
         code: "ORIGIN_DENIED",
       });
     if (req.get("sec-fetch-site") === "cross-site")
       return res.status(403).json({
-        error: "Ursprungsfremder Zugriff blockiert.",
+        error: req.t("errors:http.crossSite"),
+        messageKey: "errors:http.crossSite",
+        params: {},
         code: "ORIGIN_DENIED",
       });
     if (
@@ -75,7 +91,11 @@ export function createApp({
       req.path.startsWith("/api") &&
       !req.is("application/json")
     )
-      return res.status(415).json({ error: "JSON erforderlich." });
+      return res.status(415).json({
+        error: req.t("errors:http.json"),
+        messageKey: "errors:http.json",
+        params: {},
+      });
     next();
   });
   app.use(express.json({ limit: "4mb" }));
@@ -83,8 +103,9 @@ export function createApp({
     res.set("Cache-Control", "no-store");
     if (maintenance)
       return res.status(503).json({
-        error:
-          "Der Server wird kontrolliert heruntergefahren. Bitte nach dem Neustart erneut versuchen.",
+        error: req.t("errors:http.maintenance"),
+        messageKey: "errors:http.maintenance",
+        params: {},
         code: "SERVER_MAINTENANCE",
       });
     next();
@@ -105,14 +126,45 @@ export function createApp({
   app.use("/api/execute", execute);
   app.get(
     "/api/runtimes",
-    route(async (req, res) => res.json(await getRuntimes())),
+    route(async (req, res) =>
+      res.json(
+        (await getRuntimes()).map((runtime) =>
+          localizeFields(runtime, req.uiLocale, ["reason"]),
+        ),
+      ),
+    ),
   );
   app.use("/api", (req, res) =>
-    res
-      .status(404)
-      .json({ error: "API-Endpunkt nicht gefunden.", code: "NOT_FOUND" }),
+    res.status(404).json({
+      error: req.t("errors:http.notFound"),
+      messageKey: "errors:http.notFound",
+      params: {},
+      code: "NOT_FOUND",
+    }),
   );
   const root = path.dirname(fileURLToPath(import.meta.url));
+  app.get("/vendor/i18next.js", (req, res) =>
+    res.sendFile(
+      path.join(root, "../node_modules/i18next/dist/esm/i18next.js"),
+    ),
+  );
+  app.get("/i18n/locale.js", (req, res) =>
+    res.sendFile(path.join(root, "../shared/i18n/locale.js")),
+  );
+  app.get("/i18n/manifest.json", (req, res) =>
+    res.json({ locales: Object.keys(LOCALES), namespaces }),
+  );
+  app.get("/i18n/locales/:locale/:namespace.json", (req, res) => {
+    if (
+      !Object.hasOwn(LOCALES, req.params.locale) ||
+      !namespaces.includes(req.params.namespace)
+    )
+      return res.sendStatus(404);
+    res.set("Content-Language", req.params.locale);
+    res.sendFile(
+      path.join(catalogRoot, req.params.locale, `${req.params.namespace}.json`),
+    );
+  });
   app.use(
     "/monaco",
     express.static(path.join(root, "../node_modules/monaco-editor/min")),
@@ -124,11 +176,30 @@ export function createApp({
       error.status ||
       { ENOENT: 404, EEXIST: 409, EACCES: 403, EPERM: 403 }[error.code] ||
       500;
+    const nativeKey =
+      !error.messageKey &&
+      ({
+        "entity.parse.failed": "errors:http.invalidJson",
+        "entity.too.large": "errors:http.requestTooLarge",
+      }[error.type] ||
+        {
+          ENOENT: "errors:file.notFound",
+          EEXIST: "errors:file.exists",
+          EACCES: "errors:file.accessDenied",
+          EPERM: "errors:file.accessDenied",
+        }[error.code]);
+    const safeError = nativeKey
+      ? { messageKey: nativeKey, params: {}, code: error.code }
+      : error;
     res.status(status).json({
-      error:
-        status === 500
-          ? "Interner Fehler. Bitte Serverprotokoll prüfen."
-          : error.message,
+      ...errorPayload(safeError, req.uiLocale),
+      ...(status === 500
+        ? {
+            error: req.t("errors:http.internal"),
+            messageKey: "errors:http.internal",
+            params: {},
+          }
+        : {}),
       code: error.code || "SERVER_ERROR",
     });
     if (status === 500)

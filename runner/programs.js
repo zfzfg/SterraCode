@@ -24,6 +24,7 @@ export async function diskUsage(root) {
         "Zu viele Cache-/Dateieinträge für die Speicherdiagnose. Nicht mehr benötigte Daten gezielt bereinigen.",
         507,
         "STORAGE_INDEX_LIMIT",
+        { messageKey: "runner:storage.indexLimit", params: {} },
       );
     let handle;
     try {
@@ -42,6 +43,7 @@ export async function diskUsage(root) {
             "Zu viele Cache-/Dateieinträge.",
             507,
             "STORAGE_INDEX_LIMIT",
+            { messageKey: "runner:storage.entries", params: {} },
           );
         const name = path.join(pinned, entry.name);
         if (entry.isDirectory()) bytes += await walk(name, depth + 1);
@@ -109,12 +111,14 @@ export class ProgramManager {
         "Programmmanifest benötigt eine explizite Migration für Architektur oder Debian-Suite.",
         503,
         "MANIFEST_MIGRATION_REQUIRED",
+        { messageKey: "runner:programs.manifestMigration", params: {} },
       );
     if (!LOCK.approvedArchitectures.includes(this.identity().architecture))
       throw new RunnerError(
         "Diese Runner-Architektur ist noch nicht freigegeben.",
         503,
         "ARCHITECTURE_NOT_APPROVED",
+        { messageKey: "runner:programs.architecture", params: {} },
       );
     if (!this.manifest.basePackages.length) {
       this.manifest.basePackages = [...(await this.installedPackages()).keys()];
@@ -130,6 +134,7 @@ export class ProgramManager {
           "Unbekanntes initiales Programm im Serverprofil.",
           503,
           "INVALID_INITIAL_PROGRAMS",
+          { messageKey: "runner:programs.initialUnknown", params: {} },
         );
       this.manifest.initialPending = [
         ...new Set(
@@ -152,6 +157,8 @@ export class ProgramManager {
         job.state = "interrupted";
         job.error =
           "Runner während Paketaktion beendet. Paketdatenbank wird geprüft; Aktion kann wiederholt werden.";
+        job.errorKey = "runner:programs.interrupted";
+        job.errorParams = {};
         await this.persist(job);
       }
       this.operations.set(job.id, job);
@@ -169,6 +176,10 @@ export class ProgramManager {
         `Paketdatenbank benötigt Reparatur: ${audit.slice(0, 2000)}`,
         503,
         "PACKAGE_REPAIR_REQUIRED",
+        {
+          messageKey: "runner:programs.databaseDetails",
+          params: { details: audit.slice(0, 2000) },
+        },
       );
     // A removed desired entry is never inferred from allowedLanguages or old jobs.
     for (const [id, wanted] of Object.entries(this.manifest.desired)) {
@@ -180,6 +191,7 @@ export class ProgramManager {
               "Ungültiger Entfernungseintrag im Manifest.",
               503,
               "MANIFEST_MIGRATION_REQUIRED",
+              { messageKey: "runner:programs.removalInvalid", params: {} },
             );
           const repair = {
             id: randomUUID(),
@@ -187,6 +199,10 @@ export class ProgramManager {
             action: "remove",
             state: "removing",
             progress: "Unterbrochene Entfernung wird abgeschlossen.",
+            progressMessage: {
+              key: "runner:programs.finishRemoval",
+              params: {},
+            },
             startedAt: Date.now(),
           };
           this.operations.set(repair.id, repair);
@@ -198,6 +214,8 @@ export class ProgramManager {
           } catch (error) {
             repair.state = "failed";
             repair.error = error.message;
+            repair.errorKey = error.messageKey;
+            repair.errorParams = error.params || {};
             await this.persist(repair);
             throw error;
           }
@@ -213,6 +231,7 @@ export class ProgramManager {
           "Unvollständiges Sollmanifest. Programmverwaltung reparieren.",
           503,
           "PACKAGE_REPAIR_REQUIRED",
+          { messageKey: "runner:programs.manifestIncomplete", params: {} },
         );
       if (!(await this.healthy(program, record))) {
         const repair = {
@@ -221,6 +240,7 @@ export class ProgramManager {
           action: "restore",
           state: "installing",
           progress: "Programm wird aus dem Sollmanifest wiederhergestellt.",
+          progressMessage: { key: "runner:programs.restore", params: {} },
           startedAt: Date.now(),
         };
         this.operations.set(repair.id, repair);
@@ -232,6 +252,8 @@ export class ProgramManager {
         } catch (error) {
           repair.state = "failed";
           repair.error = error.message;
+          repair.errorKey = error.messageKey;
+          repair.errorParams = error.params || {};
           await this.persist(repair);
           throw error;
         }
@@ -247,6 +269,7 @@ export class ProgramManager {
         action: "install",
         state: "installing",
         progress: "Initiale Programmauswahl wird eingerichtet.",
+        progressMessage: { key: "runner:programs.initial", params: {} },
         startedAt: Date.now(),
       };
       this.operations.set(job.id, job);
@@ -268,6 +291,8 @@ export class ProgramManager {
       } catch (error) {
         job.state = "failed";
         job.error = error.message;
+        job.errorKey = error.messageKey;
+        job.errorParams = error.params || {};
         await this.persist(job);
         throw error;
       }
@@ -285,6 +310,7 @@ export class ProgramManager {
         "Eine Paketaktion wurde unterbrochen. Bitte beim betroffenen Programm erneut versuchen oder die Paketdatenbank reparieren.",
         503,
         "PACKAGE_REPAIR_REQUIRED",
+        { messageKey: "runner:programs.retry", params: {} },
       );
     this.jobs.initializationError = null;
     this.jobs.state = "ready";
@@ -299,10 +325,12 @@ export class ProgramManager {
       record,
     );
   }
-  async phase(job, current, label) {
+  async phase(job, current, label, descriptor = job?.progressMessage) {
     if (!job) return;
     job.stage = { current, total: 6 };
     job.progress = label;
+    if (descriptor) job.progressMessage = descriptor;
+    else delete job.progressMessage;
     await this.persist(job);
   }
   async run(command, args, job, timeout = 15 * 60 * 1000) {
@@ -344,6 +372,20 @@ export class ProgramManager {
               `${command} fehlgeschlagen${exceeded ? " (Zeitlimit)" : ""}: ${output.slice(-4000)}${/valid-until|not valid yet|signature|EXPKEYSIG/i.test(output) ? " Prüfen Sie Container-/WSL-Uhr und signierte Paketquellen; DEBIAN_FRONTEND=noninteractive ist gesetzt." : ""}`,
               503,
               "PACKAGE_COMMAND_FAILED",
+              {
+                messageKey: exceeded
+                  ? /valid-until|not valid yet|signature|EXPKEYSIG/i.test(
+                      output,
+                    )
+                    ? "runner:programs.commandFailedTimeoutClock"
+                    : "runner:programs.commandFailedTimeout"
+                  : /valid-until|not valid yet|signature|EXPKEYSIG/i.test(
+                        output,
+                      )
+                    ? "runner:programs.commandFailedClock"
+                    : "runner:programs.commandFailed",
+                params: { command, details: output.slice(-4000) },
+              },
             ),
           );
       });
@@ -389,6 +431,7 @@ export class ProgramManager {
         "Die aufgelösten Pakete überschreiten die Größenbegrenzung des Paketcaches. Nicht mehr benötigte Downloads bereinigen.",
         507,
         "CACHE_LIMIT",
+        { messageKey: "runner:programs.cacheSize", params: {} },
       );
   }
   async installedPackages() {
@@ -463,6 +506,10 @@ export class ProgramManager {
             runtime?.version || stored?.version || "",
           ),
         error: action?.error || last?.error || null,
+        errorKey: action?.error ? action.errorKey : last?.errorKey,
+        errorParams: action?.error
+          ? action.errorParams || {}
+          : last?.errorParams || {},
       };
     });
     return {
@@ -492,7 +539,10 @@ export class ProgramManager {
   getJob(id) {
     const job = this.operations.get(id);
     if (!job)
-      throw new RunnerError("Paketauftrag nicht gefunden.", 404, "NOT_FOUND");
+      throw new RunnerError("Paketauftrag nicht gefunden.", 404, "NOT_FOUND", {
+        messageKey: "runner:programs.jobNotFound",
+        params: {},
+      });
     return this.publicJob(job);
   }
   async action(id, options) {
@@ -508,9 +558,14 @@ export class ProgramManager {
         "Dieses Programmmanifest benötigt vor Paketaktionen eine unterstützte Migration.",
         503,
         "MANIFEST_MIGRATION_REQUIRED",
+        { messageKey: "runner:programs.actionMigration", params: {} },
       );
     const program = PROGRAMS.find((entry) => entry.id === id);
-    if (!program) throw new RunnerError("Unbekanntes Programm.");
+    if (!program)
+      throw new RunnerError("Unbekanntes Programm.", 400, "INVALID_REQUEST", {
+        messageKey: "runner:programs.unknown",
+        params: {},
+      });
     if (options?.action === "retry") {
       const previous = [...this.operations.values()]
         .reverse()
@@ -526,12 +581,18 @@ export class ProgramManager {
       };
     }
     if (!options || !["install", "remove", "repair"].includes(options.action))
-      throw new RunnerError("Ungültige Programmaktion.");
+      throw new RunnerError(
+        "Ungültige Programmaktion.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "runner:programs.actionInvalid", params: {} },
+      );
     if (program.base)
       throw new RunnerError(
         "Grundkomponenten können nicht entfernt oder ersetzt werden.",
         409,
         "BASE_PROGRAM",
+        { messageKey: "runner:programs.base", params: {} },
       );
     return this.jobs.serial(async () => {
       if (this.activeJob && !TERMINAL.has(this.activeJob.state)) {
@@ -549,6 +610,7 @@ export class ProgramManager {
           "Eine andere Paketaktion läuft bereits.",
           409,
           "PACKAGE_BUSY",
+          { messageKey: "runner:programs.otherAction", params: {} },
         );
       }
       if (this.jobs.maintenance)
@@ -556,6 +618,7 @@ export class ProgramManager {
           "Der Runner befindet sich in Wartung.",
           409,
           "MAINTENANCE",
+          { messageKey: "runner:programs.maintenance", params: {} },
         );
       this.jobs.maintenance = true;
       this.jobs.state = "maintenance";
@@ -574,6 +637,7 @@ export class ProgramManager {
         state: "queued",
         progress:
           "Wartet auf laufende Ausführungen. Abbrechen oder laufende Prozesse ausdrücklich stoppen.",
+        progressMessage: { key: "runner:programs.waiting", params: {} },
         startedAt: Date.now(),
       };
       this.operations.set(job.id, job);
@@ -586,12 +650,19 @@ export class ProgramManager {
   }
   async cancel(id) {
     const job = this.operations.get(id);
-    if (!job) throw new RunnerError("Paketauftrag nicht gefunden.", 404);
+    if (!job)
+      throw new RunnerError(
+        "Paketauftrag nicht gefunden.",
+        404,
+        "INVALID_REQUEST",
+        { messageKey: "runner:programs.jobNotFound", params: {} },
+      );
     if (job.state !== "queued")
       throw new RunnerError(
         "Eine begonnene Paketänderung kann nicht sicher abgebrochen werden.",
         409,
         "PACKAGE_ALREADY_STARTED",
+        { messageKey: "runner:programs.cannotCancel", params: {} },
       );
     job.state = "cancelled";
     await this.persist(job);
@@ -607,7 +678,10 @@ export class ProgramManager {
       }
       if (job.state === "cancelled") return;
       job.state = job.action === "remove" ? "removing" : "installing";
-      job.progress = "Paketdatenbank und Speicher werden geprüft.";
+      Object.assign(job, {
+        progress: "Paketdatenbank und Speicher werden geprüft.",
+        progressMessage: { key: "runner:programs.checkDatabase", params: {} },
+      }).progress;
       await this.phase(job, 1, job.progress);
       const audit = await this.run("dpkg", ["--audit"]);
       if (audit.trim() && job.action !== "repair")
@@ -615,6 +689,7 @@ export class ProgramManager {
           "Paketdatenbank benötigt Reparatur. Reparieren wählen.",
           503,
           "PACKAGE_REPAIR_REQUIRED",
+          { messageKey: "runner:programs.databaseRepair", params: {} },
         );
       if (job.action === "repair") {
         await this.run("dpkg", ["--configure", "-a"], job);
@@ -647,17 +722,28 @@ export class ProgramManager {
       }
       job.state = "succeeded";
       if (removing && job.clearCache) await this.cleanCache();
-      job.progress = "Fertig.";
+      Object.assign(job, {
+        progress: "Fertig.",
+        progressMessage: { key: "runner:programs.done", params: {} },
+      }).progress;
       job.stage = { current: 6, total: 6 };
       this.jobs.initializationError = null;
       this.jobs.state = "ready";
     } catch (error) {
       job.state = "failed";
       job.error = error.message;
-      job.progress = "Aktion fehlgeschlagen; Details prüfen und wiederholen.";
+      job.errorKey = error.messageKey;
+      job.errorParams = error.params || {};
+      Object.assign(job, {
+        progress: "Aktion fehlgeschlagen; Details prüfen und wiederholen.",
+        progressMessage: { key: "runner:programs.failed", params: {} },
+      }).progress;
       this.jobs.initializationError = {
         code: error.code || "PACKAGE_ACTION_FAILED",
         message: error.message,
+        ...(error.messageKey
+          ? { messageKey: error.messageKey, params: error.params || {} }
+          : {}),
       };
       this.jobs.state = "error";
     } finally {
@@ -670,6 +756,8 @@ export class ProgramManager {
           code: "PACKAGE_JOURNAL_FAILED",
           message:
             "Das Ergebnis der Paketaktion konnte nicht dauerhaft protokolliert werden.",
+          messageKey: "runner:programs.resultJournal",
+          params: {},
         };
       }
       this.jobs.maintenance = false;
@@ -691,6 +779,7 @@ export class ProgramManager {
         "Der Paketcache hat seine Größenbegrenzung erreicht. Nicht mehr benötigte Downloads bereinigen.",
         507,
         "CACHE_LIMIT",
+        { messageKey: "runner:programs.cacheFull", params: {} },
       );
     await freeSpace(this.config.cacheDir, MAX_DOWNLOAD + 32 * 1024 * 1024);
     const response = await fetch(url, { signal: AbortSignal.timeout(180000) });
@@ -699,6 +788,10 @@ export class ProgramManager {
         `Herstellerdownload fehlgeschlagen (${response.status}).`,
         503,
         "DOWNLOAD_FAILED",
+        {
+          messageKey: "runner:programs.downloadStatus",
+          params: { status: response.status },
+        },
       );
     let bytes = 0;
     if (job)
@@ -713,7 +806,12 @@ export class ProgramManager {
       if (job) job.download.bytes = bytes;
       if (bytes > MAX_DOWNLOAD)
         stream.destroy(
-          new RunnerError("Download überschreitet die Größenbegrenzung."),
+          new RunnerError(
+            "Download überschreitet die Größenbegrenzung.",
+            400,
+            "INVALID_REQUEST",
+            { messageKey: "runner:programs.downloadLimit", params: {} },
+          ),
         );
     });
     try {
@@ -732,6 +830,7 @@ export class ProgramManager {
           "Prüfsumme des Herstellerdownloads stimmt nicht.",
           503,
           "CHECKSUM_MISMATCH",
+          { messageKey: "runner:programs.downloadChecksum", params: {} },
         );
       await fs.rename(temp, file);
       return file;
@@ -800,6 +899,7 @@ export class ProgramManager {
             "Paketcache beschädigt. Exakte Paketversionen neu herunterladen.",
             503,
             "CACHE_CORRUPTED",
+            { messageKey: "runner:programs.cacheCorrupt", params: {} },
           );
       }
       if (missingCache) await this.installApt(program, record, job);
@@ -824,6 +924,7 @@ export class ProgramManager {
       job,
       6,
       "Installierte Laufzeit und Version werden geprüft.",
+      { key: "runner:programs.verify", params: {} },
     );
     const runtime = (await runtimes()).find((r) => r.language === program.id);
     if (!runtime?.installed)
@@ -831,6 +932,7 @@ export class ProgramManager {
         "Versions-/Funktionsprüfung der installierten Laufzeit fehlgeschlagen.",
         503,
         "RUNTIME_SMOKE_FAILED",
+        { messageKey: "runner:programs.smoke", params: {} },
       );
     record.version = program.upstream
       ? LOCK[program.id].version
@@ -840,6 +942,7 @@ export class ProgramManager {
         "Installierte Herstellerversion stimmt nicht mit dem Katalog überein.",
         503,
         "VERSION_MISMATCH",
+        { messageKey: "runner:programs.version", params: {} },
       );
     return record;
   }
@@ -849,6 +952,7 @@ export class ProgramManager {
       job,
       2,
       "Signierte Paketlisten und festgeschriebene Versionen werden geladen.",
+      { key: "runner:programs.packageLists", params: {} },
     );
     await this.apt(["update"], job);
     const packages = record.packages.length
@@ -857,12 +961,18 @@ export class ProgramManager {
           LOCK.apt[p] ? `${p}=${LOCK.apt[p].version}` : p,
         );
     await this.downloadBudget(packages, job);
-    await this.phase(job, 3, "Programmpakete werden heruntergeladen.");
+    await this.phase(job, 3, "Programmpakete werden heruntergeladen.", {
+      key: "runner:programs.downloadPackages",
+      params: {},
+    });
     await this.apt(
       ["--download-only", "--reinstall", "install", ...packages],
       job,
     );
-    await this.phase(job, 4, "Pakete werden entpackt und eingerichtet.");
+    await this.phase(job, 4, "Pakete werden entpackt und eingerichtet.", {
+      key: "runner:programs.unpackPackages",
+      params: {},
+    });
     await this.apt(["--no-download", "install", ...packages], job);
     const installed = await this.installedPackages();
     // Recovery can reference an older recipe, such as Java 17.
@@ -898,6 +1008,7 @@ export class ProgramManager {
       job,
       5,
       "Abhängigkeiten und Prüfsummen werden für die Wiederherstellung gesichert.",
+      { key: "runner:programs.saveDependencies", params: {} },
     );
     job.resolvedPackages = record.packages;
     await this.persist(job);
@@ -947,6 +1058,7 @@ export class ProgramManager {
             "Katalog-Prüfsumme des Debian-Pakets stimmt nicht.",
             503,
             "CHECKSUM_MISMATCH",
+            { messageKey: "runner:programs.catalogChecksum", params: {} },
           );
         record.cache.push({
           file,
@@ -969,10 +1081,14 @@ export class ProgramManager {
         "Der Paketcache enthält nicht alle aufgelösten Abhängigkeiten.",
         503,
         "INCOMPLETE_CACHE",
+        { messageKey: "runner:programs.dependenciesMissing", params: {} },
       );
   }
   async installUpstream(program, record, job) {
-    await this.phase(job, 3, "Herstellerdownload wird geladen und geprüft.");
+    await this.phase(job, 3, "Herstellerdownload wird geladen und geprüft.", {
+      key: "runner:programs.vendorDownload",
+      params: {},
+    });
     const root = "/opt/sterracode";
     await fs.mkdir(root, { recursive: true, mode: 0o755 });
     if (program.id === "go") {
@@ -987,7 +1103,11 @@ export class ProgramManager {
         signal: AbortSignal.timeout(20000),
       })
         .then((r) => {
-          if (!r.ok) throw new Error("Herstellermetadaten nicht erreichbar.");
+          if (!r.ok)
+            throw Object.assign(
+              new Error("Herstellermetadaten nicht erreichbar."),
+              { messageKey: "runner:programs.vendorMetadata", params: {} },
+            );
           return r.json();
         })
         .catch((error) => {
@@ -1009,8 +1129,12 @@ export class ProgramManager {
           "Go-Herstellerprüfsumme stimmt nicht mit Katalog überein.",
           503,
           "PROVENANCE_MISMATCH",
+          { messageKey: "runner:programs.goChecksum", params: {} },
         );
-      await this.phase(job, 4, "Programm wird entpackt und eingerichtet.");
+      await this.phase(job, 4, "Programm wird entpackt und eingerichtet.", {
+        key: "runner:programs.unpackVendor",
+        params: {},
+      });
       await this.run("tar", ["-xzf", file, "--no-same-owner", "-C", root], job);
       record.upstreamVerified = true;
     } else {
@@ -1032,7 +1156,11 @@ export class ProgramManager {
         const response = await fetch(`${spec.manifestURL}.asc`, {
           signal: AbortSignal.timeout(20000),
         });
-        if (!response.ok) throw new Error("Rust-Signatur nicht erreichbar.");
+        if (!response.ok)
+          throw Object.assign(new Error("Rust-Signatur nicht erreichbar."), {
+            messageKey: "runner:programs.rustSignature",
+            params: {},
+          });
         await fs.writeFile(signatureFile, await response.text(), {
           mode: 0o600,
         });
@@ -1070,6 +1198,7 @@ export class ProgramManager {
           "Rust-Komponenten sind nicht durch das signierte Herstellermanifest belegt.",
           503,
           "PROVENANCE_MISMATCH",
+          { messageKey: "runner:programs.rustManifest", params: {} },
         );
       const unpack = path.join(this.config.stateDir, "rust-unpack");
       await fs.mkdir(unpack, { recursive: true, mode: 0o700 });
@@ -1162,6 +1291,7 @@ export class ProgramManager {
         "Die Laufzeit ist weiterhin vorhanden; gemeinsam benötigte Pakete wurden geschützt.",
         409,
         "RUNTIME_STILL_INSTALLED",
+        { messageKey: "runner:programs.stillInstalled", params: {} },
       );
   }
   async cacheStatus() {
@@ -1197,6 +1327,7 @@ export class ProgramManager {
         "Cachebereinigung ist während Downloads oder Ausführungen gesperrt.",
         409,
         "CACHE_BUSY",
+        { messageKey: "runner:programs.cacheBusy", params: {} },
       );
     // Keep the verified package closure of every desired program for offline restore.
     const keep = new Set(

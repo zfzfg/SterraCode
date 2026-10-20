@@ -1,0 +1,104 @@
+{
+  "guess-number": {
+    "title": "Number guessing game",
+    "goal": "Compare a guess with a secret number and give clear feedback.",
+    "prerequisites": ["Variables", "Conditions", "Functions"],
+    "milestone": "The function beurteile_tipp returns the exact strings \"zu klein\", \"zu groß\" or \"richtig\".",
+    "runtime": "Python 3 (standard library; no installation during import)",
+    "features": ["Functions", "Comparisons", "if / elif / else"],
+    "files": [
+      {
+        "path": "main.py",
+        "content": "# Compare tipp with geheim. Complete the three cases.\ndef beurteile_tipp(tipp, geheim):\n    # TODO: Return \"zu klein\", \"zu groß\" or \"richtig\" (keep these exact strings).\n    pass\n"
+      }
+    ],
+    "task": {
+      "title": "Evaluate a guess",
+      "description": "Implement beurteile_tipp(tipp, geheim). Return exactly \"zu klein\" for a guess that is too small, \"zu groß\" for one that is too large, and \"richtig\" for a correct guess. Keep these German return strings unchanged. You can then add an optional game loop.",
+      "conceptIds": ["python.conditions", "python.functions"],
+      "difficulty": "easy",
+      "hints": [
+        "What three relationships can two numbers have?",
+        "Check less than, greater than and equal separately.",
+        "Complete the conditions inside beurteile_tipp.",
+        "Solution idea: if tipp < geheim: return \"zu klein\"; elif tipp > geheim: return \"zu groß\"; otherwise return \"richtig\". Write the branches as Python code."
+      ],
+      "testCaseNames": [
+        "Too small",
+        "Too large",
+        "Correct guess",
+        "Negative number"
+      ]
+    },
+    "checklist": ["Pass all visible cases", "Try a new guess yourself"]
+  },
+  "text-analysis": {
+    "title": "Text analysis",
+    "goal": "Count words in text, including empty input and repeated spaces.",
+    "prerequisites": ["Strings", "Lists", "Functions"],
+    "milestone": "The function zaehle_woerter returns an integer.",
+    "runtime": "Python 3 (standard library; no additional packages)",
+    "features": ["str.split", "len", "return"],
+    "files": [
+      {
+        "path": "main.py",
+        "content": "def zaehle_woerter(text):\n    # TODO: Count words separated by any whitespace.\n    pass\n"
+      }
+    ],
+    "task": {
+      "title": "Count words",
+      "description": "Implement zaehle_woerter(text). Repeated spaces and line breaks must not produce empty words.",
+      "conceptIds": ["python.strings", "python.lists", "python.functions"],
+      "difficulty": "easy",
+      "hints": [
+        "How many words does an empty string contain?",
+        "split() without an argument handles any whitespace.",
+        "Split text inside the function and find the length of the list.",
+        "Suggested solution: return len(text.split()). Then try your own inputs."
+      ],
+      "testCaseNames": ["Empty text", "Two words", "Whitespace"]
+    },
+    "checklist": ["Check empty input", "Check text with a line break"]
+  },
+  "small-website": {
+    "title": "My small website",
+    "goal": "Design a static page and change its content with a click.",
+    "prerequisites": ["Basic HTML structure", "CSS selectors"],
+    "milestone": "Add a heading, your own colour and the click action.",
+    "runtime": "Built-in static web preview; no Node.js or package required",
+    "features": ["HTML", "CSS", "DOM events"],
+    "files": [
+      {
+        "path": "index.html",
+        "content": "<!doctype html>\n<html lang=\"en\">\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>My website</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n<h1>My first page</h1>\n<p id=\"nachricht\">What would you like to show?</p>\n<button id=\"aktion\">Change text</button>\n<script src=\"app.js\"></script>\n</html>\n"
+      },
+      {
+        "path": "style.css",
+        "content": "body { font-family: sans-serif; margin: 2rem; }\n/* TODO: Style the heading and button. */\n"
+      },
+      {
+        "path": "app.js",
+        "content": "// TODO: Change the text in #nachricht when clicked.\ndocument.querySelector(\"#aktion\").addEventListener(\"click\", () => {\n  // Add your action here.\n});\n"
+      }
+    ],
+    "task": {
+      "title": "Design an interactive page",
+      "description": "Change the heading and colour. Then add the click action. Check the result in the web preview using the checklist.",
+      "hints": [
+        "Which elements would you like to change?",
+        "CSS styles the page; JavaScript responds to the click.",
+        "Complete the event handler in app.js.",
+        "Action idea: document.querySelector(\"#nachricht\").textContent = \"Hello world!\";"
+      ],
+      "conceptIds": ["javascript.functions"],
+      "difficulty": "easy"
+    },
+    "checklist": [
+      "Your own heading is visible",
+      "Colour changed",
+      "Click changes the message text",
+      "Usable with Tab and Enter",
+      "No errors in the preview log"
+    ]
+  }
+}

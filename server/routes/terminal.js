@@ -1,3 +1,4 @@
+import { localizeProcess } from "../services/messageOutput.js";
 import express from "express";
 import { route } from "./helpers.js";
 import {
@@ -9,16 +10,21 @@ import {
 const router = express.Router();
 router.post(
   "/",
-  route(async (req, res) => res.json(await startProcess(req.body))),
+  route(async (req, res) =>
+    res.json(localizeProcess(await startProcess(req.body), req.uiLocale)),
+  ),
 );
 router.get(
   "/:processId/output",
   route(async (req, res) =>
     res.json(
-      await readProcess(
-        req.params.processId,
-        req.query.sessionId,
-        Number(req.query.offset || 0),
+      localizeProcess(
+        await readProcess(
+          req.params.processId,
+          req.query.sessionId,
+          Number(req.query.offset || 0),
+        ),
+        req.uiLocale,
       ),
     ),
   ),
@@ -27,10 +33,13 @@ router.post(
   "/:processId/input",
   route(async (req, res) =>
     res.json(
-      await inputProcess(
-        req.params.processId,
-        req.body.sessionId,
-        req.body.input,
+      localizeProcess(
+        await inputProcess(
+          req.params.processId,
+          req.body.sessionId,
+          req.body.input,
+        ),
+        req.uiLocale,
       ),
     ),
   ),
@@ -38,7 +47,12 @@ router.post(
 router.delete(
   "/:processId",
   route(async (req, res) =>
-    res.json(await stopProcess(req.params.processId, req.body.sessionId)),
+    res.json(
+      localizeProcess(
+        await stopProcess(req.params.processId, req.body.sessionId),
+        req.uiLocale,
+      ),
+    ),
   ),
 );
 export default router;

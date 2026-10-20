@@ -40,11 +40,17 @@ export function canonical(value) {
 }
 export function validatePayload(value) {
   if (!value || typeof value !== "object")
-    throw new RunnerError("Auftragsdaten fehlen.");
+    throw new RunnerError("Auftragsdaten fehlen.", 400, "INVALID_REQUEST", {
+      messageKey: "runner:job.missing",
+      params: {},
+    });
   sessionId(value.sessionId);
   const type = value.type || (value.file ? "file" : "command");
   if (!["file", "command", "trace", "test"].includes(type))
-    throw new RunnerError("Unbekannte Auftragsart.");
+    throw new RunnerError("Unbekannte Auftragsart.", 400, "INVALID_REQUEST", {
+      messageKey: "runner:job.type",
+      params: {},
+    });
   const result = {
     sessionId: value.sessionId,
     type,
@@ -53,30 +59,43 @@ export function validatePayload(value) {
     compilationTimeout: value.compilationTimeout ?? 60000,
   };
   if (!["user", "ai"].includes(result.actor))
-    throw new RunnerError("Ungültiger Akteur.");
+    throw new RunnerError("Ungültiger Akteur.", 400, "INVALID_REQUEST", {
+      messageKey: "runner:job.actor",
+      params: {},
+    });
   for (const key of ["executionTimeout", "compilationTimeout"])
     if (
       !Number.isInteger(result[key]) ||
       result[key] < (key === "compilationTimeout" ? 1000 : 0) ||
       result[key] > 600000
     )
-      throw new RunnerError("Ungültiges Zeitlimit (höchstens 600.000 ms).");
+      throw new RunnerError(
+        "Ungültiges Zeitlimit (höchstens 600.000 ms).",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "runner:job.timeout", params: {} },
+      );
   if (type === "test") {
-    result.test = validateTest(value.test, (m) => {
-      throw new RunnerError(m);
+    result.test = validateTest(value.test, (m, metadata) => {
+      throw new RunnerError(m, 400, "INVALID_REQUEST", metadata);
     });
     result.language = "python";
     result.executionTimeout = 30000;
   } else if (type === "trace") {
-    result.trace = validateTrace(value.trace, (message) => {
-      throw new RunnerError(message);
+    result.trace = validateTrace(value.trace, (message, metadata) => {
+      throw new RunnerError(message, 400, "INVALID_REQUEST", metadata);
     });
     result.language = "python";
     result.executionTimeout = 10000;
   } else if (type === "file") {
     result.file = relativePath(value.file);
     if (!LANGUAGES.includes(value.language))
-      throw new RunnerError("Sprache nicht unterstützt.");
+      throw new RunnerError(
+        "Sprache nicht unterstützt.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "runner:job.language", params: {} },
+      );
     result.language = value.language;
   } else {
     if (
@@ -85,7 +104,12 @@ export function validatePayload(value) {
       value.command.length > 10000 ||
       value.command.includes("\0")
     )
-      throw new RunnerError("Ein gültiger Befehl ist erforderlich.");
+      throw new RunnerError(
+        "Ein gültiger Befehl ist erforderlich.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "runner:job.command", params: {} },
+      );
     result.command = value.command;
   }
   return result;
@@ -163,7 +187,10 @@ export class JobManager {
       if (!file.endsWith(".json")) continue;
       const job = await readJSON(path.join(this.config.stateDir, "jobs", file));
       if (!UUID.test(job.id) || !job.hash || !job.payload)
-        throw new Error("Beschädigtes Runner-Auftragsjournal.");
+        throw Object.assign(new Error("Beschädigtes Runner-Auftragsjournal."), {
+          messageKey: "runner:job.journalCorrupt",
+          params: {},
+        });
       if (!FINAL.has(job.state)) {
         job.state = "interrupted";
         job.reason = "runner_restarted";
@@ -181,6 +208,8 @@ export class JobManager {
           code: "JOURNAL_WRITE_FAILED",
           message:
             "Die Auftragsbereinigung konnte nicht dauerhaft protokolliert werden.",
+          messageKey: "runner:job.cleanupJournal",
+          params: {},
         };
       });
     }, 60000);
@@ -231,7 +260,12 @@ export class JobManager {
   }
   snapshot(job, offset = 0) {
     if (!Number.isInteger(offset) || offset < 0)
-      throw new RunnerError("Ungültige Ausgabeposition.");
+      throw new RunnerError(
+        "Ungültige Ausgabeposition.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "runner:job.offset", params: {} },
+      );
     const output = Buffer.from(job.output || "", "utf8");
     // Clients use byte offsets. If an arbitrary offset lands inside a codepoint,
     // skip continuation bytes instead of returning a replacement character.
@@ -245,6 +279,9 @@ export class JobManager {
         `${job.payload.language} ${job.payload.trace?.entry || job.payload.test?.suite.entry.path || job.payload.file}`,
       actor: job.payload.actor,
       output: output.subarray(start).toString("utf8"),
+      systemMessages: (job.systemMessages || []).filter(
+        (item) => item.outputOffset >= offset,
+      ),
       offset: job.bytes || 0,
       nextOffset: job.bytes || 0,
       exited: FINAL.has(job.state),
@@ -263,11 +300,20 @@ export class JobManager {
     sessionId(session);
     const job = this.jobs.get(id);
     if (!job || job.payload.sessionId !== session)
-      throw new RunnerError("Prozess nicht gefunden.", 404, "NOT_FOUND");
+      throw new RunnerError("Prozess nicht gefunden.", 404, "NOT_FOUND", {
+        messageKey: "runner:job.notFound",
+        params: {},
+      });
     return job;
   }
   async start(id, value) {
-    if (!UUID.test(id)) throw new RunnerError("Ungültige Idempotenz-ID.");
+    if (!UUID.test(id))
+      throw new RunnerError(
+        "Ungültige Idempotenz-ID.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "runner:job.idempotency", params: {} },
+      );
     const payload = validatePayload(value),
       hash = createHash("sha256").update(canonical(payload)).digest("hex");
     return this.serial(async () => {
@@ -278,6 +324,7 @@ export class JobManager {
             "Die Auftrags-ID wurde bereits mit anderen Daten verwendet.",
             409,
             "IDEMPOTENCY_CONFLICT",
+            { messageKey: "runner:job.conflict", params: {} },
           );
         return this.snapshot(existing);
       }
@@ -286,12 +333,14 @@ export class JobManager {
           "Der Runner ist in Wartung oder wird wiederhergestellt.",
           503,
           "RUNNER_NOT_READY",
+          { messageKey: "runner:job.maintenance", params: {} },
         );
       if (this.blocked.has(payload.sessionId))
         throw new RunnerError(
           "Diese Session ist für Ausführungen gesperrt.",
           409,
           "SESSION_BLOCKED",
+          { messageKey: "runner:job.blocked", params: {} },
         );
       const active = this.active();
       if (active.some((job) => job.payload.sessionId === payload.sessionId))
@@ -299,6 +348,7 @@ export class JobManager {
           "In dieser Session läuft bereits ein Prozess.",
           409,
           "SESSION_BUSY",
+          { messageKey: "runner:job.running", params: {} },
         );
       if (
         active.length >= 4 ||
@@ -310,6 +360,7 @@ export class JobManager {
           "Der Runner ist ausgelastet. Bitte einen laufenden Auftrag beenden.",
           429,
           "RUNNER_BUSY",
+          { messageKey: "runner:job.capacity", params: {} },
         );
       const root = path.join(this.config.workspaceDir, payload.sessionId),
         handle = await safeOpen(root, "", true);
@@ -325,6 +376,10 @@ export class JobManager {
             runtime?.reason || "Laufzeit fehlt.",
             400,
             "RUNTIME_MISSING",
+            {
+              messageKey: runtime?.reasonKey || "runner:runtime.missing",
+              params: runtime?.reasonParams || {},
+            },
           );
       }
       const job = {
@@ -418,7 +473,13 @@ export class JobManager {
               ? "succeeded"
               : "failed";
     } catch (error) {
-      this.append(job, Buffer.from(`\n${error.message}\n`));
+      (job.systemMessages ||= []).push({
+        message: error.message,
+        ...(error.messageKey
+          ? { messageKey: error.messageKey, params: error.params || {} }
+          : {}),
+        outputOffset: job.bytes || 0,
+      });
       job.exitCode = -1;
       job.state = job.stopping ? "cancelled" : "failed";
     } finally {
@@ -440,6 +501,8 @@ export class JobManager {
           code: "JOURNAL_WRITE_FAILED",
           message:
             "Das Auftragsergebnis konnte nicht dauerhaft protokolliert werden.",
+          messageKey: "runner:job.resultJournal",
+          params: {},
         };
         console.error("Runner journal failure", {
           code: error.code || "JOURNAL_WRITE_FAILED",
@@ -472,12 +535,14 @@ export class JobManager {
           : null;
       child.stdout.on("data", (d) => this.append(job, d));
       child.stderr.on("data", (d) => this.append(job, d, true));
-      child.on("error", (error) =>
-        this.append(
-          job,
-          Buffer.from(`\nStart fehlgeschlagen: ${error.message}\n`),
-        ),
-      );
+      child.on("error", (error) => {
+        (job.systemMessages ||= []).push({
+          message: `Start fehlgeschlagen: ${error.message}`,
+          messageKey: "runner:job.startFailed",
+          params: { message: error.message },
+          outputOffset: job.bytes || 0,
+        });
+      });
       child.on("close", (code) => {
         clearTimeout(timer);
         job.child = null;
@@ -495,9 +560,17 @@ export class JobManager {
   async input(id, session, input) {
     const job = this.owned(id, session);
     if (typeof input !== "string" || input.length > 65536)
-      throw new RunnerError("Ungültige Eingabe.");
+      throw new RunnerError("Ungültige Eingabe.", 400, "INVALID_REQUEST", {
+        messageKey: "runner:job.input",
+        params: {},
+      });
     if (FINAL.has(job.state) || !job.child?.stdin?.writable)
-      throw new RunnerError("Der Prozess erwartet keine Eingabe.");
+      throw new RunnerError(
+        "Der Prozess erwartet keine Eingabe.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "runner:job.noInput", params: {} },
+      );
     await new Promise((resolve, reject) =>
       job.child.stdin.write(`${input}\n`, (error) =>
         error
@@ -506,6 +579,7 @@ export class JobManager {
                 "Die Prozesseingabe wurde geschlossen.",
                 409,
                 "INPUT_CLOSED",
+                { messageKey: "runner:job.inputClosed", params: {} },
               ),
             )
           : resolve(),
@@ -533,6 +607,7 @@ export class JobManager {
                   "Prozessende noch nicht bestätigt.",
                   503,
                   "STOP_PENDING",
+                  { messageKey: "runner:job.notStopped", params: {} },
                 ),
               ),
             10000,

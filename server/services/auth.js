@@ -14,8 +14,8 @@ const DAY = 86400000,
   MAX_AGE = 90 * DAY;
 export const SESSION_COOKIE = "sterracode.session";
 const digest = (value) => createHash("sha256").update(value).digest("hex");
-const error = (message, status, code) =>
-  Object.assign(new Error(message), { status, code });
+const error = (message, status, code, metadata = {}) =>
+  Object.assign(new Error(message), { status, code, ...metadata });
 function sameHash(left, right) {
   const a = Buffer.from(String(left || ""), "hex"),
     b = Buffer.from(String(right || ""), "hex");
@@ -31,6 +31,7 @@ function validatePassword(password) {
       "Das Passwort muss zwischen 12 und 1024 Zeichen lang sein.",
       400,
       "INVALID_PASSWORD",
+      { messageKey: "serverFeature:auth.passwordLength", params: {} },
     );
 }
 async function passwordRecord(password) {
@@ -106,6 +107,7 @@ export function createAuthService({ dataDir, now = Date.now } = {}) {
         "Zu viele Anmeldeversuche. Bitte in 15 Minuten erneut versuchen.",
         429,
         "AUTH_RATE_LIMITED",
+        { messageKey: "serverFeature:auth.rateLimited", params: {} },
       );
     recent.push(stamp);
     failures.set(ip, recent);
@@ -157,6 +159,7 @@ export function createAuthService({ dataDir, now = Date.now } = {}) {
             "Die Einrichtung ist bereits abgeschlossen.",
             409,
             "SETUP_COMPLETE",
+            { messageKey: "serverFeature:auth.setupComplete", params: {} },
           );
         const key = await read(setupFile);
         if (
@@ -169,6 +172,7 @@ export function createAuthService({ dataDir, now = Date.now } = {}) {
             "Einrichtungsschlüssel ist ungültig oder abgelaufen.",
             401,
             "INVALID_SETUP_KEY",
+            { messageKey: "serverFeature:auth.invalidSetupKey", params: {} },
           );
         const record = {
           version: 1,
@@ -201,9 +205,13 @@ export function createAuthService({ dataDir, now = Date.now } = {}) {
             "Bitte zuerst die Einrichtung abschließen.",
             401,
             "SETUP_REQUIRED",
+            { messageKey: "serverFeature:auth.setupRequired", params: {} },
           );
         if (!(await passwordMatches(password, record.password)))
-          throw error("Ungültiges Passwort.", 401, "INVALID_CREDENTIALS");
+          throw error("Ungültiges Passwort.", 401, "INVALID_CREDENTIALS", {
+            messageKey: "serverFeature:auth.invalidPassword",
+            params: {},
+          });
         const token = issue(record);
         await write(authFile, record);
         failures.delete(ip);
@@ -245,6 +253,10 @@ export function createAuthService({ dataDir, now = Date.now } = {}) {
             "Das bisherige Passwort ist ungültig.",
             401,
             "INVALID_CREDENTIALS",
+            {
+              messageKey: "serverFeature:auth.invalidCurrentPassword",
+              params: {},
+            },
           );
         record.password = await passwordRecord(password);
         record.sessions = [];

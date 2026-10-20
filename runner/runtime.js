@@ -146,6 +146,15 @@ export async function runtimes(probeFn = probe) {
         enabled: true,
         available: false,
         reason: `Laufzeit fehlt: ${language === "java" ? "JDK mit java und javac" : language === "csharp" ? ".NET SDK" : SPECS[language].map(([cmd]) => cmd).join(" / ")} installieren.`,
+        reasonKey: "runner:runtime.install",
+        reasonParams: {
+          runtime:
+            language === "java"
+              ? "JDK (java, javac)"
+              : language === "csharp"
+                ? ".NET SDK"
+                : SPECS[language].map(([cmd]) => cmd).join(" / "),
+        },
       };
     }),
   );
@@ -226,7 +235,12 @@ export async function runFile(manager, job, root, runtime) {
     }
     if (language === "csharp") {
       if (!runtime.sdkMajor || runtime.sdkMajor < 6)
-        throw new RunnerError("Ein .NET SDK ab Version 6 wird benötigt.");
+        throw new RunnerError(
+          "Ein .NET SDK ab Version 6 wird benötigt.",
+          400,
+          "INVALID_REQUEST",
+          { messageKey: "runner:runtime.dotnetVersion", params: {} },
+        );
       let project = (await sources(root, ".csproj"))[0];
       if (project) project = path.join(root, project);
       else {
@@ -271,7 +285,12 @@ export async function runFile(manager, job, root, runtime) {
         await dir.close();
       }
       if (!config)
-        throw new RunnerError("Keine ausführbare .NET-Anwendung erzeugt.");
+        throw new RunnerError(
+          "Keine ausführbare .NET-Anwendung erzeugt.",
+          400,
+          "INVALID_REQUEST",
+          { messageKey: "runner:runtime.dotnetOutput", params: {} },
+        );
       return await run(runtime.command, [
         path.join(build, config.replace(".runtimeconfig.json", ".dll")),
       ]);

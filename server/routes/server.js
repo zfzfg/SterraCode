@@ -10,6 +10,10 @@ import {
 } from "../services/lmStudio.js";
 import { route } from "./helpers.js";
 import { testOpenAIConnection } from "../services/openAI.js";
+import {
+  localizeFields,
+  localizeRunnerStatus,
+} from "../services/messageOutput.js";
 
 async function writable(directory) {
   const file = path.join(directory, `.diagnostic-${randomUUID()}`);
@@ -17,20 +21,32 @@ async function writable(directory) {
     await fs.writeFile(file, "", { flag: "wx", mode: 0o600 });
     return { writable: true };
   } catch {
-    return { writable: false, error: "Volume ist nicht beschreibbar." };
+    return {
+      writable: false,
+      error: "Volume ist nicht beschreibbar.",
+      errorKey: "serverFeature:diagnostics.volumeReadOnly",
+      errorParams: {},
+    };
   } finally {
     await fs.rm(file, { force: true }).catch(() => {});
   }
 }
 export function createServerRouter(config) {
   const router = express.Router();
-  router.get("/server", (req, res) => res.json(getServerConfig(config)));
+  router.get("/server", (req, res) =>
+    res.json(localizeFields(getServerConfig(config), req.uiLocale, ["source"])),
+  );
   router.post(
     "/lm-studio/test",
     route(async (req, res) => {
       const settings = await getSettings();
       if (req.body.url !== undefined) settings.lmStudioUrl = req.body.url;
-      res.json(await testLMStudioConnection(settings));
+      res.json(
+        localizeFields(await testLMStudioConnection(settings), req.uiLocale, [
+          "error",
+          "warning",
+        ]),
+      );
     }),
   );
   router.get(
@@ -55,17 +71,25 @@ export function createServerRouter(config) {
             code: error.code || "RUNNER_UNAVAILABLE",
             error:
               "Runner ist nicht erreichbar. Datei- und Sessionarbeit bleibt möglich.",
+            errorKey: "serverFeature:diagnostics.runnerUnavailable",
+            errorParams: {},
           };
         }
       }
       res.json({
-        server: getServerConfig(config),
-        volumes: { data, workspaces },
-        runner,
-        lmStudio,
+        server: localizeFields(getServerConfig(config), req.uiLocale, [
+          "source",
+        ]),
+        volumes: {
+          data: localizeFields(data, req.uiLocale, ["error"]),
+          workspaces: localizeFields(workspaces, req.uiLocale, ["error"]),
+        },
+        runner: localizeRunnerStatus(runner, req.uiLocale),
+        lmStudio: localizeFields(lmStudio, req.uiLocale, ["error", "warning"]),
         warnings: [
           settings.provider !== "openai" &&
-            lmStudioWarning(settings.lmStudioUrl, config.docker),
+            lmStudioWarning(settings.lmStudioUrl, config.docker) &&
+            req.t("serverFeature:lmStudio.containerAddress"),
         ].filter(Boolean),
       });
     }),

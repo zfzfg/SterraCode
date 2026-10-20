@@ -50,6 +50,7 @@ export function rpc(promise, signal, timeout = 10000) {
             "LM-Studio-Kontextprüfung hat das Zeitlimit überschritten. Verbindung und geladenes Modell prüfen.",
             503,
             "CONTEXT_UNVERIFIED",
+            { messageKey: "serverFeature:lmStudio.contextTimeout", params: {} },
           ),
         ),
       timeout,
@@ -67,7 +68,10 @@ function validatedUrl(value) {
   try {
     url = new URL(value);
   } catch {
-    throw new AppError("Ungültige LM-Studio-URL.");
+    throw new AppError("Ungültige LM-Studio-URL.", undefined, undefined, {
+      messageKey: "serverFeature:lmStudio.invalidUrl",
+      params: {},
+    });
   }
   if (
     !["http:", "https:"].includes(url.protocol) ||
@@ -76,7 +80,10 @@ function validatedUrl(value) {
     url.search ||
     url.hash
   )
-    throw new AppError("Ungültige LM-Studio-URL.");
+    throw new AppError("Ungültige LM-Studio-URL.", undefined, undefined, {
+      messageKey: "serverFeature:lmStudio.invalidUrl",
+      params: {},
+    });
   return url;
 }
 export function lmStudioWarning(
@@ -106,6 +113,7 @@ async function clientFor(settings) {
         "LM-Studio-Secret-Datei ist nicht lesbar.",
         503,
         "LM_SECRET_UNAVAILABLE",
+        { messageKey: "serverFeature:lmStudio.secretUnreadable", params: {} },
       );
     }
   }
@@ -160,6 +168,8 @@ export async function testLMStudioConnection(settings, signal) {
       status: "invalid-container-address",
       native: true,
       warning,
+      warningKey: "serverFeature:lmStudio.containerAddress",
+      warningParams: {},
     };
   try {
     const models = await listLoadedModels(
@@ -202,6 +212,8 @@ export async function testLMStudioConnection(settings, signal) {
       code: error.code || "LM_STUDIO_UNAVAILABLE",
       error:
         "LM Studio ist über das native SDK nicht erreichbar. Adresse, Netzwerkfreigabe und Secret-Datei prüfen.",
+      errorKey: "serverFeature:lmStudio.offline",
+      errorParams: {},
     };
   }
 }
@@ -214,6 +226,7 @@ export async function connectModel(settings, signal) {
       "Bitte in LM Studio ein Modell laden und auswählen.",
       400,
       "NO_MODEL",
+      { messageKey: "serverFeature:lmStudio.selectModel", params: {} },
     );
   const loaded = await listLoadedModels(settings, signal);
   const native = loaded.find((m) => m.identifier === settings.activeModel);
@@ -222,6 +235,7 @@ export async function connectModel(settings, signal) {
       "Das ausgewählte Modell ist nicht geladen. Bitte in LM Studio laden und die Modellauswahl aktualisieren.",
       400,
       "NO_MODEL",
+      { messageKey: "serverFeature:lmStudio.modelNotLoaded", params: {} },
     );
   const info = await rpc(native.getModelInfo(), signal);
   const model = {
@@ -294,8 +308,11 @@ export async function runModelPass({
   const timer = setTimeout(
     () =>
       passController.abort(
-        new Error(
+        new AppError(
           "LM Studio hat nicht innerhalb von 120 Sekunden geantwortet.",
+          503,
+          "MODEL_TIMEOUT",
+          { messageKey: "serverFeature:lmStudio.responseTimeout", params: {} },
         ),
       ),
     120000,
@@ -352,8 +369,14 @@ export async function runModelPass({
           passSignal.throwIfAborted();
           const entry = requests.get(ctx.callId);
           if (!entry)
-            throw new Error(
+            throw new AppError(
               "Werkzeugaufruf konnte nicht eindeutig zugeordnet werden.",
+              502,
+              "INVALID_TOOL_REQUEST",
+              {
+                messageKey: "serverFeature:lmStudio.ambiguousToolCall",
+                params: {},
+              },
             );
           hadTools = true;
           executedTools++;
@@ -402,7 +425,16 @@ export async function runModelPass({
                   e.request.name === r.name &&
                   ((!r.id && !e.request.id) || r.id === e.request.id),
               ) || entries[index];
-            if (!entry) throw new Error("Unvollständiger Werkzeugaufruf.");
+            if (!entry)
+              throw new AppError(
+                "Unvollständiger Werkzeugaufruf.",
+                502,
+                "INVALID_TOOL_REQUEST",
+                {
+                  messageKey: "serverFeature:lmStudio.incompleteToolCall",
+                  params: {},
+                },
+              );
             unmatched.delete(entry);
             return entry.call;
           });

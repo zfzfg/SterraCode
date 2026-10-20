@@ -1,51 +1,51 @@
+import { t, formatNumber, translateMessage } from "./i18n.js";
 import { api } from "./api.js";
 import { state, emit } from "./state.js";
 import { node, toast } from "./ui.js";
 
-const labels = {
-  "not-installed": "Nicht installiert",
-  queued: "Wartet",
-  installing: "Wird installiert",
-  installed: "Installiert",
-  removing: "Wird entfernt",
-  error: "Fehler",
-  reconciling: "Wird wiederhergestellt",
-  succeeded: "Abgeschlossen",
-  failed: "Fehlgeschlagen",
-  cancelled: "Abgebrochen",
-  interrupted: "Unterbrochen",
-};
+const labels = () => ({
+  "not-installed": t("features:programs.notInstalled"),
+  queued: t("features:programs.queued"),
+  installing: t("features:programs.installing"),
+  installed: t("features:programs.installed"),
+  removing: t("features:programs.removing"),
+  error: t("features:shared.error"),
+  reconciling: t("features:programs.reconciling"),
+  succeeded: t("features:shared.finished"),
+  failed: t("features:shared.failed"),
+  cancelled: t("features:shared.cancelled"),
+  interrupted: t("features:shared.interrupted"),
+});
 export async function openPrograms({ initial = false } = {}) {
   const dialog = node("dialog", "programs-dialog");
-  const heading = node("h2", "", initial ? "Programme auswählen" : "Programme");
+  const heading = node(
+    "h2",
+    "",
+    initial ? t("features:programs.choose") : t("features:programs.title"),
+  );
   heading.id = "programs-heading";
   dialog.setAttribute("aria-labelledby", heading.id);
   const content = node("div", "dialog-form");
-  const status = node("p", "muted", "Programmzustand wird geladen …");
+  const status = node("p", "muted", t("features:programs.loading"));
   status.setAttribute("role", "status");
   const error = node("p", "form-error");
   error.setAttribute("role", "alert");
   const list = node("div", "program-list");
   const jobs = node("div", "program-jobs");
   const footer = node("div", "dialog-footer");
-  const cache = action("Downloadcache leeren", async () => {
+  const cache = action(t("features:programs.clearCache"), async () => {
     await api("/api/programs/cache", { method: "DELETE", body: {} });
-    toast(
-      "Downloadcache geleert. Eine Offline-Wiederherstellung benötigt diesen Cache.",
-    );
+    toast(t("features:programs.cacheCleared"));
     await refresh();
   });
-  const close = action(initial ? "Weiter zur KI-Verbindung" : "Schließen", () =>
-    dialog.close(),
+  const close = action(
+    initial ? t("features:programs.continue") : t("features:shared.close"),
+    () => dialog.close(),
   );
   footer.append(cache, close);
   content.append(
     heading,
-    node(
-      "p",
-      "muted",
-      "Installiere die Sprachwerkzeuge, die du verwenden möchtest. Deaktivieren sperrt die Sprachausführung; Deinstallieren entfernt das Werkzeug und erhält deine Projekte.",
-    ),
+    node("p", "muted", t("features:programs.help")),
     status,
     error,
     jobs,
@@ -75,7 +75,9 @@ export async function openPrograms({ initial = false } = {}) {
     return button;
   }
   async function run(program, command, stopRunning = false) {
-    status.textContent = `${program.name || program.id}: Auftrag wird gestartet …`;
+    status.textContent = t("features:programs.jobStarting", {
+      p1: program.name || program.id,
+    });
     await api(`/api/programs/${program.id}/actions`, {
       method: "POST",
       body: { action: command, stopRunning },
@@ -89,13 +91,22 @@ export async function openPrograms({ initial = false } = {}) {
     try {
       const data = await api("/api/programs");
       const runnerState = {
-        ready: "Bereit",
-        maintenance: "Programme werden geändert",
-        reconciling: "Wird wiederhergestellt",
-        starting: "Startet",
-        error: "Fehler",
+        ready: t("features:shared.ready"),
+        maintenance: t("features:programs.maintenance"),
+        reconciling: t("features:programs.reconciling"),
+        starting: t("features:programs.starting"),
+        error: t("features:shared.error"),
       };
-      status.textContent = `Runner: ${runnerState[data.status] || data.status}${data.cache?.packageBytes !== undefined ? ` · Paketcache: ${Math.round(data.cache.packageBytes / 1048576)} MiB · Werkzeugcache: ${Math.round(data.cache.toolBytes / 1048576)} MiB` : ""}`;
+      status.textContent = t("features:programs.runnerStatus", {
+        status: runnerState[data.status] || data.status,
+        cache:
+          data.cache?.packageBytes !== undefined
+            ? t("features:programs.cacheSize", {
+                p1: formatNumber(Math.round(data.cache.packageBytes / 1048576)),
+                p2: formatNumber(Math.round(data.cache.toolBytes / 1048576)),
+              })
+            : "",
+      });
       list.replaceChildren();
       const active = data.activeJob;
       const displayedJob = active || data.latestJob;
@@ -106,24 +117,27 @@ export async function openPrograms({ initial = false } = {}) {
         const current = displayedJob;
         const programName =
           data.programs.find((p) => p.id === current.programId)?.name ||
-          "Wiederherstellung";
+          t("features:programs.recovery");
         jobs.append(
           node(
             "p",
             "program-job-heading",
-            `${programName} · ${labels[current.state] || current.state}`,
+            `${programName} · ${labels()[current.state] || current.state}`,
           ),
         );
         const progress = node("progress", "program-progress");
         progress.max = current.stage?.total || 6;
-        progress.setAttribute("aria-label", `Fortschritt: ${programName}`);
+        progress.setAttribute(
+          "aria-label",
+          t("features:programs.progressLabel", { p1: programName }),
+        );
         if (current.state === "succeeded") progress.value = progress.max;
         else if (current.stage)
           progress.value = Math.max(0, current.stage.current - 1);
         const message = node(
           "p",
           "program-job-status",
-          `${active && current.stage ? `Schritt ${current.stage.current} von ${current.stage.total}: ` : ""}${current.progress || labels[current.state] || "Auftrag wird vorbereitet …"}`,
+          `${active && current.stage ? t("features:programs.stepPrefix", { p1: formatNumber(current.stage.current), p2: formatNumber(current.stage.total) }) : ""}${translateMessage(current.progressMessage, current.progress || labels()[current.state] || t("features:programs.preparing"))}`,
         );
         message.setAttribute("role", "status");
         jobs.append(progress, message);
@@ -133,7 +147,16 @@ export async function openPrograms({ initial = false } = {}) {
             node(
               "p",
               "muted",
-              `${name}: ${(bytes / 1048576).toFixed(1)}${total ? ` / ${(total / 1048576).toFixed(1)}` : ""} MiB heruntergeladen`,
+              t("features:programs.downloaded", {
+                p1: name,
+                p2: formatNumber(bytes / 1048576, {
+                  minimumFractionDigits: 1,
+                  maximumFractionDigits: 1,
+                }),
+                p3: total
+                  ? ` / ${formatNumber(total / 1048576, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`
+                  : "",
+              }),
             ),
           );
         }
@@ -141,12 +164,22 @@ export async function openPrograms({ initial = false } = {}) {
           const details = node("details", "program-job-details");
           details.open = detailsOpen;
           details.append(
-            node("summary", "", "Installationsdetails anzeigen"),
+            node("summary", "", t("features:programs.details")),
             node("pre", "program-job-log", current.log),
           );
           jobs.append(details);
         }
-        if (current.error) jobs.append(node("p", "form-error", current.error));
+        if (current.error || current.errorKey)
+          jobs.append(
+            node(
+              "p",
+              "form-error",
+              translateMessage(
+                { messageKey: current.errorKey, params: current.errorParams },
+                current.error,
+              ),
+            ),
+          );
       }
       if (active) {
         for (const blocking of active.blockingJobs || [])
@@ -154,12 +187,15 @@ export async function openPrograms({ initial = false } = {}) {
             node(
               "p",
               "muted",
-              `Wartet auf Prozess ${blocking.processId}: ${blocking.command}`,
+              t("features:programs.waitingProcess", {
+                p1: blocking.processId,
+                p2: blocking.command,
+              }),
             ),
           );
         if (active.state === "queued")
           jobs.append(
-            action("Paketauftrag abbrechen", async () => {
+            action(t("features:programs.cancel"), async () => {
               await api(`/api/programs/jobs/${active.id}/cancel`, {
                 method: "POST",
                 body: {},
@@ -170,7 +206,7 @@ export async function openPrograms({ initial = false } = {}) {
         if (active.blockingJobs?.length)
           jobs.append(
             action(
-              "Laufende Prozesse stoppen und fortsetzen",
+              t("features:programs.stopContinue"),
               () => run({ id: active.programId }, active.action, true),
               "danger",
             ),
@@ -185,18 +221,41 @@ export async function openPrograms({ initial = false } = {}) {
         const description = node("div");
         description.append(
           node("strong", "", program.name),
-          node("p", "muted", program.description),
+          node(
+            "p",
+            "muted",
+            translateMessage(
+              {
+                messageKey: program.descriptionKey,
+                params: program.descriptionParams,
+              },
+              program.description,
+            ),
+          ),
           node(
             "small",
             "",
-            `${labels[program.state] || program.state}${program.version ? ` · ${program.version}` : ""}${program.sizeMB ? ` · etwa ${program.sizeMB} MiB` : ""}${program.base ? " · Grundkomponente" : ""}`,
+            `${labels()[program.state] || program.state}${program.version ? ` · ${program.version}` : ""}${program.sizeMB ? t("features:programs.estimatedSize", { p1: program.sizeMB }) : ""}${program.base ? t("features:programs.base") : ""}`,
           ),
         );
-        if (program.error)
-          description.append(node("p", "form-error", program.error));
+        if (program.error || program.errorKey)
+          description.append(
+            node(
+              "p",
+              "form-error",
+              translateMessage(
+                { messageKey: program.errorKey, params: program.errorParams },
+                program.error,
+              ),
+            ),
+          );
         const controls = node("div", "program-controls");
         if (program.language) {
-          const label = node("label", "checkbox-label", "Ausführung aktiviert");
+          const label = node(
+            "label",
+            "checkbox-label",
+            t("features:programs.enabled"),
+          );
           const input = node("input");
           input.type = "checkbox";
           input.checked =
@@ -227,10 +286,10 @@ export async function openPrograms({ initial = false } = {}) {
         if (!program.base) {
           const button = action(
             program.updateAvailable
-              ? "Auf Java 25 aktualisieren"
+              ? t("features:programs.upgradeJava")
               : program.installed
-                ? "Deinstallieren"
-                : "Installieren",
+                ? t("features:programs.uninstall")
+                : t("features:programs.install"),
             () =>
               run(
                 program,
@@ -246,14 +305,20 @@ export async function openPrograms({ initial = false } = {}) {
           controls.append(button);
           if (program.updateAvailable)
             controls.append(
-              action("Deinstallieren", () => run(program, "remove"), "danger"),
+              action(
+                t("features:programs.uninstall"),
+                () => run(program, "remove"),
+                "danger",
+              ),
             );
           if (program.state === "error") {
             controls.append(
-              action("Erneut versuchen", () => run(program, "retry")),
+              action(t("features:programs.retry"), () => run(program, "retry")),
             );
             controls.append(
-              action("Paketdatenbank reparieren", () => run(program, "repair")),
+              action(t("features:programs.repair"), () =>
+                run(program, "repair"),
+              ),
             );
           }
         }

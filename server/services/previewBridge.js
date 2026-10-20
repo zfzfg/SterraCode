@@ -6,7 +6,7 @@ export function previewBridge(config) {
     windowStart = Date.now(),
     rate = 0,
     suppressed = false;
-  function send(level, text, file = "", line = 0) {
+  function send(level, text, file = "", line = 0, metadata = {}) {
     if (Date.now() - windowStart > 1000) {
       windowStart = Date.now();
       rate = 0;
@@ -21,7 +21,11 @@ export function previewBridge(config) {
             previewRunId: config.previewRunId,
             renderId: config.renderId,
             level: "warn",
-            text: "Weitere Meldungen zusammengefasst",
+            text:
+              config.messages?.suppressed ||
+              "Weitere Meldungen zusammengefasst",
+            messageKey: "serverFeature:preview.suppressed",
+            params: {},
             file: "",
             line: 0,
           },
@@ -39,6 +43,7 @@ export function previewBridge(config) {
         text,
         file,
         line,
+        ...metadata,
       },
       config.origin,
     );
@@ -61,7 +66,7 @@ export function previewBridge(config) {
           try {
             return typeof value === "string" ? value : JSON.stringify(value);
           } catch {
-            return "[Nicht darstellbar]";
+            return config.messages?.unserializable || "[Nicht darstellbar]";
           }
         })
         .join(" ");
@@ -75,9 +80,14 @@ export function previewBridge(config) {
       : locationOf(event.error?.stack);
     send(
       "error",
-      event.message || "Ressource konnte nicht geladen werden",
+      event.message ||
+        config.messages?.resourceFailed ||
+        "Ressource konnte nicht geladen werden",
       where.file,
       where.line,
+      event.message
+        ? {}
+        : { messageKey: "serverFeature:preview.resourceFailed", params: {} },
     );
   });
   addEventListener("unhandledrejection", (event) => {
@@ -90,7 +100,16 @@ export function previewBridge(config) {
     );
   });
   addEventListener("securitypolicyviolation", (event) =>
-    send("warn", `Vorschau-Policy blockiert: ${event.violatedDirective}`),
+    send(
+      "warn",
+      `Vorschau-Policy blockiert: ${event.violatedDirective}`,
+      "",
+      0,
+      {
+        messageKey: "serverFeature:preview.policyBlocked",
+        params: { directive: event.violatedDirective },
+      },
+    ),
   );
   addEventListener(
     "click",
@@ -98,7 +117,17 @@ export function previewBridge(config) {
       const link = event.target.closest?.("a, area");
       if (link && !link.getAttribute("href")?.startsWith("#")) {
         event.preventDefault();
-        send("warn", "Navigation ist in der Vorschau nicht unterstützt.");
+        send(
+          "warn",
+          config.messages?.navigationUnsupported ||
+            "Navigation ist in der Vorschau nicht unterstützt.",
+          "",
+          0,
+          {
+            messageKey: "serverFeature:preview.navigationUnsupported",
+            params: {},
+          },
+        );
       }
     },
     true,

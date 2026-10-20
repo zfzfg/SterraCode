@@ -33,12 +33,14 @@ const changeError = () =>
     "Modell oder Kontextgröße wurde während der Antwort geändert. Bitte erneut senden; gespeicherte Schritte bleiben erhalten.",
     409,
     "MODEL_CHANGED",
+    { messageKey: "learningContent:errors.contextModelChanged", params: {} },
   );
 const fitError = () =>
   new AppError(
     "Der aktuelle Auftrag, notwendige Wiederherstellungsdaten und Werkzeuge passen nicht ins Kontextfenster. In LM Studio ein größeres Kontextfenster laden oder die aktuelle Nachricht kürzen.",
     400,
     "CONTEXT_TOO_LARGE",
+    { messageKey: "learningContent:errors.contextTooLarge", params: {} },
   );
 const tokenMemos = new Map();
 export function contextProviderIdentity(settings) {
@@ -57,11 +59,11 @@ function tokenMemo(key) {
   return memo;
 }
 
-export function estimatedUsage(session, settings, error) {
+export function estimatedUsage(session, settings, error, metadata = {}) {
   const history = modelHistory(session);
   return {
     promptTokens: estimateTokens(
-      settings.systemPrompt + JSON.stringify(history),
+      systemPrompt(settings, session) + JSON.stringify(history),
     ),
     transcriptTokens: estimateTokens(JSON.stringify(history)),
     contextLength: null,
@@ -72,7 +74,17 @@ export function estimatedUsage(session, settings, error) {
     coveredMessages: 0,
     chunkCount: 0,
     lastMode: null,
-    ...(error ? { error } : {}),
+    ...(error
+      ? {
+          error,
+          ...(metadata.messageKey
+            ? {
+                errorKey: metadata.messageKey,
+                errorParams: metadata.params || {},
+              }
+            : {}),
+        }
+      : {}),
     sampledAt: new Date().toISOString(),
     provider: settings.provider || "lmstudio",
     model:
@@ -135,6 +147,10 @@ export class ContextManager {
         `Genaue Tokenprüfung nicht verfügbar. Modell und Verbindung in LM Studio prüfen: ${error.message}`,
         503,
         "CONTEXT_UNVERIFIED",
+        {
+          messageKey: "learningContent:errors.contextTokenConnection",
+          params: { error: error.message },
+        },
       );
     }
   }
@@ -148,6 +164,7 @@ export class ContextManager {
           "Kontext-Verknüpfungen sind nicht erlaubt.",
           403,
           "PATH_DENIED",
+          { messageKey: "learningContent:errors.contextLinks", params: {} },
         );
     }
     this.cache = await ChunkCache.load(path.join(dir, "cache.json"));
@@ -157,6 +174,7 @@ export class ContextManager {
         "LM Studio liefert keine gültige Kontextgröße. Modell erneut laden.",
         503,
         "CONTEXT_UNVERIFIED",
+        { messageKey: "learningContent:errors.contextSize", params: {} },
       );
     try {
       await this.model.applyPromptTemplate(plainChat("Kontextprüfung."));
@@ -204,6 +222,10 @@ export class ContextManager {
         `Prompttemplate konnte nicht geprüft werden. Modell in LM Studio erneut laden: ${error.message}`,
         503,
         "CONTEXT_UNVERIFIED",
+        {
+          messageKey: "learningContent:errors.contextTemplate",
+          params: { error: error.message },
+        },
       );
     }
     const value = await this.count(rendered);
@@ -212,6 +234,7 @@ export class ContextManager {
         "Genaue Tokenprüfung nicht verfügbar. Modell und Chattemplate in LM Studio prüfen.",
         503,
         "CONTEXT_UNVERIFIED",
+        { messageKey: "learningContent:errors.contextTokens", params: {} },
       );
     return value;
   }
@@ -248,6 +271,8 @@ export class ContextManager {
       this.emit("notice", {
         message:
           "Der Kontextcache konnte nicht gespeichert werden. Der vollständige Chat ist gespeichert; nach Neustart wird erneut komprimiert.",
+        messageKey: "learningContent:context.cacheNotSaved",
+        params: {},
       });
   }
   summaryText() {
@@ -265,6 +290,8 @@ export class ContextManager {
     this.emit("context-progress", {
       phase: "consolidation",
       message: "Ältere Zusammenfassungen werden zusammengeführt …",
+      messageKey: "learningContent:context.consolidating",
+      params: {},
     });
     let merged;
     if (summaries.length > 1 && !this.mergeFailed) {
@@ -294,6 +321,8 @@ export class ContextManager {
       this.emit("notice", {
         message:
           "Ältere Kontextdetails wurden durch einen begrenzten Digest ersetzt. Originale bleiben im Chat erhalten.",
+        messageKey: "learningContent:context.digest",
+        params: {},
       });
     }
     this.state.chunkSummaries = merged ? [merged] : [];
@@ -369,7 +398,7 @@ export class ContextManager {
       identifier: this.model.identifier,
       context: this.contextLength,
       origin: contextProviderIdentity(this.settings),
-      system: this.settings.systemPrompt,
+      system: this.systemPrompt(session, profile, retry),
       shape: this.strategy,
       prompt: summarySystemPrompt({ variant: this.variant, agentic: false }),
       settings: [...Object.keys(CONTEXT_DEFAULTS), "maxTokensResponse"].map(
@@ -526,6 +555,8 @@ export class ContextManager {
               total: cuts.length,
               percent,
               message: `Kontext wird komprimiert … ${i + 1}/${cuts.length}`,
+              messageKey: "learningContent:context.compacting",
+              params: { chunk: i + 1, total: cuts.length },
             });
           };
           progress(0);
@@ -550,6 +581,8 @@ export class ContextManager {
             if (this.signal.aborted) throw error;
             this.emit("notice", {
               message: `Kontextzusammenfassung fehlgeschlagen: ${error.message}`,
+              messageKey: "learningContent:context.summaryFailed",
+              params: { error: error.message },
             });
             continue;
           }
@@ -576,6 +609,8 @@ export class ContextManager {
             this.emit("notice", {
               message:
                 "Ein Kontextabschnitt wurde als struktureller Digest erhalten; ältere Details sind im vollständigen Chat nachlesbar.",
+              messageKey: "learningContent:context.structuralDigest",
+              params: {},
             });
           await this.consolidate(summaryBudget);
           chat = build();

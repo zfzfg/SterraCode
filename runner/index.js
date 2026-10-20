@@ -29,14 +29,20 @@ async function body(req) {
   for await (const chunk of req) {
     bytes += chunk.length;
     if (bytes > 4 * 1024 * 1024)
-      throw new RunnerError("Runner-Anfrage zu groß.", 413, "BODY_TOO_LARGE");
+      throw new RunnerError("Runner-Anfrage zu groß.", 413, "BODY_TOO_LARGE", {
+        messageKey: "runner:request.large",
+        params: {},
+      });
     chunks.push(chunk);
   }
   if (!bytes) return {};
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
-    throw new RunnerError("Ungültiges JSON.");
+    throw new RunnerError("Ungültiges JSON.", 400, "INVALID_REQUEST", {
+      messageKey: "runner:request.json",
+      params: {},
+    });
   }
 }
 function send(res, status, value) {
@@ -54,12 +60,18 @@ export async function createRunner(config = configuration(), overrides = {}) {
     (process.platform === "linux" &&
       ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid()))
   )
-    throw new Error(
-      "Runner-Dienstschlüssel muss dem Steuerbenutzer gehören und Modus 0400/0600 haben.",
+    throw Object.assign(
+      new Error(
+        "Runner-Dienstschlüssel muss dem Steuerbenutzer gehören und Modus 0400/0600 haben.",
+      ),
+      { messageKey: "runner:auth.permissions", params: {} },
     );
   const secret = (await fs.readFile(config.secretFile, "utf8")).trim();
   if (secret.length < 32)
-    throw new Error("Runner-Dienstschlüssel ist zu kurz.");
+    throw Object.assign(new Error("Runner-Dienstschlüssel ist zu kurz."), {
+      messageKey: "runner:auth.short",
+      params: {},
+    });
   const jobs = overrides.jobs || new JobManager(config);
   const programs = overrides.programs || new ProgramManager(config, jobs);
   const server = http.createServer(async (req, res) => {
@@ -74,6 +86,7 @@ export async function createRunner(config = configuration(), overrides = {}) {
           "Runner-Dienstauthentifizierung erforderlich.",
           401,
           "UNAUTHORIZED",
+          { messageKey: "runner:auth.required", params: {} },
         );
       if (
         req.headers["x-runner-protocol"] &&
@@ -83,6 +96,7 @@ export async function createRunner(config = configuration(), overrides = {}) {
           "App und Runner verwenden inkompatible Protokolle.",
           409,
           "PROTOCOL_MISMATCH",
+          { messageKey: "runner:protocol.incompatible", params: {} },
         );
       const url = new URL(req.url, "http://runner"),
         route = url.pathname,
@@ -109,6 +123,11 @@ export async function createRunner(config = configuration(), overrides = {}) {
               jobs.state === "ready"
                 ? runtime.reason
                 : "Runner wird wiederhergestellt oder befindet sich in Wartung.",
+            reasonKey:
+              jobs.state === "ready"
+                ? runtime.reasonKey
+                : "runner:runtime.recovering",
+            reasonParams: jobs.state === "ready" ? runtime.reasonParams : {},
             runnerStatus: jobs.state,
           })),
         );
@@ -136,7 +155,13 @@ export async function createRunner(config = configuration(), overrides = {}) {
       );
       if (jobRoute) {
         const [, id, action] = jobRoute;
-        if (!UUID.test(id)) throw new RunnerError("Ungültige Auftrags-ID.");
+        if (!UUID.test(id))
+          throw new RunnerError(
+            "Ungültige Auftrags-ID.",
+            400,
+            "INVALID_REQUEST",
+            { messageKey: "runner:job.invalidId", params: {} },
+          );
         if (method === "GET" && (!action || action === "output"))
           return send(
             res,
@@ -190,7 +215,10 @@ export async function createRunner(config = configuration(), overrides = {}) {
             programs.activeJob.state,
           )
         )
-          throw new RunnerError("Paketaktion läuft.", 409, "PACKAGE_BUSY");
+          throw new RunnerError("Paketaktion läuft.", 409, "PACKAGE_BUSY", {
+            messageKey: "runner:programs.busy",
+            params: {},
+          });
         jobs.maintenance = false;
         if (!jobs.initializationError) jobs.state = "ready";
         return send(res, 200, { status: jobs.state });
@@ -219,12 +247,17 @@ export async function createRunner(config = configuration(), overrides = {}) {
         "Runner-Endpunkt nicht gefunden.",
         404,
         "NOT_FOUND",
+        { messageKey: "runner:request.notFound", params: {} },
       );
     } catch (error) {
       if (!res.headersSent)
         send(res, error.status || 500, {
           error: error.status ? error.message : "Interner Runner-Fehler.",
           code: error.code || "RUNNER_ERROR",
+          messageKey: error.status
+            ? error.messageKey
+            : "runner:request.internal",
+          params: error.status ? error.params || {} : {},
         });
     }
   });
@@ -239,6 +272,9 @@ export async function createRunner(config = configuration(), overrides = {}) {
       jobs.initializationError = {
         code: error.code || "INITIALIZATION_FAILED",
         message: error.message,
+        ...(error.messageKey
+          ? { messageKey: error.messageKey, params: error.params || {} }
+          : {}),
       };
       console.error("Runner initialization failed", {
         code: error.code || "INITIALIZATION_FAILED",

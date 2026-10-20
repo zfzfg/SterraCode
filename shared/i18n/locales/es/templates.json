@@ -1,0 +1,110 @@
+{
+  "guess-number": {
+    "title": "Juego de adivinar el número",
+    "goal": "Compara un intento con un número secreto y da una respuesta clara.",
+    "prerequisites": ["Variables", "Condiciones", "Funciones"],
+    "milestone": "La función beurteile_tipp devuelve las cadenas exactas \"zu klein\", \"zu groß\" o \"richtig\".",
+    "runtime": "Python 3 (biblioteca estándar; sin instalación al importar)",
+    "features": ["Funciones", "Comparaciones", "if / elif / else"],
+    "files": [
+      {
+        "path": "main.py",
+        "content": "# Compara tipp con geheim. Completa los tres casos.\ndef beurteile_tipp(tipp, geheim):\n    # TODO: Devuelve \"zu klein\", \"zu groß\" o \"richtig\" (conserva estas cadenas exactas).\n    pass\n"
+      }
+    ],
+    "task": {
+      "title": "Evaluar un intento",
+      "description": "Implementa beurteile_tipp(tipp, geheim). Devuelve exactamente \"zu klein\" si el intento es demasiado pequeño, \"zu groß\" si es demasiado grande y \"richtig\" si es correcto. Conserva estas cadenas alemanas. Después puedes añadir un bucle de juego opcional.",
+      "conceptIds": ["python.conditions", "python.functions"],
+      "difficulty": "easy",
+      "hints": [
+        "¿Qué tres relaciones pueden tener dos números?",
+        "Comprueba por separado si es menor, mayor o igual.",
+        "Completa las condiciones dentro de beurteile_tipp.",
+        "Idea de solución: if tipp < geheim: return \"zu klein\"; elif tipp > geheim: return \"zu groß\"; en otro caso, return \"richtig\". Escribe las ramas como código Python."
+      ],
+      "testCaseNames": [
+        "Demasiado pequeño",
+        "Demasiado grande",
+        "Acierto",
+        "Número negativo"
+      ]
+    },
+    "checklist": [
+      "Superar todos los casos visibles",
+      "Probar otro intento por tu cuenta"
+    ]
+  },
+  "text-analysis": {
+    "title": "Análisis de texto",
+    "goal": "Cuenta palabras en textos, incluidas las entradas vacías y los espacios repetidos.",
+    "prerequisites": ["Cadenas de texto", "Listas", "Funciones"],
+    "milestone": "La función zaehle_woerter devuelve un número entero.",
+    "runtime": "Python 3 (biblioteca estándar; sin paquetes adicionales)",
+    "features": ["str.split", "len", "return"],
+    "files": [
+      {
+        "path": "main.py",
+        "content": "def zaehle_woerter(text):\n    # TODO: Cuenta las palabras separadas por cualquier espacio en blanco.\n    pass\n"
+      }
+    ],
+    "task": {
+      "title": "Contar palabras",
+      "description": "Implementa zaehle_woerter(text). Los espacios repetidos y los saltos de línea no deben generar palabras vacías.",
+      "conceptIds": ["python.strings", "python.lists", "python.functions"],
+      "difficulty": "easy",
+      "hints": [
+        "¿Cuántas palabras tiene una cadena vacía?",
+        "split() sin argumentos trata cualquier espacio en blanco.",
+        "Divide text dentro de la función y calcula la longitud de la lista.",
+        "Solución sugerida: return len(text.split()). Después prueba tus propias entradas."
+      ],
+      "testCaseNames": ["Texto vacío", "Dos palabras", "Espacios en blanco"]
+    },
+    "checklist": [
+      "Comprobar una entrada vacía",
+      "Comprobar texto con un salto de línea"
+    ]
+  },
+  "small-website": {
+    "title": "Mi pequeña página web",
+    "goal": "Diseña una página estática y cambia su contenido con un clic.",
+    "prerequisites": ["Estructura básica de HTML", "Selectores de CSS"],
+    "milestone": "Añade un encabezado, tu propio color y la acción del clic.",
+    "runtime": "Vista previa web estática integrada; no requiere Node.js ni paquetes",
+    "features": ["HTML", "CSS", "Eventos del DOM"],
+    "files": [
+      {
+        "path": "index.html",
+        "content": "<!doctype html>\n<html lang=\"es\">\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Mi página web</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n<h1>Mi primera página</h1>\n<p id=\"nachricht\">¿Qué quieres mostrar?</p>\n<button id=\"aktion\">Cambiar texto</button>\n<script src=\"app.js\"></script>\n</html>\n"
+      },
+      {
+        "path": "style.css",
+        "content": "body { font-family: sans-serif; margin: 2rem; }\n/* TODO: Diseña el encabezado y el botón. */\n"
+      },
+      {
+        "path": "app.js",
+        "content": "// TODO: Cambia el texto de #nachricht al hacer clic.\ndocument.querySelector(\"#aktion\").addEventListener(\"click\", () => {\n  // Añade tu acción aquí.\n});\n"
+      }
+    ],
+    "task": {
+      "title": "Diseñar una página interactiva",
+      "description": "Cambia el encabezado y el color. Después añade la acción del clic. Comprueba el resultado en la vista previa web con la lista de comprobación.",
+      "hints": [
+        "¿Qué elementos quieres cambiar?",
+        "CSS da estilo a la página; JavaScript responde al clic.",
+        "Completa el controlador del evento en app.js.",
+        "Idea para la acción: document.querySelector(\"#nachricht\").textContent = \"¡Hola, mundo!\";"
+      ],
+      "conceptIds": ["javascript.functions"],
+      "difficulty": "easy"
+    },
+    "checklist": [
+      "Tu encabezado es visible",
+      "Color modificado",
+      "El clic cambia el texto del mensaje",
+      "Se puede usar con Tab y Enter",
+      "Sin errores en el registro de la vista previa"
+    ]
+  }
+}

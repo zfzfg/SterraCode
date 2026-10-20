@@ -1,0 +1,17 @@
+{
+  "actions.close": "Cerrar",
+  "actions.save": "Guardar",
+  "actions.cancel": "Cancelar",
+  "actions.confirm": "Confirmar",
+  "dialog.open": "Cierra primero el diálogo abierto.",
+  "dialog.advanced": "Ajustes avanzados",
+  "locale.label": "Idioma de la interfaz",
+  "errors.generic": "Se ha producido un error. Inténtalo de nuevo.",
+  "validation.required": "Completa este campo.",
+  "validation.minimum": "Introduce al menos {{count}} caracteres.",
+  "network.unavailable": "No se puede acceder al servidor de SterraCode. Comprueba la dirección y la conexión.",
+  "network.invalid": "Respuesta del servidor no válida.",
+  "network.interrupted": "La conexión se ha interrumpido. Los pasos completados siguen guardados.",
+  "validation.invalid": "Introduce un valor válido.",
+  "locale.loadFailed": "No se han podido cargar los archivos de idioma. Inténtalo de nuevo."
+}

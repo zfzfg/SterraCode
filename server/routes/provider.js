@@ -7,6 +7,7 @@ import {
 } from "../services/providerCredentials.js";
 import { testOpenAIConnection } from "../services/openAI.js";
 import { testLMStudioConnection } from "../services/lmStudio.js";
+import { localizeFields } from "../services/messageOutput.js";
 const router = express.Router();
 router.get(
   "/credentials",
@@ -23,9 +24,13 @@ router.post(
   route(async (req, res) => {
     const settings = await getSettings();
     res.json(
-      await (settings.provider === "openai"
-        ? testOpenAIConnection(settings)
-        : testLMStudioConnection(settings)),
+      localizeFields(
+        await (settings.provider === "openai"
+          ? testOpenAIConnection(settings)
+          : testLMStudioConnection(settings)),
+        req.uiLocale,
+        ["error", "warning"],
+      ),
     );
   }),
 );

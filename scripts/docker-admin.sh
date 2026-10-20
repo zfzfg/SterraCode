@@ -13,7 +13,7 @@ case "$operation" in
     images=$(sterra_compose images --format json)
     sterra_compose run --rm --no-deps -e "STERRACODE_BACKUP_IMAGES=$images" -e "STERRACODE_BACKUP_UID=$(id -u)" -e "STERRACODE_BACKUP_GID=$(id -g)" -v "$target:/backup" admin backup "$@"
     if [[ " $* " == *' --offline '* ]]; then
-      docker image save "$(sterra_env COMPOSE_PROJECT_NAME sterracode)-app:1.0.0" "$(sterra_env COMPOSE_PROJECT_NAME sterracode)-runner:1.0.0" -o "$target/images.tar"
+      docker image save "$(sterra_env COMPOSE_PROJECT_NAME sterracode)-app:1.1.0" "$(sterra_env COMPOSE_PROJECT_NAME sterracode)-runner:1.1.0" -o "$target/images.tar"
       chmod 600 "$target/images.tar"
     fi
     sterra_compose up -d --remove-orphans

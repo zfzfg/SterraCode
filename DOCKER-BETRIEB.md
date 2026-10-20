@@ -1,148 +1,123 @@
-# SterraCode im Dockerbetrieb
+# SterraCode Docker operations
 
-Stand: 18.10.2026. Unterstützt wird zunächst Linux/amd64 mit Docker Engine und Compose. Windows verwendet Docker Desktop mit Linux-Containern, vorzugsweise WSL 2. Windows Server benötigt eine Linux-VM. `npm start`, `start.ps1` und `start.bat` behalten den lokalen Entwicklungsbetrieb. Die Docker-Instanz hat einen Administrator und einen gemeinsamen Runner. Freie Programme teilen dieselbe UID und können die Workspaces anderer Sessions lesen. Für fremden Code oder mehrere getrennte Benutzer ist zusätzliche Isolation erforderlich.
+Release 1.1.0. Supported target: Linux/amd64 with Docker Engine and Compose. Windows uses Docker Desktop with Linux containers, preferably WSL 2; Windows Server requires a Linux VM. English is the fresh-install/browser default; saved browser choices remain unchanged. The [German historical guide](DOCKER-BETRIEB.de.md) and [acceptance records](docker/ABNAHME.md) remain available.
 
-## Installation und Neustart
+The deployment has one administrator and a shared runner. Programs share an execution UID and can read other sessions' workspaces. Additional isolation is required for mutually isolated users or untrusted tenants.
+
+## Installation and restart
 
 ```sh
 bash install.sh
-# ohne Rückfragen bei bekannter LAN-Adresse:
+# unattended installation on a known LAN address:
 bash install.sh --bind-ip 192.168.178.50 --port 3000 --non-interactive
 bash start-docker.sh
 bash stop-docker.sh
 ```
 
 ```powershell
-.\install.ps1
 .\install.ps1 -BindIP 192.168.178.50 -Port 3000 -NonInteractive
 .\start-docker.ps1
 .\stop-docker.ps1
 ```
 
-Hostvoraussetzungen sind Docker und Compose, keine Hostlaufzeiten. Der Installer prüft den Linux-Daemon, Compose-Konfiguration und Portbelegung. Bei mehreren LAN-Adressen wird eine Auswahl verlangt. Bei einem belegten Port die beiden Werte `STERRACODE_PORT` und `STERRACODE_PUBLIC_URL` in `.env` gemeinsam anpassen und erneut starten. Vorhandene `.env`, Volumes und Passwörter werden erhalten. Ein neuer Einrichtungsschlüssel entsteht nur bei offener Einrichtung und gilt 30 Minuten. Er wird ausschließlich auf dem Terminal angezeigt. Die App speichert seinen Hash. Ein Installer-Neustart vor Passwortvergabe ersetzt den vorherigen Schlüssel.
+No host compilers or language runtimes are required. The installer checks the Linux daemon, Compose configuration, and port availability. It preserves `.env`, volumes, and passwords. Initial setup displays a key only in the terminal; the app stores its hash and it expires after 30 minutes. Re-running setup before password creation replaces that key. Set an administrator password of at least 12 characters in the browser.
 
-Unter etwa 8 GiB freiem Platz warnt der Installer. Die virtuelle Platte von Docker Desktop braucht zusätzlich Platz für Images, optionale SDKs und Projektcaches. Dateischreibmenge und Toolcaches werden durch RAM-Limits nicht begrenzt. `scripts/docker-admin.sh usage` beziehungsweise `scripts/docker-admin.ps1 usage` zeigt Volumegrößen und freien Platz. Paketcache lässt sich in der Programmverwaltung bereinigen, Quellcode und Backups werden dabei erhalten. Das ausführbare Named Volume `runs` enthält nur Compilergebnisse, wird beim Runnerstart geleert und nicht gesichert; seine Größe ist durch den Docker-Datenträger begrenzt.
+The installer warns below approximately 8 GiB free space. Images, optional SDKs, and caches need additional space. RAM limits do not limit disk consumption. `bash scripts/docker-admin.sh usage` reports volume sizes and free space. Programs can clear package downloads without deleting sources/backups. The executable `runs` volume contains compiler output, is cleared at runner startup, and is not backed up.
 
-Für dauerhaft erreichbare LAN-Adressen eine DHCP-Reservierung einrichten. `bash install.sh --diagnose` / `.\install.ps1 -Diagnose` vergleicht aktuelle Schnittstellen und Konfiguration. Nach Änderungen `.env` speichern und das Startskript erneut ausführen; ein reines `docker compose restart` übernimmt keine geänderten Containerparameter.
+Reserve stable LAN addresses in DHCP. `bash install.sh --diagnose` or `.\install.ps1 -Diagnose` compares interfaces/configuration. When changing ports, update `STERRACODE_PORT` and `STERRACODE_PUBLIC_URL` together. Re-run startup after `.env` changes: `docker compose restart` does not replace container parameters.
 
-## Firewall und LAN
+## Network, firewall, and proxies
 
-Standardmäßig wird genau die gewählte IPv4-Adresse veröffentlicht. `0.0.0.0` erfordert im Installer eine ausdrückliche Bestätigung oder `--all-interfaces` / `-AllInterfaces`. Es gibt keine automatische Routerfreigabe. IPv6 ist ein eigener Freigabetest mit zusätzlichen Publish-Einträgen und Firewallregeln.
+Direct LAN mode publishes only the selected IPv4 address. Binding `0.0.0.0` requires explicit confirmation or `--all-interfaces` / `-AllInterfaces`; also specify a concrete browser URL using `--public-url` / `-PublicUrl`. No router forwarding is created. IPv6 requires its own publish rules and acceptance test.
 
-Bei `--bind-ip 0.0.0.0` zusätzlich beispielsweise `--public-url http://192.168.178.50:3000` angeben; unter PowerShell entsprechend `-BindIP 0.0.0.0 -AllInterfaces -PublicUrl http://192.168.178.50:3000`. Die öffentliche URL bezeichnet eine konkrete erreichbare LAN-/Domainadresse. Der Installer prüft sie vor dem atomaren Anlegen von `.env`; eine Wildcardadresse wird nicht als Browseradresse übernommen.
-
-Linux mit UFW, an eigenes Netz anpassen:
+For Linux UFW, adapt addresses to your network:
 
 ```sh
 sudo ufw allow from 192.168.178.0/24 to 192.168.178.50 port 3000 proto tcp
 ```
 
-Docker verwaltet eigene Paketfilterregeln; UFW allein kann veröffentlichte Containerports je nach Hostkonfiguration nicht filtern. Die konkrete Bind-IP begrenzt die veröffentlichten Interfaces. Betreiber müssen bei benötigter Netzfilterung auch die Docker-Firewall beziehungsweise vorgelagerte Netzregeln prüfen.
+Docker manages packet-filter rules; UFW alone may not filter published container ports as expected. Restrict the bind address and verify Docker/upstream filtering as needed. The optional installer firewall switch asks before changing rules. A local healthcheck does not prove access from a second LAN device.
 
-Windows als Administrator, ausschließlich privates Netz:
+`.env.example` contains non-secret configuration only. Never store passwords, setup keys, or tokens in `.env`. Base Compose publishes no ports. Startup selects one overlay:
 
-```powershell
-New-NetFirewallRule -DisplayName SterraCode -Direction Inbound -Protocol TCP -LocalAddress 192.168.178.50 -LocalPort 3000 -RemoteAddress LocalSubnet -Profile Private -Action Allow
-```
-
-Der optionale Installerschalter `--firewall` / `-Firewall` fragt vor einer Regeländerung nach. Ohne erhöhte Rechte bleibt die Installation vorhanden und der Befehl kann separat ausgeführt werden. Auf einem zweiten LAN-Gerät die angezeigte Browseradresse öffnen, anmelden und eine Datei erstellen. Ein lokaler Healthcheck belegt diesen Zugriff nicht.
-
-## Konfiguration und Domains
-
-`.env.example` enthält ausschließlich nicht geheime Werte. Passwörter, Einrichtungsschlüssel und LM-Studio-Token gehören nicht in `.env`. Das Compose-Basisdokument veröffentlicht keinen Port. Die Startskripte wählen genau eine Ergänzung:
-
-| `STERRACODE_PROXY_MODE` | Ergänzung                   | Portfreigabe                                 |
-| ----------------------- | --------------------------- | -------------------------------------------- |
-| `off`                   | `compose.lan.yaml`          | Gewählte IPv4 und Hostport                   |
-| `caddy`                 | `compose.caddy.yaml`        | Nur Caddy auf 80/443                         |
-| `host`                  | `compose.host-proxy.yaml`   | App ausschließlich 127.0.0.1                 |
-| `docker`                | `compose.docker-proxy.yaml` | App nur am konfigurierten externen Proxynetz |
-
-Direkter LAN-Aufruf:
+| Proxy mode | Compose overlay             | Published endpoint               |
+| ---------- | --------------------------- | -------------------------------- |
+| `off`      | `compose.lan.yaml`          | Selected IPv4/host port          |
+| `caddy`    | `compose.caddy.yaml`        | Caddy only, ports 80/443         |
+| `host`     | `compose.host-proxy.yaml`   | App on 127.0.0.1                 |
+| `docker`   | `compose.docker-proxy.yaml` | App on an existing proxy network |
 
 ```sh
 docker compose -f compose.yaml -f compose.lan.yaml config --quiet
 docker compose -f compose.yaml -f compose.lan.yaml up -d --remove-orphans
 ```
 
-Die App lauscht intern immer auf `0.0.0.0:3000`. `STERRACODE_PUBLIC_URL` ist eine vollständige http-/https-URL an der Wurzel ohne Benutzerinformationen oder Unterpfad. Zusätzliche Hosts und Origins werden explizit erlaubt. Vertrauenswürdige Proxy-IP-Adressen/CIDRs stehen in `STERRACODE_TRUSTED_PROXIES`; eine pauschale Freigabe ist ungültig. Für den mitgelieferten Caddy kann das dedizierte Compose-Subnetz explizit konfiguriert oder die tatsächliche Caddy-IP eingetragen werden. Niemals beliebige Clientnetze als Proxy eintragen. Proxywechsel entfernen alte Dienste mit `--remove-orphans`.
+The app listens internally on `0.0.0.0:3000`. `STERRACODE_PUBLIC_URL` must be a root HTTP(S) URL without user information or subpath. Additional hosts/origins are explicit. Configure trusted proxy IPs/CIDRs with `STERRACODE_TRUSTED_PROXIES`; never trust arbitrary client networks. Switching proxy modes removes obsolete services with `--remove-orphans`.
 
-Caddy benötigt `STERRACODE_DOMAIN=code.example.org`, `STERRACODE_PUBLIC_URL=https://code.example.org` und den Proxy-Modus `caddy`. `STERRACODE_TLS_MODE=internal` verwendet die lokale Caddy-CA, deren Rootzertifikat auf jedem zugreifenden Gerät vertraut werden muss. Für öffentlich gültige ACME-Zertifikate `STERRACODE_TLS_MODE=` setzen und DNS sowie eingehende Validierung passend konfigurieren. Eine Domain allein erzeugt keine Erreichbarkeit. Caddy persistiert Zertifikate in eigenen Volumes.
+Caddy requires `STERRACODE_DOMAIN`, an HTTPS public URL, and proxy mode `caddy`. `STERRACODE_TLS_MODE=internal` uses a local CA whose root certificate must be trusted on each client. For public ACME, leave TLS mode empty and configure DNS/reachability. Certificates persist in Caddy volumes. An existing proxy must allow 4 MiB JSON, DELETE request bodies, requests lasting at least 20 minutes, and unbuffered SSE. App/browser use no WebSockets; the app's native LM Studio connection does.
 
-Ein bestehender Proxy muss 4 MiB JSON, DELETE mit JSON-Körper und Ausführungen bis mindestens 20 Minuten erlauben. SSE muss ungepuffert weitergereicht werden; im Beispiel Caddy ist `flush_interval -1` gesetzt. Browser und App verwenden keine WebSockets. Die native LM-Studio-WebSocket-Verbindung baut ausschließlich die App auf. HTTP im LAN verwendet ein HttpOnly-/SameSite-Lax-Cookie ohne Secure; eine konfigurierte HTTPS-URL setzt Secure. Eine HTTPS-URL bei anschließendem direkten HTTP-Zugriff kann deshalb keine Sitzung halten.
+LAN HTTP uses an HttpOnly/SameSite-Lax cookie without Secure. A configured HTTPS URL enables Secure; direct HTTP access to that installation cannot retain authentication.
 
-## LM Studio
+## AI providers and credentials
 
-| Standort          | URL aus dem App-Container                                   |
-| ----------------- | ----------------------------------------------------------- |
-| Docker-Host       | `http://host.docker.internal:1234`                          |
-| Anderes LAN-Gerät | Dessen tatsächliche IPv4, etwa `http://192.168.178.20:1234` |
-| HTTPS-Proxy       | Etwa `https://llm.example.org`                              |
+From the app container, use `http://host.docker.internal:1234` for LM Studio on the Docker host, a concrete LAN address for another machine, or an external HTTPS URL. Compose adds the Linux host gateway. LM Studio must listen on a reachable interface. `localhost` refers to the app container. Imported addresses are preserved and unsuitable local addresses are reported. The native SDK probe checks access, model/tokenization, and context; `/v1/models` alone is insufficient.
 
-Compose ergänzt unter Linux `host.docker.internal:host-gateway`. LM Studio muss auf einer aus dem Container erreichbaren Adresse lauschen. `localhost` bezeichnet die App selbst. Importierte lokale Adressen werden gemeldet und erhalten. Die Diagnose prüft das native SDK, Modellzugriff und Tokenisierung; `/v1/models` allein belegt den SDK-WebSocketzugriff nicht. SDK 2.1.0 ist im Dependencylock festgeschrieben.
+`STERRACODE_LM_STUDIO_URL` seeds new settings; saved settings take precedence afterward. `STERRACODE_LM_STUDIO_OVERRIDE_URL` is an explicit administrative override. `STERRACODE_LM_STUDIO_TOKEN_PATH` points to a protected host file and enables the app-only secret overlay. Token/address changes refresh the SDK client.
 
-`STERRACODE_LM_STUDIO_URL` ist die Vorgabe für neue Einstellungen. Danach gilt die gespeicherte Adresse; ein administrativer Override ist über die Serverkonfiguration ausdrücklich benannt. Token werden als geschützte Datei bereitgestellt. Für das vorbereitete Overlay `STERRACODE_LM_STUDIO_TOKEN_PATH` auf eine vom Appbenutzer lesbare Hostdatei setzen. Die Startskripte ergänzen dann `compose.lm-secret.yaml`; nur die App bekommt den Mount. Die Datei auf Linux beispielsweise an UID 10001 geben und Modus 0400 setzen. Bei Token-/Adresswechsel wird der SDK-Clientcache erneuert. Ein Modell ist keine Voraussetzung für Sessions, Editor, Runner oder Programme.
+For OpenAI, save a key in Settings/credentials and select a model from the API list. Keys stay in private `provider-secrets.json` with mode 0600. General APIs do not return them, and they do not enter browser storage, runner environment, or Compose environment. Backups contain stored keys and must be protected.
 
-## Programme und Grenzen
+Alternatively set `STERRACODE_OPENAI_API_KEY_PATH` to a protected host file. Startup adds the app-only overlay; the app reads `STERRACODE_OPENAI_API_KEY_FILE`. This override takes precedence and is read-only in the UI. Back up external secret files separately. On Linux, UID 10001 must be able to read each mount; mode 0600 owned by another UID usually prevents access. Windows uses host ACLs.
 
-Unter Einstellungen → Programme werden Java JDK, Python, Go, Rust/Cargo, C/C++, .NET SDK und Lua tatsächlich installiert oder entfernt. Node und Bash gehören zur Basis und können für die Sprachausführung deaktiviert werden. Deaktivieren erhält Pakete; Entfernen ändert das Sollmanifest und entfernt die zugehörigen optionalen Pakete. Gemeinsam benötigte Abhängigkeiten und Grundkomponenten bleiben erhalten. Das Sollmanifest ist nach der ersten Initialisierung maßgeblich; `STERRACODE_INITIAL_PROGRAMS` wird nur beim ersten Manifest übernommen.
+OpenAI requests target only `https://api.openai.com/v1`. Responses use tools, streaming, and `store: false`. Chat and compaction can incur costs. Connection testing lists models and counts input tokens without generating a model answer. Native compaction uses `context_management: [{ type: "compaction" }]` and `/responses/compact`; the model must support these. Local context/answer budgets apply only to LM Studio. Both providers retain complete tool results with paged retrieval. Interrupted streams are not automatically retried.
 
-Seit Katalog `2026.10.19.1` bietet die Auswahl **Java JDK 25** (Microsoft Build of OpenJDK, festgeschriebenes Paket `msopenjdk-25` Version `25.0.3-1`). Eine vorhandene Java-17-Installation lässt sich über „Auf Java 25 aktualisieren“ ersetzen. Ein gewöhnlicher Neustart stellt weiterhin die tatsächlich gespeicherte Version wieder her. Grundlage ist das [signierte Microsoft-Repository für Debian](https://learn.microsoft.com/en-us/java/openjdk/install#debian-10---12).
+For unattended initial setup, `STERRACODE_ADMIN_PASSWORD_PATH` mounts a protected password file as `STERRACODE_ADMIN_PASSWORD_FILE`. It is used only when no administrator account exists and never replaces an existing password on restart. Password changes revoke older sessions. Setup/session keys are stored as hashes.
 
-Während einer Installation zeigt der Programmdialog einen Fortschrittsbalken mit sechs Schritten: Vorbereitung, Paketlisten, Download, Einrichtung, Wiederherstellungscache und Versionsprüfung. Das ist ein Fortschritt nach Arbeitsschritten, keine geschätzte Restzeit. Aufklappbare Installationsdetails werden alle zwei Sekunden aktualisiert; das letzte Ergebnis bleibt sichtbar.
+## Runtimes and limits
 
-Paketänderungen sperren neue Starts. Laufende Aufträge dürfen auslaufen oder werden nach ausdrücklicher Auswahl gestoppt. Wiederherstellung nach Containerneuerstellung nutzt exakte Versionen und geprüften Paketcache; fehlende Pakete oder beschädigte Downloads zeigen einen reparierbaren Fehler. Fehlerzustände werden nicht als erfolgreiche Installation angezeigt. Die Oberfläche bleibt währenddessen für Datei- und Sessionarbeit erreichbar.
+Programs manages Python, Java JDK 25, Go, Rust/Cargo, C/C++, .NET SDK, and Lua. Node/Bash are base components and can be disabled. Disable retains packages; remove updates the desired manifest and removes optional packages while preserving shared/base dependencies. `STERRACODE_INITIAL_PROGRAMS` is read only at initial manifest creation.
 
-Die App ist eine Instanz mit 1 GiB RAM und 128 Prozessen; der Runner hat 2 GiB und 256 Prozesse. `memswap_limit` entspricht jeweils `mem_limit`, damit die Container keinen zusätzlichen Hostswap belegen. Bis zu vier aktive Ausführungen, höchstens eine je Session und zwei Kompilierungen gleichzeitig. Limits stehen in `compose.yaml`. App ist UID/GID 10001, Nutzerprogramme UID 10002/GID 10001 ohne Zusatzgruppen. Gemeinsam beschreibbare Workspaces haben Setgid und Umask 002. Steuerdateien, Journal und Runner-Schlüssel sind rootgeschützt; App-Daten sind nicht im Runner gemountet. Der Runner hat keinen veröffentlichten Port. Docker-Socket und Hostsystemverzeichnisse werden nicht gemountet.
+Catalog `2026.10.19.1` pins Microsoft `msopenjdk-25` version `25.0.3-1`. An existing Java 17 installation can be explicitly upgraded. Ordinary restart restores the exact saved version.
 
-## Import bestehender Daten
+Progress has six phases, not an estimated time remaining: database/storage, signed package lists, downloads, installation, recovery cache, and version verification. Details show native logs. Maintenance blocks new starts; existing jobs finish or are explicitly stopped. Exact cached packages are restored after container replacement. Missing/corrupt downloads produce a repairable failure rather than success.
 
-Zuerst den alten lokalen Server stoppen und eine separate Kopie seines vollständigen `server/data`-Verzeichnisses sichern. Unvollständige Migrationsjournale vor dem Import durch Öffnen der betroffenen Session im alten Server abschließen. Der Import verweigert unvollständige Journale, Symlinks/Junctions, Hardlinks und Spezialdateien. Originale bleiben unverändert, die Quelle wird ausschließlich lesend gemountet. Importziele müssen leer sein: für einen Import vor dem ersten Installerstart Images bauen und mit neuem Projektnamen arbeiten.
+App limits: 1 GiB RAM / 128 processes. Runner: 2 GiB / 256 processes. `memswap_limit` equals `mem_limit`, preventing additional host swap. Admission allows four jobs overall, one per session, and two compilations. App UID/GID is 10001; programs run as UID 10002/GID 10001 without extra groups. Workspaces use setgid and umask 002. Runner control files/keys are protected; app data is not mounted there. Neither the Docker socket nor host system directories are exposed.
+
+## Import existing data
+
+Stop the old local server and separately copy its complete `server/data`. Finish interrupted migration journals in the old app first. Import rejects incomplete journals, symlinks/junctions, hardlinks, and special files. It mounts the source read-only, preserves an original copy, requires empty target volumes, and loads sessions to finish migrations. Use a separate Compose project for initial import.
 
 ```sh
 cp .env.example .env
-# .env: COMPOSE_PROJECT_NAME=sterracode-import, passende LAN-IP/URL
+# Configure a new COMPOSE_PROJECT_NAME and correct LAN URL.
 docker compose -f compose.yaml -f compose.lan.yaml build
 bash scripts/docker-admin.sh import /absolute/path/to/old/server/data
 bash install.sh
 ```
 
-```powershell
-.\scripts\docker-admin.ps1 import -Path 'C:\Sicherung\server\data'
-.\install.ps1
-```
+PowerShell uses `.\scripts\docker-admin.ps1 import -Path 'C:\Backup\server\data'`. Sessions, workspaces, histories, profiles, backups, and completed markers are preserved; `runs` is omitted. Browser-local drafts are not migrated. Check an old session, source, history, and undo afterward.
 
-Der Import bewahrt vor Schemaänderungen einen unveränderten Quellstand unter `backups/import-original-*`, übernimmt Sessions, UUID- und Titelworkspaces, Änderungen, Profile, Backups, Kontext und abgeschlossene Marker und lädt jede Session einmal zum Abschluss der Migration. `runs` wird ausgelassen. Dateirechte werden auf die Container-UIDs angepasst. Browserentwürfe im localStorage wandern nicht mit. Alte Session öffnen und Dateiinhalt, Änderungshistorie sowie KI-Rückgängig prüfen.
-
-## Sicherung, Wiederherstellung und Passwort zurücksetzen
+## Backup, restore, and password recovery
 
 ```sh
 bash scripts/docker-admin.sh backup /absolute/path/to/empty/backup
-# Mit Paketcache und Images für Offline-Wiederherstellung:
-bash scripts/docker-admin.sh backup /absolute/path/to/empty/offline-backup --offline
+# Optional image export for offline recovery:
+bash scripts/docker-admin.sh backup /absolute/path/to/empty/backup --offline
 ```
 
-```powershell
-.\scripts\docker-admin.ps1 backup -Path 'D:\SterraBackup\2026-10-18' -Offline
-```
+PowerShell: `.\scripts\docker-admin.ps1 backup -Path 'D:\SterraBackup\release' -Offline`.
 
-Der Wrapper stoppt App und Runner kontrolliert und startet ausschließlich den Hilfscontainer. Währenddessen sind neue Schreibaktionen und Aufträge gesperrt. Danach startet er den Stack wieder. Bei Fehler bleibt der Stack gestoppt. Die Sicherung enthält App-Daten einschließlich Anmeldeinformationen, Workspaces, Sollmanifest/Journal und getrennte Archive beider Dienstschlüssel. Optional kommen Paketcache und `images.tar` hinzu. Werkzeugcache und flüchtige Compilergebnisse gehören nicht zur Sicherung. Das Manifest nennt UTC-Zeitpunkt, Architektur, Schema, Imageidentitäten, Volumes, Größe und SHA-256; es enthält keine Secretwerte. Zielverzeichnis erhält 0700 und Archive 0600. Auf Windows muss die Host-ACL den Zugriff entsprechend begrenzen. LM-Studio-Token außerhalb der Volumes getrennt geschützt sichern oder neu bereitstellen.
+The helper stops app/runner for consistency, archives data/workspaces/manifests/secrets with checksums, then restarts the same stack. Protect the destination: it contains private source and credentials. External secrets need separate protection. Offline backup includes images. Compiler `runs` are excluded; package cache is required for offline runtime recovery.
 
-Restore immer zunächst mit anderem Compose-Projektnamen und anderem Port erproben. Das Restoreziel muss leer sein, die Dienste bleiben gestoppt. Kein regulärer Update- oder Restorebefehl löscht alte Volumes. In der neuen Arbeitskopie `.env` anpassen, die passenden App-/Runner-Images bauen beziehungsweise aus `images.tar` laden und auf die Images des Zielprojekts taggen; anschließend:
+First rehearse restore with a different project name/port. Targets must be empty and stopped. Build/tag matching images or load `images.tar`, configure `.env`, then run:
 
 ```sh
 bash scripts/docker-admin.sh restore /absolute/path/to/backup
 bash start-docker.sh
 ```
 
-```powershell
-.\scripts\docker-admin.ps1 restore -Path 'D:\SterraBackup\2026-10-18'
-.\start-docker.ps1
-```
+PowerShell uses `restore -Path`. Restore verifies checksums, paths, sizes, and types before extraction. Absolute/traversal paths, links, special files, duplicate paths, and more than 100 GiB expanded data per archive are rejected. Deliberately larger archives require `STERRACODE_ARCHIVE_MAX_BYTES` in the helper. An archive alone is not a restore acceptance: open an old session and execute restored source with its runtime.
 
-Der Helfer prüft vor dem ersten Entpacken alle Prüfsummen, Pfade, Typen und Größen sowie freien Platz. Absolute Pfade, `..`, Links, Spezialdateien, doppelte Einträge und mehr als 100 GiB entpackte Daten je Archiv werden abgewiesen. Das Größenlimit kann für bewusst größere Daten über `STERRACODE_ARCHIVE_MAX_BYTES` im Hilfscontainer gesetzt werden. Ein Backup mit Symlinks/Hardlinks wird ebenfalls abgewiesen; solche Dateien vor der Sicherung entfernen oder als reguläre Dateien exportieren. Anschließend alte Session samt Verlauf öffnen und einen echten Lauf mit rekonstruierter Laufzeit durchführen. Ein vorhandenes Archiv allein gilt nicht als Restoreabnahme.
-
-Vergessenes Passwort bei gestopptem Stack:
+Forgotten password, with the stack stopped:
 
 ```sh
 bash stop-docker.sh
@@ -150,40 +125,21 @@ bash scripts/docker-admin.sh reset-password
 bash start-docker.sh
 ```
 
-```powershell
-.\stop-docker.ps1
-.\scripts\docker-admin.ps1 reset-password
-.\start-docker.ps1
+This revokes old sessions and displays a new setup key. It is not an API backdoor or an exec into a stopped service.
+
+## Updates, rollback, and verification
+
+Back up **before** replacing sources/images. Preserve previous app/runner image IDs and release source. Pull or extract the intended release, build both images together, then start the existing project:
+
+```sh
+docker compose -f compose.yaml -f compose.lan.yaml build
+bash start-docker.sh
 ```
 
-Der Hilfscontainer widerruft die bisherigen Sitzungen und zeigt einen neuen Einrichtungsschlüssel zur Passwortvergabe. Das ist kein API-Hintereingang und kein `exec` in einen gestoppten Dienst.
+Release 1.1.0 tags app/runner images `:1.1.0`, including installer/admin/smoke references; both images carry an OCI version label. Do not change the Compose project name during updates: it identifies existing volumes. Never delete volumes or prune Docker to update. Rollback requires previous images and, for migrated data, the matching backup. Node 24/Bookworm is digest-pinned. Base-image/catalog changes require explicit checksum/version verification and architecture-specific runtime smokes.
 
-## Updates, Rollback und Tests
+Language is browser-local and available before authentication. English is the fresh default; saved German/Spanish choices remain. Old files/history do not change. The app needs packaged `shared/` and production i18next; the runner has no i18next dependency. Older validators may discard locale/provenance fields, so lossless downgrade is not assumed.
 
-Vor einem Update sichern, danach `git pull`, `docker compose -f compose.yaml -f compose.lan.yaml build` und das Startskript ausführen. Niemals `down -v` oder `docker system prune` als Update verwenden. Der Projektname ist standardmäßig `sterracode`; jede weitere Arbeitskopie braucht einen anderen `COMPOSE_PROJECT_NAME`. Die Volumes haben keine globalen Namen. Rollback verlangt die vorherigen App-/Runner-Imageidentitäten und bei einer Migration den passenden gesicherten Datenstand. Basis-Node 24 auf Debian Bookworm ist durch Digest gebunden; Sicherheitsupdates werden als gemeinsames Release aus neuem Basisdigest, geprüftem Katalog und vollständigen Laufzeitsmokes veröffentlicht. App und Runner müssen denselben Protokollstand haben.
+`npm test` needs no Docker. `npm run test:docker` uses disposable projects for authentication, execution, recreation, backup/restore, and cleanup. Missing Linux Docker skips explicitly; `CI=1` or `STERRACODE_DOCKER_REQUIRED=1` makes it a failure. `STERRACODE_DOCKER_FULL=1` installs/runs/disables/enables/removes every optional runtime. Tests must not use live project names or volumes.
 
-`npm test` benötigt kein Docker. `npm run test:docker` baut ein isoliertes temporäres Projekt, testet Health, geschützte Einrichtung, echte Ausführung, Containerneuerstellung und Restore in ein zweites Projekt und entfernt nur diese Testprojekte. Ohne Linux-Daemon wird lokal verständlich übersprungen; `CI=1` oder `STERRACODE_DOCKER_REQUIRED=1` macht dies zum Fehler. `STERRACODE_DOCKER_FULL=1` installiert, testet, deaktiviert, aktiviert und entfernt jede optionale Laufzeit. CI führt diesen vollständigen Kataloglauf aus. Playwright verwendet weiterhin den lokalen Testserver auf Port 3107. ARM64 ist bis zur vollständigen Katalogabnahme nicht freigegeben.
-
-Plattformnachweise und tatsächliche Ubuntu-Ergebnisse stehen in [docker/ABNAHME.md](docker/ABNAHME.md). Windows-LAN, ein zweites physisches Gerät, IPv6, öffentliche HTTPS-Zertifikate und eine echte LM-Studio-Instanz brauchen jeweils ihre eigene verfügbare Testumgebung.
-
-## KI-Anbieter und OpenAI-Zugang
-
-Unter Einstellungen kann zwischen LM Studio und der direkten OpenAI API gewechselt werden. LM Studio unterstützt sowohl Host- und LAN-Adressen als auch eine externe HTTPS-Adresse. Der native Verbindungstest prüft WebSocket-Zugriff sowie bei geladenem Modell Tokenisierung und Kontextgröße. Eine importierte localhost-Adresse bleibt unverändert und wird im Dockerbetrieb als unpassend gemeldet.
-
-Für OpenAI den API-Schlüssel direkt im Feld **OpenAI-API-Schlüssel** unter Einstellungen speichern (alternativ über **KI-Zugangsdaten**) und ein Modell aus der direkt abgefragten OpenAI-Modellliste auswählen. Der Schlüssel wird serverseitig in `provider-secrets.json` auf dem privaten App-Volume mit Dateimodus `0600` gespeichert. Die allgemeine Settings-API und die Zugangsdaten-Metadaten liefern ihn nicht zurück. Er wird nicht in Browser-Localstorage, `.env`, Runner oder Compose-Umgebung geschrieben. App-Backups enthalten den gespeicherten Schlüssel und müssen entsprechend geschützt werden. Löschen im Zugangsdialog entfernt den gespeicherten Schlüssel.
-
-Als Alternative kann eine Secret-Datei verwendet werden: `.env` enthält nur `STERRACODE_OPENAI_API_KEY_PATH=/absoluter/host/pfad/openai-key`; die Startskripte ergänzen `compose.openai-secret.yaml` und mounten die Datei nur in der App. Intern liest die App `STERRACODE_OPENAI_API_KEY_FILE`. Diese Vorgabe hat Vorrang vor dem gespeicherten Schlüssel und ist in der Oberfläche schreibgeschützt. Externe Secret-Dateien werden separat gesichert.
-
-Bei Linux-Bindmounts müssen Dateirechte beziehungsweise ACLs dem App-Benutzer mit Container-UID `10001` das Lesen erlauben. Eine Hostdatei mit Modus `0600`, die einer anderen UID gehört, ist für die App normalerweise nicht lesbar. Das gilt ebenso für LM-Studio-Token und das optionale initiale Administratorpasswort. Unter Windows wird der Zugriff auf die Hostdatei durch die Host-ACL geschützt.
-
-OpenAI-Anfragen gehen ausschließlich an `https://api.openai.com/v1`; die LM-Studio-URL kann dieses Ziel nicht verändern. Die Anbindung verwendet die Responses API mit Funktionswerkzeugen, Streaming und `store: false`. Bei OpenAI erfolgen automatische Verdichtung und die manuelle Aktion `/compact` über die Responses API; der lokale LM-Studio-Compressor wird nicht verwendet. Chat und Verdichtung können API-Kosten verursachen. Der Verbindungstest lädt nur die Modellliste und prüft die Eingabe-Tokenzählung; er erzeugt keine Modellantwort. Ein realer kostenpflichtiger OpenAI-Schlüssel wurde für die Entwicklungstests nicht verwendet.
-
-SterraCode setzt bei OpenAI kein eigenes Kontextbudget, Antwort-Tokenlimit oder eine Verdichtungsschwelle. Die Responses API erhält `context_management: [{ type: "compaction" }]`; `/compact` verwendet `/responses/compact`. Das gewählte Modell muss diese Funktionen unterstützen. Die API-Modellliste liefert keine verlässliche Kontextgröße oder Funktionsfähigkeiten. Lokale Kontext-, Antwortbudget- und Compressor-Einstellungen gelten ausschließlich für LM Studio. Die Ergebnisbudgets für einzelne Werkzeugantworten und deren Summe gelten dagegen für beide Provider; vollständige Originalergebnisse bleiben gespeichert und sind seitenweise nachladbar (siehe TOKEN-EFFIZIENZ.md). Dessen tatsächlich geladenes Kontextfenster wird automatisch erkannt und in der Modellauswahl angezeigt. Volle Nachrichten einschließlich Werkzeugschemata werden über den offiziellen Input-Token-Endpunkt gezählt. Temperaturoptionen bleiben bei OpenAI ungesendet, da ihre Unterstützung modellabhängig ist. Verschlüsselte Reasoning-Einträge bei Werkzeugaufrufen werden im privaten Sessionverlauf erhalten und beim nächsten Aufruf zurückgegeben. Ein abgebrochener Antwortstrom wird nicht automatisch erneut kostenpflichtig gestartet.
-
-Technische Referenzen: [Responses und Funktionswerkzeuge](https://developers.openai.com/api/docs/guides/function-calling), [Streaming](https://developers.openai.com/api/docs/guides/streaming-responses), [Tokenzählung einschließlich Werkzeugschemata](https://developers.openai.com/api/docs/guides/token-counting). LM Studio verwendet das festgeschriebene SDK `2.1.0` mit der dokumentierten [apiToken-Option](https://lmstudio.ai/docs/typescript/authentication).
-
-## Automatisierte erste Anmeldung und administrative Vorgaben
-
-Für eine unbeaufsichtigte erste Einrichtung kann `STERRACODE_ADMIN_PASSWORD_PATH` in `.env` auf eine geschützte Hostdatei zeigen. Das Secret-Overlay mountet sie als `STERRACODE_ADMIN_PASSWORD_FILE`; der Inhalt wird nur übernommen, solange noch kein Administratorkonto existiert. Mindestens zwölf Zeichen sind erforderlich. Ein bestehendes Passwort wird durch Neustarts oder spätere Änderungen dieser Datei nicht ersetzt. Einrichtungs- und Sitzungsschlüssel werden ausschließlich gehasht gespeichert; ein Passwortwechsel widerruft ältere Sitzungen.
-
-`STERRACODE_LM_STUDIO_URL` ist die Vorgabe für neue Einstellungen. Für eine dauerhafte administrative Adressvorgabe kann die App ausdrücklich `STERRACODE_LM_STUDIO_OVERRIDE_URL` erhalten; die gespeicherte Benutzeradresse bleibt dabei erhalten. Das ist eine nicht geheime URL und erfordert bei Änderung einen Neustart. LM-Studio-Token bleiben in der gesondert gemounteten Secret-Datei; ein Token- oder Adresswechsel erzeugt einen neuen nativen Client.
+Record platform results and deployment/image/backup identities in [docker/ABNAHME.md](docker/ABNAHME.md). Second-device LAN access, IPv6, public TLS, and real AI providers require their own available environment.

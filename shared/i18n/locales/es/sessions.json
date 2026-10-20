@@ -1,0 +1,22 @@
+{
+  "tutor.label": "Idioma del tutor",
+  "tutor.help": "Se aplica a las respuestas futuras. Los mensajes y archivos existentes se conservan.",
+  "tutor.legacy": "Idioma del usuario (comportamiento anterior)",
+  "errors.tutorLocale": "Idioma del tutor no válido.",
+  "deletion.pending": "Eliminación pendiente · abre la gestión para continuar",
+  "manage.title": "Gestionar sesión",
+  "empty": "Aún no hay sesiones. Empieza con tu propio objetivo de aprendizaje.",
+  "recent": "Editado recientemente",
+  "new.title": "Nueva sesión",
+  "new.server": "Los archivos y el progreso de aprendizaje se guardan en el servidor de SterraCode.",
+  "new.local": "Los archivos y el progreso de aprendizaje se guardan localmente en tu equipo.",
+  "name": "Nombre",
+  "new.defaultTitle": "Mi nueva sesión",
+  "new.create": "Crear sesión",
+  "action": "Acción",
+  "rename": "Cambiar nombre",
+  "delete.action": "Eliminar sesión (con copia de seguridad)",
+  "delete.stop": "Detén primero la respuesta de IA en curso.",
+  "delete.confirm": "¿Eliminar sesión?",
+  "delete.description": "Se eliminará «{{title}}» de la lista. Se conserva una copia de seguridad local."
+}

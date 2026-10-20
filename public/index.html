@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" data-theme="dark">
+<html lang="en" data-theme="dark" data-i18n-loading="">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -13,41 +13,54 @@
         <button
           id="sidebar-toggle"
           class="icon-only"
-          title="Seitenleiste umschalten"
-          aria-label="Seitenleiste umschalten"
+          data-i18n-title="app:static.sidebarToggle"
+          title="Toggle sidebar"
+          data-i18n-aria-label="app:static.sidebarToggle"
+          aria-label="Toggle sidebar"
           aria-expanded="true"
         >
           <svg class="icon" aria-hidden="true">
             <use href="/assets/icons.svg#menu"></use>
           </svg>
         </button>
-        <a class="brand" href="/" aria-label="SterraCode Startseite"
+        <a
+          class="brand"
+          href="/"
+          data-i18n-aria-label="app:static.home"
+          aria-label="SterraCode home"
           ><svg class="icon brand-icon" aria-hidden="true">
             <use href="/assets/icons.svg#orbit"></use></svg
           >SterraCode</a
         >
         <span class="header-divider"></span
         ><span id="session-title" class="session-title"
-          >Dein Lernarbeitsplatz</span
+          ><span data-i18n="app:static.workplace"
+            >Your learning workspace</span
+          ></span
         >
         <div class="header-actions">
-          <button id="profile-btn" aria-haspopup="dialog" disabled>
-            Lernprofil
+          <button id="profile-btn" aria-haspopup="dialog" disabled="">
+            <span data-i18n="app:static.profile">Learning profile</span>
           </button>
           <button
             id="terminal-toggle"
-            title="Terminal umschalten"
+            data-i18n-title="app:static.terminalToggle"
+            title="Toggle terminal"
             aria-controls="terminal-panel"
             aria-expanded="false"
           >
             <svg class="icon" aria-hidden="true">
               <use href="/assets/icons.svg#terminal"></use></svg
-            ><span class="optional-label">Terminal</span></button
+            ><span class="optional-label"
+              ><span data-i18n="app:static.terminal">Terminal</span></span
+            ></button
           ><button
             id="settings-btn"
             class="icon-only"
-            title="Einstellungen"
-            aria-label="Einstellungen"
+            data-i18n-title="app:static.settings"
+            title="Settings"
+            data-i18n-aria-label="app:static.settings"
+            aria-label="Settings"
           >
             <svg class="icon" aria-hidden="true">
               <use href="/assets/icons.svg#settings"></use>
@@ -55,37 +68,47 @@
           </button>
         </div>
       </header>
-      <aside id="sidebar" aria-label="Sessionnavigation">
+      <aside
+        id="sidebar"
+        data-i18n-aria-label="app:static.navigation"
+        aria-label="Session navigation"
+      >
         <div class="sidebar-top">
-          <span class="eyebrow">Arbeitsplatz</span
-          ><button id="new-session-btn" class="primary" disabled>
+          <span class="eyebrow"
+            ><span data-i18n="app:static.workspace">Workspace</span></span
+          ><button id="new-session-btn" class="primary" disabled="">
             <svg class="icon" aria-hidden="true">
               <use href="/assets/icons.svg#plus"></use></svg
-            >Neue Session
+            ><span data-i18n="app:static.newSession">New session</span>
           </button>
         </div>
-        <div class="sidebar-tabs" role="tablist" aria-label="Seitenleiste">
+        <div
+          class="sidebar-tabs"
+          role="tablist"
+          data-i18n-aria-label="app:static.sidebar"
+          aria-label="Sidebar"
+        >
           <button
             id="tab-sessions"
             role="tab"
             aria-selected="true"
             aria-controls="sessions-view"
           >
-            Sessions</button
+            <span data-i18n="app:static.sessions">Sessions</span></button
           ><button
             id="tab-files"
             role="tab"
             aria-selected="false"
             aria-controls="files-view"
           >
-            Dateien</button
+            <span data-i18n="app:static.files">Files</span></button
           ><button
             id="tab-plan"
             role="tab"
             aria-selected="false"
             aria-controls="plan-view"
           >
-            Lernplan
+            <span data-i18n="app:static.plan">Learning plan</span>
           </button>
         </div>
         <section
@@ -95,12 +118,14 @@
         >
           <div class="learning-actions">
             <button id="projects-btn" aria-haspopup="dialog">
-              Projektwerkstatt
+              <span data-i18n="app:static.projects">Project workshop</span>
             </button>
             <button id="project-export-btn" aria-haspopup="dialog">
-              Projekt exportieren
+              <span data-i18n="app:static.export">Export project</span>
             </button>
-            <button id="journal-btn" aria-haspopup="dialog">Lernjournal</button>
+            <button id="journal-btn" aria-haspopup="dialog">
+              <span data-i18n="app:static.journal">Learning journal</span>
+            </button>
           </div>
           <div id="sessions-list"></div>
         </section>
@@ -108,19 +133,28 @@
           id="files-view"
           role="tabpanel"
           aria-labelledby="tab-files"
-          hidden
+          hidden=""
         >
           <div class="side-toolbar">
-            <span class="eyebrow">Workspace</span>
+            <span class="eyebrow"
+              ><span data-i18n="app:static.workspaceLabel"
+                >Workspace</span
+              ></span
+            >
             <div id="file-actions"></div>
           </div>
-          <div id="file-tree" role="tree" aria-label="Dateien und Ordner"></div>
+          <div
+            id="file-tree"
+            role="tree"
+            data-i18n-aria-label="app:static.fileTree"
+            aria-label="Files and folders"
+          ></div>
         </section>
         <section
           id="plan-view"
           role="tabpanel"
           aria-labelledby="tab-plan"
-          hidden
+          hidden=""
         >
           <div id="learning-plan"></div>
         </section>
@@ -128,7 +162,8 @@
           id="sidebar-resizer"
           class="resizer vertical"
           role="separator"
-          aria-label="Breite der Seitenleiste"
+          data-i18n-aria-label="app:static.sidebarWidth"
+          aria-label="Sidebar width"
           aria-orientation="vertical"
           tabindex="0"
         ></div>
@@ -136,24 +171,37 @@
       <button
         id="sidebar-backdrop"
         class="sidebar-backdrop"
-        aria-label="Seitenleiste schließen"
-        hidden
+        data-i18n-aria-label="app:static.sidebarClose"
+        aria-label="Close sidebar"
+        hidden=""
       ></button>
       <main id="workbench">
         <section id="welcome" class="welcome">
           <div class="welcome-content">
             <svg class="icon welcome-orbit" aria-hidden="true">
               <use href="/assets/icons.svg#orbit"></use></svg
-            ><span class="eyebrow">Lernen. Ausprobieren. Verstehen.</span>
-            <h1>Raum für deinen nächsten Schritt.</h1>
+            ><span class="eyebrow"
+              ><span data-i18n="app:static.welcomeMotto"
+                >Learn. Try. Understand.</span
+              ></span
+            >
+            <h1>
+              <span data-i18n="app:static.welcomeTitle"
+                >Room for your next step.</span
+              >
+            </h1>
             <p>
-              Schreibe Code, stelle Fragen und arbeite mit deinem lokalen
-              KI-Tutor an einem eigenen Lernziel.
+              <span data-i18n="app:static.welcomeBody"
+                >Write code, ask questions and work towards your own learning
+                goal with your local AI tutor.</span
+              >
             </p>
-            <button id="welcome-new" class="primary" disabled>
+            <button id="welcome-new" class="primary" disabled="">
               <svg class="icon" aria-hidden="true">
                 <use href="/assets/icons.svg#plus"></use></svg
-              >Neue Session starten
+              ><span data-i18n="app:static.welcomeStart"
+                >Start a new session</span
+              >
             </button>
             <div id="welcome-status" class="connection-help"></div>
             <div id="recent-sessions" class="recent-sessions"></div>
@@ -162,27 +210,41 @@
         <nav
           id="compact-tabs"
           class="compact-tabs"
-          aria-label="Arbeitsansicht"
-          hidden
+          data-i18n-aria-label="app:static.view"
+          aria-label="Work view"
+          hidden=""
         >
-          <button id="view-editor" aria-pressed="true">Editor</button
-          ><button id="view-chat" aria-pressed="false">KI-Tutor</button>
+          <button id="view-editor" aria-pressed="true">
+            <span data-i18n="app:static.editor">Editor</span></button
+          ><button id="view-chat" aria-pressed="false">
+            <span data-i18n="app:static.tutor">AI tutor</span>
+          </button>
         </nav>
-        <div id="panes" class="panes" hidden>
+        <div id="panes" class="panes" hidden="">
           <div id="editor-area" class="editor-area">
-            <section id="editor-panel" class="panel" aria-label="Code-Editor">
+            <section
+              id="editor-panel"
+              class="panel"
+              data-i18n-aria-label="app:static.codeEditor"
+              aria-label="Code editor"
+            >
               <div class="panel-heading">
-                <span class="eyebrow">Editor</span>
+                <span class="eyebrow"
+                  ><span data-i18n="app:static.editor">Editor</span></span
+                >
                 <div class="panel-actions">
                   <select
                     id="language-select"
-                    aria-label="Programmiersprache"
+                    data-i18n-aria-label="app:static.programmingLanguage"
+                    aria-label="Programming language"
                   ></select
                   ><button
                     id="save-btn"
                     class="icon-only"
-                    title="Speichern (Strg+S)"
-                    aria-label="Speichern"
+                    data-i18n-title="app:static.saveShortcut"
+                    title="Save (Ctrl+S)"
+                    data-i18n-aria-label="app:static.save"
+                    aria-label="Save"
                   >
                     <svg class="icon" aria-hidden="true">
                       <use href="/assets/icons.svg#save"></use>
@@ -190,7 +252,7 @@
                   ><button id="run-btn" class="primary">
                     <svg class="icon" aria-hidden="true">
                       <use href="/assets/icons.svg#play"></use></svg
-                    >Ausführen
+                    ><span data-i18n="app:static.run">Run</span>
                   </button>
                 </div>
               </div>
@@ -198,22 +260,26 @@
                 id="file-tabs"
                 class="file-tabs"
                 role="tablist"
-                aria-label="Geöffnete Dateien"
+                data-i18n-aria-label="app:static.openFiles"
+                aria-label="Open files"
               ></div>
               <div class="file-info">
-                <span id="file-path">Keine Datei geöffnet</span
+                <span id="file-path"
+                  ><span data-i18n="app:static.noFile">No file open</span></span
                 ><button
                   id="save-status"
                   class="text-button"
                   aria-live="polite"
                 >
-                  Gespeichert
+                  <span data-i18n="app:static.saved">Saved</span>
                 </button>
                 <button
                   id="changes-btn"
                   class="icon-only"
-                  title="KI-Dateiänderungen"
-                  aria-label="KI-Dateiänderungen"
+                  data-i18n-title="app:static.changes"
+                  title="AI file changes"
+                  data-i18n-aria-label="app:static.changes"
+                  aria-label="AI file changes"
                 >
                   <svg class="icon" aria-hidden="true">
                     <use href="/assets/icons.svg#undo"></use>
@@ -222,53 +288,68 @@
               </div>
               <div id="editor-container"></div>
               <div id="runtime-hint" class="runtime-hint"></div>
-              <div id="trace-tools" class="trace-tools" hidden>
+              <div id="trace-tools" class="trace-tools" hidden="">
                 <button id="trace-open" type="button" aria-haspopup="dialog">
-                  Python Schritt für Schritt
+                  <span data-i18n="app:static.trace">Python step by step</span>
                 </button>
-                <span>Codezeilen und Variablen nachvollziehen</span>
+                <span
+                  ><span data-i18n="app:static.traceHelp"
+                    >Follow code lines and variables</span
+                  ></span
+                >
               </div>
               <button
                 id="preview-open"
                 type="button"
-                hidden
+                hidden=""
                 aria-expanded="false"
                 aria-controls="preview-panel"
               >
-                Web-Vorschau
+                <span data-i18n="app:static.preview">Web preview</span>
               </button>
             </section>
             <div
               id="terminal-resizer"
               class="resizer horizontal"
               role="separator"
-              aria-label="Terminalhöhe"
+              data-i18n-aria-label="app:static.terminalHeight"
+              aria-label="Terminal height"
               aria-orientation="horizontal"
               aria-controls="terminal-panel"
               aria-expanded="false"
-              title="Terminal nach oben ziehen; Enter öffnet oder schließt es"
+              data-i18n-title="app:static.terminalResize"
+              title="Drag the terminal upwards; Enter opens or closes it"
               tabindex="0"
             ></div>
             <section
               id="terminal-panel"
               class="terminal-panel"
+              data-i18n-aria-label="app:static.terminal"
               aria-label="Terminal"
-              hidden
+              hidden=""
             >
               <div class="terminal-heading">
-                <span class="eyebrow">Terminal</span
-                ><span id="process-status" class="muted">Bereit</span>
+                <span class="eyebrow"
+                  ><span data-i18n="app:static.terminal">Terminal</span></span
+                ><span id="process-status" class="muted"
+                  ><span data-i18n="app:static.ready">Ready</span></span
+                >
                 <div class="panel-actions">
-                  <button id="stop-process-btn" disabled>
+                  <button id="stop-process-btn" disabled="">
                     <svg class="icon" aria-hidden="true">
                       <use href="/assets/icons.svg#stop"></use></svg
-                    >Stoppen</button
-                  ><button id="clear-terminal-btn">Ausgabe leeren</button
+                    ><span data-i18n="app:static.stop">Stop</span></button
+                  ><button id="clear-terminal-btn">
+                    <span data-i18n="app:static.clear"
+                      >Clear output</span
+                    ></button
                   ><button
                     id="close-terminal-btn"
                     class="icon-only"
-                    aria-label="Terminal schließen"
-                    title="Terminal schließen"
+                    data-i18n-aria-label="app:static.terminalClose"
+                    aria-label="Close terminal"
+                    data-i18n-title="app:static.terminalClose"
+                    title="Close terminal"
                   >
                     <svg class="icon" aria-hidden="true">
                       <use href="/assets/icons.svg#close"></use>
@@ -280,16 +361,22 @@
                 id="terminal-output"
                 class="terminal-output"
                 tabindex="0"
-                aria-label="Terminalausgabe"
+                data-i18n-aria-label="app:static.output"
+                aria-label="Terminal output"
               ></pre>
               <form id="terminal-form">
                 <label for="terminal-input" class="sr-only"
-                  >Befehl oder Programmeingabe</label
+                  ><span data-i18n="app:static.command"
+                    >Command or program input</span
+                  ></label
                 ><input
                   id="terminal-input"
-                  placeholder="Befehl im Session-Workspace eingeben …"
+                  data-i18n-placeholder="app:static.commandPlaceholder"
+                  placeholder="Enter a command in the session workspace …"
                   autocomplete="off"
-                /><button type="submit">Senden</button>
+                /><button type="submit">
+                  <span data-i18n="app:static.send">Send</span>
+                </button>
               </form>
             </section>
           </div>
@@ -297,29 +384,43 @@
             id="editor-resizer"
             class="resizer vertical"
             role="separator"
-            aria-label="Verhältnis von Editor und Chat"
+            data-i18n-aria-label="app:static.split"
+            aria-label="Editor and chat ratio"
             aria-orientation="vertical"
             tabindex="0"
           ></div>
-          <section id="teacher-panel" class="panel" aria-label="KI-Tutor">
+          <section
+            id="teacher-panel"
+            class="panel"
+            data-i18n-aria-label="app:static.tutor"
+            aria-label="AI tutor"
+          >
             <div class="panel-heading">
               <div class="tutor-title">
                 <svg class="icon" aria-hidden="true">
                   <use href="/assets/icons.svg#chat"></use></svg
-                ><strong>KI-Tutor</strong
+                ><strong
+                  ><span data-i18n="app:static.tutor">AI tutor</span></strong
                 ><span
                   id="connection-badge"
                   class="status-dot offline"
                   role="status"
-                  aria-label="Verbindung wird geprüft"
+                  data-i18n-aria-label="app:static.checking"
+                  aria-label="Checking connection"
                 ></span>
               </div>
-              <select id="model-select" aria-label="KI-Modell"></select
+              <select
+                id="model-select"
+                data-i18n-aria-label="app:static.model"
+                aria-label="AI model"
+              ></select
               ><button
                 id="refresh-models"
                 class="icon-only"
-                title="Verbindung prüfen"
-                aria-label="Verbindung prüfen"
+                data-i18n-title="app:static.check"
+                title="Check connection"
+                data-i18n-aria-label="app:static.check"
+                aria-label="Check connection"
               >
                 <svg class="icon" aria-hidden="true">
                   <use href="/assets/icons.svg#refresh"></use>
@@ -334,31 +435,37 @@
             <div
               id="chat-messages"
               class="chat-messages"
-              aria-label="Chatverlauf"
+              data-i18n-aria-label="app:static.chatHistory"
+              aria-label="Chat history"
               role="log"
               aria-live="polite"
               aria-relevant="additions"
             ></div>
-            <div id="task-panel" class="task-panel" hidden></div>
+            <div id="task-panel" class="task-panel" hidden=""></div>
             <form id="chat-form" class="chat-input-area">
               <label for="chat-input" class="sr-only"
-                >Nachricht an den KI-Tutor</label
+                ><span data-i18n="app:static.message"
+                  >Message to the AI tutor</span
+                ></label
               ><textarea
                 id="chat-input"
                 rows="3"
-                placeholder="Was möchtest du verstehen oder ausprobieren?"
+                data-i18n-placeholder="app:static.messagePlaceholder"
+                placeholder="What would you like to understand or try?"
               ></textarea>
               <div class="composer-footer">
                 <span id="chat-state" class="muted" role="status"
-                  >Enter sendet, Umschalt+Enter fügt eine Zeile ein</span
-                ><button id="stop-chat-btn" type="button" hidden>
+                  ><span data-i18n="app:static.chatHelp"
+                    >Enter sends, Shift+Enter adds a line</span
+                  ></span
+                ><button id="stop-chat-btn" type="button" hidden="">
                   <svg class="icon" aria-hidden="true">
                     <use href="/assets/icons.svg#stop"></use></svg
-                  >Stoppen</button
+                  ><span data-i18n="app:static.stop">Stop</span></button
                 ><button id="send-btn" class="primary" type="submit">
                   <svg class="icon" aria-hidden="true">
                     <use href="/assets/icons.svg#send"></use></svg
-                  >Senden
+                  ><span data-i18n="app:static.send">Send</span>
                 </button>
               </div>
             </form>
@@ -366,15 +473,23 @@
         </div>
       </main>
       <footer class="statusbar">
-        <span id="workspace-status">Lokal auf deinem Rechner</span
-        ><span id="token-counter">Kontext bereit</span
-        ><span id="connection-text">Verbindung wird geprüft</span>
+        <span id="workspace-status"
+          ><span data-i18n="app:static.local"
+            >Local on your computer</span
+          ></span
+        ><span id="token-counter"
+          ><span data-i18n="app:static.context">Context ready</span></span
+        ><span id="connection-text"
+          ><span data-i18n="app:static.checking"
+            >Checking connection</span
+          ></span
+        >
       </footer>
     </div>
     <dialog id="app-dialog"></dialog>
     <dialog id="profile-dialog" class="profile-dialog"></dialog>
     <div id="toasts" class="toasts"></div>
     <script src="/monaco/vs/loader.js"></script>
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="/js/bootstrap.js"></script>
   </body>
 </html>

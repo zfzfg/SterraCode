@@ -82,6 +82,9 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+[data-i18n-loading] #app {
+  visibility: hidden;
+}
 button,
 input,
 textarea,
@@ -247,6 +250,11 @@ a {
   display: flex;
   gap: 8px;
   margin-left: auto;
+  flex-shrink: 0;
+}
+.ui-locale-select {
+  max-width: 120px;
+  min-width: 96px;
 }
 .statusbar {
   grid-column: 1/-1;

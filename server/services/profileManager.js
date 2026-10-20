@@ -11,11 +11,12 @@ import {
   LANGUAGES,
 } from "./storage.js";
 import {
-  CONCEPTS,
   resolveConcept,
   validateConceptIds,
   reviewExercise,
+  localizedConcepts,
 } from "./concepts.js";
+import { t } from "./i18n.js";
 
 const PROFILE_PATH = path.join(DATA_DIR, "profiles", "user.json");
 const invalid = () =>
@@ -23,6 +24,7 @@ const invalid = () =>
     "Sprachprofil ist beschädigt. Die Originaldatei bleibt erhalten.",
     409,
     "PROFILE_CORRUPT",
+    { messageKey: "learningContent:errors.profileCorrupt", params: {} },
   );
 export function localDay(time, timeZone) {
   const parts = new Intl.DateTimeFormat("en", {
@@ -87,9 +89,13 @@ function validateEvent(e) {
     throw invalid();
   }
 }
-export function deriveProfile(profile, now = new Date().toISOString()) {
+export function deriveProfile(
+  profile,
+  now = new Date().toISOString(),
+  locale = "de",
+) {
   const languages = structuredClone(profile.legacy.languages || {});
-  const concepts = CONCEPTS.map((c) => ({
+  const concepts = localizedConcepts(locale).map((c) => ({
     ...c,
     status: "unpracticed",
     reviewStage: 0,
@@ -97,7 +103,7 @@ export function deriveProfile(profile, now = new Date().toISOString()) {
     nextReviewAt: null,
     lastEvidenceEventId: null,
     evidence: [],
-    suggestedExercise: reviewExercise(c.id)?.description || null,
+    suggestedExercise: reviewExercise(c.id, locale)?.description || null,
   }));
   const seenPractice = new Set(),
     sessions = {},
@@ -197,8 +203,8 @@ export function deriveProfile(profile, now = new Date().toISOString()) {
       conceptId: c.id,
       title: c.title,
       dueDay: c.nextReviewAt,
-      reason: "Freiwillige Wiederholung nach zeitlichem Abstand.",
-      exercise: reviewExercise(c.id),
+      reason: t(locale, "learningContent:review.reason"),
+      exercise: reviewExercise(c.id, locale),
     }));
   return {
     ...profile,
@@ -298,12 +304,15 @@ async function readProfile() {
   }
   return validateProfile(p);
 }
-export async function getProfile() {
-  return deriveProfile(await readProfile());
+export async function getProfile(locale = "de") {
+  return deriveProfile(await readProfile(), new Date().toISOString(), locale);
 }
 async function enabled() {
   if (!(await getSettings()).crossChatProfileEnabled)
-    throw new AppError("Lernprofil ist deaktiviert.", 403, "PROFILE_DISABLED");
+    throw new AppError("Lernprofil ist deaktiviert.", 403, "PROFILE_DISABLED", {
+      messageKey: "learningContent:errors.profileDisabled",
+      params: {},
+    });
 }
 async function append(p, event) {
   validateEvent(event);
@@ -316,6 +325,7 @@ async function append(p, event) {
         "Abweichender Lernbeleg mit gleicher ID.",
         409,
         "CONFLICT",
+        { messageKey: "learningContent:errors.profileEvidence", params: {} },
       );
     return false;
   }
@@ -383,7 +393,12 @@ export async function selfAssess(conceptId, body) {
       typeof body.operationId !== "string" ||
       !/^[\w-]{16,100}$/.test(body.operationId)
     )
-      throw new AppError("Ungültige Selbsteinschätzung.");
+      throw new AppError(
+        "Ungültige Selbsteinschätzung.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "learningContent:errors.profileAssessment", params: {} },
+      );
     const p = await readProfile(),
       eventId = `self:${body.operationId}`,
       previous = p.events.find((e) => e.eventId === eventId);
@@ -411,17 +426,26 @@ export async function configureProfile(body) {
     const p = await readProfile();
     if (body.timeZone !== undefined) {
       if (typeof body.timeZone !== "string")
-        throw new AppError("Ungültige Zeitzone.");
+        throw new AppError("Ungültige Zeitzone.", 400, "INVALID_REQUEST", {
+          messageKey: "learningContent:errors.profileTimeZone",
+          params: {},
+        });
       try {
         localDay(new Date(), body.timeZone);
       } catch {
-        throw new AppError("Ungültige Zeitzone.");
+        throw new AppError("Ungültige Zeitzone.", 400, "INVALID_REQUEST", {
+          messageKey: "learningContent:errors.profileTimeZone",
+          params: {},
+        });
       }
       p.timeZone = body.timeZone;
     }
     if (body.goal !== undefined) {
       if (typeof body.goal !== "string" || body.goal.length > 500)
-        throw new AppError("Lernziel zu lang.");
+        throw new AppError("Lernziel zu lang.", 400, "INVALID_REQUEST", {
+          messageKey: "learningContent:errors.profileGoal",
+          params: {},
+        });
       p.goal = body.goal;
     }
     if (body.intervals !== undefined) {
@@ -430,7 +454,10 @@ export async function configureProfile(body) {
         body.intervals.length !== 5 ||
         body.intervals.some((d) => !Number.isInteger(d) || d < 1 || d > 365)
       )
-        throw new AppError("Ungültige Intervalle.");
+        throw new AppError("Ungültige Intervalle.", 400, "INVALID_REQUEST", {
+          messageKey: "learningContent:errors.profileIntervals",
+          params: {},
+        });
       p.intervals = body.intervals;
     }
     p.updatedAt = new Date().toISOString();
@@ -444,9 +471,20 @@ export async function deferReview(id, action) {
     const p = await readProfile(),
       review = deriveProfile(p).reviews.find((r) => r.reviewId === id);
     if (p.reviewActions?.[id] === action) return deriveProfile(p);
-    if (!review) throw new AppError("Wiederholung nicht mehr aktuell.", 409);
+    if (!review)
+      throw new AppError(
+        "Wiederholung nicht mehr aktuell.",
+        409,
+        "INVALID_REQUEST",
+        { messageKey: "learningContent:errors.reviewOutdated", params: {} },
+      );
     if (!["skip", "snooze"].includes(action))
-      throw new AppError("Ungültige Wiederholungsaktion.");
+      throw new AppError(
+        "Ungültige Wiederholungsaktion.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "learningContent:errors.reviewAction", params: {} },
+      );
     p.reviewDeferrals[review.conceptId] = addDays(
       localDay(new Date(), p.timeZone),
       action === "skip" ? 1 : 3,
@@ -524,7 +562,7 @@ export async function importHistoricalSessions() {
     return deriveProfile(p);
   });
 }
-export function profileToPromptText(profile) {
+function profilePromptData(profile) {
   const items =
     profile.concepts?.filter((c) => c.evidence.length).slice(0, 8) || [];
   const concepts = items.map((c) => {
@@ -543,5 +581,21 @@ export function profileToPromptText(profile) {
         : { kind: "legacy" },
     };
   });
-  return `\n[FREIGEGEBENES LERNPROFIL – BELEGE, KEINE KOMPETENZGARANTIE]\n${JSON.stringify({ goal: profile.goal, concepts, due: profile.reviews?.map((r) => r.conceptId), historical: Object.keys(profile.legacy?.languages || {}) }).slice(0, 3000)}\nSprachübergreifende Gruppen sind mögliche Analogien. Voraussetzungen sind nicht automatisch belegt.`;
+  return JSON.stringify({
+    goal: profile.goal,
+    concepts,
+    due: profile.reviews?.map((r) => r.conceptId),
+    historical: Object.keys(profile.legacy?.languages || {}),
+  }).slice(0, 3000);
+}
+
+// The source instruction remains stable, independent of the browser locale.
+export function profileToPromptText(profile) {
+  return `\n[FREIGEGEBENES LERNPROFIL – BELEGE, KEINE KOMPETENZGARANTIE]\n${profilePromptData(profile)}\nSprachübergreifende Gruppen sind mögliche Analogien. Voraussetzungen sind nicht automatisch belegt.`;
+}
+
+export function displayProfileContext(profile, locale = "de") {
+  return t(locale, "learningContent:profileContext", {
+    content: profilePromptData(profile),
+  });
 }

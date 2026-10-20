@@ -1,3 +1,4 @@
+import { t, formatNumber } from "./i18n.js";
 import { api, sessionURL, workspaceURL } from "./api.js";
 import { state, emit, on } from "./state.js";
 import { $, node, formDialog, confirmDialog } from "./ui.js";
@@ -5,6 +6,12 @@ import { createIcon, button } from "./icons.js";
 import { flush, openEditorFile, currentFile } from "./editor.js";
 import { randomUUID } from "./uuid.js";
 const expanded = new Set();
+export const captureWorkspaceState = () => [...expanded];
+export function restoreWorkspaceState(saved) {
+  if (Array.isArray(saved))
+    for (const path of saved.slice(-1000))
+      if (typeof path === "string") expanded.add(path);
+}
 let navigation = Promise.resolve();
 export function selectFile(file) {
   const id = state.session?.id;
@@ -42,7 +49,7 @@ export function renderTabs() {
     tab.append(
       open,
       button(
-        `Datei ${path} schließen`,
+        t("features:workspace.closeFile", { p1: path }),
         "close",
         async () => {
           await flush();
@@ -73,7 +80,7 @@ export async function loadFiles() {
     container = $("file-tree");
   if (!session) {
     container.replaceChildren(
-      node("p", "empty-small", "Wähle zuerst eine Session."),
+      node("p", "empty-small", t("features:workspace.choose")),
     );
     return;
   }
@@ -112,13 +119,13 @@ export async function loadFiles() {
       row.append(
         open,
         button(
-          `Umbenennen: ${f.name}`,
+          t("features:workspace.renameLabel", { p1: f.name }),
           "edit",
           () => rename(f.path),
           "icon-only",
         ),
         button(
-          `Löschen: ${f.name}`,
+          t("features:workspace.deleteLabel", { p1: f.name }),
           "trash",
           () => remove(f.path),
           "icon-only",
@@ -163,29 +170,26 @@ export async function loadFiles() {
   }
   tree(files, container);
   if (!files.length)
-    container.append(
-      node(
-        "p",
-        "empty-small",
-        "Noch keine Dateien. Erstelle eine Datei oder einen Ordner.",
-      ),
-    );
+    container.append(node("p", "empty-small", t("features:workspace.empty")));
 }
 export async function createFile(type) {
-  if (!state.session) throw new Error("Bitte zuerst eine Session auswählen.");
+  if (!state.session) throw new Error(t("features:shared.selectSession"));
   await flush();
   const id = state.session.id;
   const data = await formDialog({
-    title: type === "folder" ? "Neuer Ordner" : "Neue Datei",
+    title:
+      type === "folder"
+        ? t("features:workspace.newFolder")
+        : t("features:workspace.newFile"),
     fields: [
       {
         name: "path",
-        label: "Relativer Pfad",
+        label: t("features:workspace.relativePath"),
         placeholder: type === "folder" ? "src" : "src/beispiel.py",
         required: true,
       },
     ],
-    submit: "Erstellen",
+    submit: t("features:workspace.create"),
     onSave: async (values) => {
       await api(`${workspaceURL(id)}/files`, {
         method: "POST",
@@ -201,11 +205,11 @@ async function rename(oldPath) {
   await flush();
   const id = state.session.id;
   const result = await formDialog({
-    title: "Umbenennen oder verschieben",
+    title: t("features:workspace.rename"),
     fields: [
       {
         name: "newPath",
-        label: "Neuer relativer Pfad",
+        label: t("features:workspace.newPath"),
         value: oldPath,
         required: true,
       },
@@ -223,8 +227,8 @@ async function remove(path) {
   await flush();
   if (
     !(await confirmDialog(
-      "Datei oder Ordner löschen?",
-      `„${path}“ und enthaltene Dateien werden gelöscht. Eine lokale Sicherung wird vorher angelegt.`,
+      t("features:workspace.deleteTitle"),
+      t("features:workspace.deleteDescription", { p1: path }),
     ))
   )
     return;
@@ -250,11 +254,7 @@ export function renderPlan() {
   container.replaceChildren();
   if (!state.session) {
     container.append(
-      node(
-        "p",
-        "empty-small",
-        "Dein Lernplan erscheint nach dem Öffnen einer Session.",
-      ),
+      node("p", "empty-small", t("features:workspace.planWelcome")),
     );
     return;
   }
@@ -265,13 +265,17 @@ export function renderPlan() {
     const progress = node("progress", "plan-progress");
     progress.max = plan.topics.length || 1;
     progress.value = count;
-    progress.setAttribute("aria-label", "Lernfortschritt");
+    progress.setAttribute("aria-label", t("features:workspace.progress"));
     container.append(
       progress,
       node(
         "p",
         "muted",
-        `${count} von ${plan.topics.length} Themen abgeschlossen`,
+        t("features:workspace.topicsDone", {
+          count: plan.topics.length,
+          p1: formatNumber(count),
+          p2: formatNumber(plan.topics.length),
+        }),
       ),
     );
     for (const topic of plan.topics) {
@@ -296,16 +300,12 @@ export function renderPlan() {
       container.append(label);
     }
   } else
-    container.append(
-      node(
-        "p",
-        "empty-small",
-        "Noch kein Lernplan. Erstelle ihn selbst oder frage deinen KI-Tutor.",
-      ),
-    );
+    container.append(node("p", "empty-small", t("features:workspace.noPlan")));
   container.append(
     button(
-      plan ? "Lernplan bearbeiten" : "Lernplan erstellen",
+      plan
+        ? t("features:workspace.editPlan")
+        : t("features:workspace.createPlan"),
       "edit",
       editPlan,
     ),
@@ -325,20 +325,19 @@ async function savePlan(plan) {
 async function editPlan() {
   const plan = state.session.learningPlan;
   await formDialog({
-    title: "Lernplan bearbeiten",
-    description:
-      "Eine Zeile pro Thema. Vorhandene Abschlüsse bleiben für gleich benannte Themen erhalten.",
+    title: t("features:workspace.editPlan"),
+    description: t("features:workspace.planDescription"),
     fields: [
       {
         name: "goal",
-        label: "Lernziel",
+        label: t("features:workspace.goal"),
         value: plan?.goal || "",
         required: true,
         maxLength: 500,
       },
       {
         name: "topics",
-        label: "Themen",
+        label: t("features:workspace.topics"),
         type: "textarea",
         value: plan?.topics.map((t) => t.title).join("\n") || "",
         required: true,
@@ -364,8 +363,18 @@ async function editPlan() {
 }
 export function initWorkspace() {
   $("file-actions").append(
-    button("Neue Datei", "file", () => createFile("file"), "icon-only"),
-    button("Neuer Ordner", "folder", () => createFile("folder"), "icon-only"),
+    button(
+      t("features:workspace.newFile"),
+      "file",
+      () => createFile("file"),
+      "icon-only",
+    ),
+    button(
+      t("features:workspace.newFolder"),
+      "folder",
+      () => createFile("folder"),
+      "icon-only",
+    ),
   );
   $("file-tree").addEventListener("keydown", (event) => {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;

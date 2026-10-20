@@ -162,7 +162,10 @@ export async function readToolResult(
 ) {
   validateSessionId(messageId);
   if (!Number.isInteger(offset) || offset < 0)
-    throw new AppError("Ungültige Ergebnisposition.");
+    throw new AppError("Ungültige Ergebnisposition.", 400, "INVALID_REQUEST", {
+      messageKey: "learningContent:errors.resultOffset",
+      params: {},
+    });
   const source = session.messages.find(
     (m) => m.id === messageId && m.role === "tool",
   );
@@ -171,10 +174,16 @@ export async function readToolResult(
       "Werkzeugergebnis gehört nicht zu dieser Session oder wurde gelöscht.",
       404,
       "NOT_FOUND",
+      { messageKey: "learningContent:errors.resultMissing", params: {} },
     );
   const raw = source.content || "";
   if (offset > raw.length)
-    throw new AppError("Die Position liegt hinter dem Ergebnis.");
+    throw new AppError(
+      "Die Position liegt hinter dem Ergebnis.",
+      400,
+      "INVALID_REQUEST",
+      { messageKey: "learningContent:errors.resultEnd", params: {} },
+    );
   const page = (length) => ({
     type: "read_tool_result",
     messageId,
@@ -190,6 +199,7 @@ export async function readToolResult(
       "Das Kontextfenster ist zu klein für eine Ergebnisreferenz.",
       400,
       "CONTEXT_TOO_LARGE",
+      { messageKey: "learningContent:errors.resultReferenceSize", params: {} },
     );
   while (low <= high) {
     const middle = Math.floor((low + high) / 2);
@@ -204,6 +214,7 @@ export async function readToolResult(
       "Das Kontextfenster ist zu klein für den nächsten Ergebnisausschnitt.",
       400,
       "CONTEXT_TOO_LARGE",
+      { messageKey: "learningContent:errors.resultExcerptSize", params: {} },
     );
   return best;
 }

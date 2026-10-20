@@ -22,8 +22,8 @@ export function jsonValue(value, depth = 0) {
 }
 export function validateSuite(
   suite,
-  fail = (m) => {
-    throw new Error(m);
+  fail = (m, metadata = {}) => {
+    throw Object.assign(new Error(m), metadata);
   },
 ) {
   const only = (object, keys) =>
@@ -56,6 +56,7 @@ export function validateSuite(
   )
     return fail(
       "Ungültige Testsuite: Python, strict-json und 1–20 sichtbare Fälle erforderlich.",
+      { messageKey: "runner:tests.suite", params: {} },
     );
   validateTrace(
     {
@@ -84,11 +85,15 @@ export function validateSuite(
     )
       return fail(
         "Ungültiger Testfall: eindeutige ID, JSON-Argumente und sichtbare Erwartung erforderlich.",
+        { messageKey: "runner:tests.case", params: {} },
       );
     ids.add(c.id);
   }
   if (!suite.cases.some((c) => c.required))
-    return fail("Mindestens ein erforderlicher Testfall fehlt.");
+    return fail("Mindestens ein erforderlicher Testfall fehlt.", {
+      messageKey: "runner:tests.required",
+      params: {},
+    });
   return JSON.parse(JSON.stringify(suite));
 }
 export function validateTest(test, fail) {

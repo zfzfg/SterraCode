@@ -1,3 +1,4 @@
+import { t, localeSelector, translateDOM } from "./i18n.js";
 import { openAIModelOptions } from "./providerModels.js";
 import { api } from "./api.js";
 import { $, node, formDialog, toast } from "./ui.js";
@@ -20,21 +21,32 @@ async function authenticate() {
   const heading = node(
     "h1",
     "",
-    status.setupRequired ? "SterraCode einrichten" : "Bei SterraCode anmelden",
+    status.setupRequired ? t("auth:setup.title") : t("auth:login.title"),
   );
   heading.id = "access-heading";
+  heading.dataset.i18n = status.setupRequired
+    ? "auth:setup.title"
+    : "auth:login.title";
   form.append(
     heading,
     node(
       "p",
       "muted",
       status.setupRequired
-        ? "Gib den einmaligen Schlüssel aus dem Installer ein und lege dein Administratorpasswort fest."
-        : "Melde dich mit dem Administratorpasswort dieses Servers an.",
+        ? t("auth:setup.description")
+        : t("auth:login.description"),
     ),
   );
   function field(label, name, autocomplete) {
-    const wrapper = node("label", "field", label);
+    const wrapper = node("label", "field");
+    const caption = node("span", "", label);
+    caption.dataset.i18n =
+      name === "setupKey"
+        ? "auth:setup.key"
+        : name === "confirmation"
+          ? "auth:password.repeat"
+          : "auth:password.label";
+    wrapper.append(caption);
     const input = node("input");
     input.type = "password";
     input.name = name;
@@ -45,26 +57,51 @@ async function authenticate() {
     return input;
   }
   const key = status.setupRequired
-    ? field("Einrichtungsschlüssel", "setupKey", "off")
+    ? field(t("auth:setup.key"), "setupKey", "off")
     : null;
   const password = field(
-    "Administratorpasswort",
+    t("auth:password.label"),
     "password",
     status.setupRequired ? "new-password" : "current-password",
   );
   password.maxLength = 1024;
   if (status.setupRequired) password.minLength = 12;
   const confirmation = status.setupRequired
-    ? field("Passwort wiederholen", "confirmation", "new-password")
+    ? field(t("auth:password.repeat"), "confirmation", "new-password")
     : null;
   const error = node("p", "form-error");
   error.setAttribute("role", "alert");
   const submit = node(
     "button",
     "primary",
-    status.setupRequired ? "Einrichtung abschließen" : "Anmelden",
+    status.setupRequired ? t("auth:setup.submit") : t("auth:login.submit"),
   );
   submit.type = "submit";
+  submit.dataset.i18n = status.setupRequired
+    ? "auth:setup.submit"
+    : "auth:login.submit";
+  const description = form.querySelector("p");
+  description.dataset.i18n = status.setupRequired
+    ? "auth:setup.description"
+    : "auth:login.description";
+  form.prepend(localeSelector());
+  const updateLocale = () => {
+    translateDOM(dialog);
+    error.textContent = "";
+  };
+  window.addEventListener("locale-changed", updateLocale);
+  for (const input of [key, password, confirmation].filter(Boolean)) {
+    input.addEventListener("input", () => input.setCustomValidity(""));
+    input.addEventListener("invalid", () =>
+      input.setCustomValidity(
+        input.validity.valueMissing
+          ? t("common:validation.required")
+          : input.validity.tooShort
+            ? t("common:validation.minimum", { count: input.minLength })
+            : "",
+      ),
+    );
+  }
   form.append(error, submit);
   dialog.append(form);
   document.body.append(dialog);
@@ -77,7 +114,7 @@ async function authenticate() {
       event.preventDefault();
       if (!form.reportValidity()) return;
       if (confirmation && confirmation.value !== password.value) {
-        error.textContent = "Die Passwörter stimmen nicht überein.";
+        error.textContent = t("auth:password.mismatch");
         return;
       }
       submit.disabled = true;
@@ -94,6 +131,7 @@ async function authenticate() {
         if (confirmation) confirmation.value = "";
         dialog.close();
         dialog.remove();
+        window.removeEventListener("locale-changed", updateLocale);
         $("app").inert = false;
         resolve({ created: status.setupRequired, authRequired: true });
       } catch (reason) {
@@ -107,32 +145,31 @@ async function authenticate() {
 
 export async function changePassword() {
   await formDialog({
-    title: "Administratorpasswort ändern",
-    description:
-      "Nach dem Passwortwechsel werden alle bisherigen Anmeldungen beendet.",
+    title: t("auth:password.change"),
+    description: t("auth:password.sessions"),
     fields: [
       {
         name: "currentPassword",
-        label: "Bisheriges Passwort",
+        label: t("auth:password.current"),
         type: "password",
         required: true,
       },
       {
         name: "password",
-        label: "Neues Passwort (mindestens 12 Zeichen)",
+        label: t("auth:password.new"),
         type: "password",
         required: true,
       },
       {
         name: "confirmation",
-        label: "Neues Passwort wiederholen",
+        label: t("auth:password.newRepeat"),
         type: "password",
         required: true,
       },
     ],
     onSave: async ({ currentPassword, password, confirmation }) => {
       if (password !== confirmation)
-        throw new Error("Die Passwörter stimmen nicht überein.");
+        throw new Error(t("auth:password.mismatch"));
       await api("/api/auth/password", {
         method: "PATCH",
         body: { currentPassword, password },
@@ -145,14 +182,13 @@ export async function configureModel() {
   const settings = await api("/api/chat/settings");
   const metadata = await api("/api/provider/credentials");
   await formDialog({
-    title: "KI verbinden",
-    description:
-      "LM Studio kann auf jedem vom Server erreichbaren Rechner laufen, auch über eine externe HTTPS-Adresse. Alternativ kannst du die OpenAI API verwenden. Ohne Modell kannst du Sessions, Dateien und Programme verwenden.",
-    submit: "Speichern und Verbindung prüfen",
+    title: t("auth:model.connect"),
+    description: t("auth:model.description"),
+    submit: t("auth:model.saveTest"),
     fields: [
       {
         name: "provider",
-        label: "KI-Anbieter",
+        label: t("auth:model.provider"),
         type: "select",
         value: settings.provider || "lmstudio",
         options: [
@@ -162,27 +198,27 @@ export async function configureModel() {
       },
       {
         name: "lmStudioUrl",
-        label: "LM-Studio-URL",
+        label: t("auth:model.lmUrl"),
         value: settings.lmStudioUrl,
-        help: "Für LM Studio erforderlich. Bei OpenAI wird die bisherige LM-Studio-Adresse beibehalten.",
+        help: t("auth:model.lmHelp"),
       },
       {
         name: "openAIModel",
-        label: "OpenAI-Modell",
+        label: t("auth:model.openai"),
         type: "select",
         options: await openAIModelOptions(settings.openAIModel),
         value: settings.openAIModel || "",
-        help: "Nach dem Speichern eines neuen API-Schlüssels stehen die Modelle in der Modellauswahl bereit.",
+        help: t("auth:model.openaiHelp"),
       },
       {
         name: "apiKey",
-        label: "OpenAI-API-Schlüssel (optional)",
+        label: t("auth:credentials.optional"),
         type: "password",
         value: "",
         disabled: metadata.openai?.source === "file",
         autocomplete: "off",
         maxLength: 2048,
-        help: "Wird auf dem Server geschützt gespeichert und nie wieder angezeigt.",
+        help: t("auth:credentials.protected"),
       },
     ],
     onSave: async ({ provider, lmStudioUrl, openAIModel, apiKey }) => {
@@ -207,10 +243,9 @@ export async function configureModel() {
       toast(
         result.connected
           ? result.status === "no-model"
-            ? "Verbindung steht. Bitte ein Modell auswählen."
-            : "KI-Verbindung ist bereit."
-          : result.error ||
-              "Verbindung gespeichert; der KI-Dienst ist zurzeit nicht erreichbar.",
+            ? t("auth:model.select")
+            : t("auth:model.ready")
+          : result.error || t("auth:model.unavailable"),
         result.connected ? "info" : "error",
       );
     },
@@ -221,15 +256,20 @@ export async function openCredentials() {
   const metadata = await api("/api/provider/credentials");
   const external = metadata.openai?.source === "file";
   await formDialog({
-    title: "KI-Zugangsdaten",
-    submit: external ? "Schließen" : "Speichern",
+    title: t("auth:credentials.title"),
+    submit: external ? t("common:actions.close") : t("common:actions.save"),
     description: metadata.openai?.configured
-      ? `Ein OpenAI-Schlüssel ist eingerichtet (${metadata.openai.source === "file" ? "Secret-Datei" : "Serverdaten"}). Leer lassen erhält ihn. Für LM-Studio-Authentifizierung wird die Token-Secret-Datei am Server eingerichtet.`
-      : "Ein OpenAI-Schlüssel wird auf dem Server separat von den Einstellungen gespeichert. Für LM-Studio-Authentifizierung wird die Token-Secret-Datei am Server eingerichtet.",
+      ? t("auth:credentials.exists", {
+          source:
+            metadata.openai.source === "file"
+              ? t("auth:credentials.file")
+              : t("auth:credentials.server"),
+        })
+      : t("auth:credentials.description"),
     fields: [
       {
         name: "apiKey",
-        label: "Neuer OpenAI-API-Schlüssel",
+        label: t("auth:credentials.new"),
         type: "password",
         value: "",
         maxLength: 2048,
@@ -238,17 +278,14 @@ export async function openCredentials() {
       },
       {
         name: "clear",
-        label: "Gespeicherten OpenAI-Schlüssel entfernen",
+        label: t("auth:credentials.remove"),
         type: "checkbox",
         value: false,
         disabled: external,
       },
     ],
     onSave: async ({ apiKey, clear }) => {
-      if (apiKey.trim() && clear)
-        throw new Error(
-          "Bitte entweder einen Schlüssel setzen oder den gespeicherten Schlüssel entfernen.",
-        );
+      if (apiKey.trim() && clear) throw new Error(t("auth:credentials.choose"));
       if (apiKey.trim() || clear)
         await api("/api/provider/credentials", {
           method: "PATCH",

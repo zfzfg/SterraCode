@@ -1,49 +1,46 @@
 import { AppError } from "./storage.js";
+import { normalizeLocale } from "../../shared/i18n/locale.js";
+import { t } from "./i18n.js";
 
 export const CATALOG_VERSION = 1;
 const definitions = [
-  ["variables", "Variablen", "data", ["variables", "variablen"], []],
+  ["variables", "data", ["variables", "variablen"], []],
   [
     "conditions",
-    "Bedingungen",
     "control-flow",
-    ["conditions", "bedingungen", "if"],
+    ["conditions", "bedingungen", "condiciones", "if"],
     ["variables"],
   ],
   [
     "loops",
-    "Schleifen",
     "control-flow",
-    ["loops", "schleifen", "for-schleifen"],
+    ["loops", "schleifen", "for-schleifen", "bucles"],
     ["conditions"],
   ],
   [
     "lists",
-    "Listen",
     "collections",
-    ["lists", "listen", "arrays"],
+    ["lists", "listen", "arrays", "listas"],
     ["variables"],
   ],
   [
     "functions",
-    "Funktionen",
     "functions",
-    ["functions", "funktionen"],
+    ["functions", "funktionen", "funciones"],
     ["variables"],
   ],
   [
     "strings",
-    "Zeichenketten",
     "data",
-    ["strings", "zeichenketten"],
+    ["strings", "zeichenketten", "cadenas", "cadenas de texto"],
     ["variables"],
   ],
 ];
 export const CONCEPTS = ["python", "javascript"].flatMap((language) =>
-  definitions.map(([key, title, group, aliases, prerequisites]) => ({
+  definitions.map(([key, group, aliases, prerequisites]) => ({
     id: `${language}.${key}`,
     language,
-    title,
+    title: t("de", `learningContent:concepts.${key}`),
     group,
     aliases,
     prerequisites: prerequisites.map((p) => `${language}.${p}`),
@@ -61,13 +58,24 @@ export function resolveConcept(value, language) {
 }
 export function validateConceptIds(values = [], language) {
   if (!Array.isArray(values) || values.length > 30)
-    throw new AppError("Ungültige Konzeptliste.");
+    throw new AppError("Ungültige Konzeptliste.", 400, "INVALID_REQUEST", {
+      messageKey: "learningContent:errors.conceptList",
+      params: {},
+    });
   return [
     ...new Set(
       values.map((v) => {
         const id = resolveConcept(v, language);
         if (!id || (language && !id.startsWith(`${language}.`)))
-          throw new AppError(`Unbekanntes Konzept: ${String(v).slice(0, 100)}`);
+          throw new AppError(
+            `Unbekanntes Konzept: ${String(v).slice(0, 100)}`,
+            400,
+            "INVALID_REQUEST",
+            {
+              messageKey: "learningContent:errors.conceptUnknown",
+              params: { value: String(v).slice(0, 100) },
+            },
+          );
         return id;
       }),
     ),
@@ -78,7 +86,6 @@ export function validateConceptIds(values = [], language) {
 const exercises = {
   variables: [
     "double_value",
-    "Gib das Doppelte der Zahl zurück.",
     [
       [3, 6],
       [-2, -4],
@@ -87,7 +94,6 @@ const exercises = {
   ],
   conditions: [
     "is_positive",
-    "Gib zurück, ob die Zahl größer als null ist.",
     [
       [3, true],
       [-1, false],
@@ -96,7 +102,6 @@ const exercises = {
   ],
   loops: [
     "sum_to",
-    "Addiere mit einer Schleife die Zahlen von 1 bis n (einschließlich).",
     [
       [4, 10],
       [1, 1],
@@ -105,7 +110,6 @@ const exercises = {
   ],
   lists: [
     "first_or_none",
-    "Gib das erste Listenelement zurück, bei einer leeren Liste None.",
     [
       [[4, 2], 4],
       [[], null],
@@ -114,7 +118,6 @@ const exercises = {
   ],
   functions: [
     "square",
-    "Schreibe eine Funktion, die das Quadrat der Zahl zurückgibt.",
     [
       [3, 9],
       [-2, 4],
@@ -123,7 +126,6 @@ const exercises = {
   ],
   strings: [
     "reverse_string",
-    "Gib die Zeichenkette in umgekehrter Reihenfolge zurück.",
     [
       ["Lernen", "nenreL"],
       ["", ""],
@@ -131,13 +133,39 @@ const exercises = {
     ],
   ],
 };
-export function reviewExercise(conceptId) {
+export function conceptTitle(conceptId, locale = "de") {
+  const concept = CONCEPTS.find((item) => item.id === conceptId);
+  return concept
+    ? t(locale, `learningContent:concepts.${concept.id.split(".")[1]}`)
+    : conceptId;
+}
+
+export function localizedConcepts(locale = "de") {
+  return CONCEPTS.map((concept) => ({
+    ...concept,
+    title: conceptTitle(concept.id, locale),
+  }));
+}
+
+export function reviewExercise(conceptId, locale = "de") {
   if (!conceptId.startsWith("python.")) return null;
-  const [fn, description, examples] = exercises[conceptId.split(".")[1]] || [];
+  const key = conceptId.split(".")[1];
+  const [fn, examples] = exercises[key] || [];
   if (!fn) return null;
+  locale = normalizeLocale(locale);
   return {
-    title: `Freiwillige Wiederholung: ${CONCEPTS.find((c) => c.id === conceptId).title}`,
-    description: `${description}\nDatei: main.py; Funktion: ${fn}(value). Die Tests prüfen Verhalten, nicht die verwendete Syntax.`,
+    title: t(locale, "learningContent:review.title", {
+      concept: conceptTitle(conceptId, locale),
+    }),
+    description: `${t(locale, `learningContent:review.${key}`)}\n${t(locale, "learningContent:review.contract", { function: fn })}`,
+    contentLocale: locale,
+    contentProvenance: {
+      version: 1,
+      kind: "review",
+      id: conceptId,
+      contentVersion: 1,
+      contentLocale: locale,
+    },
     conceptIds: [conceptId],
     difficulty: "beginner",
     hints: [],
@@ -149,7 +177,7 @@ export function reviewExercise(conceptId) {
       comparison: { kind: "strict-json" },
       cases: examples.map(([arg, expected], i) => ({
         id: `case-${i}`,
-        name: `Beispiel ${i + 1}`,
+        name: t(locale, "learningContent:review.case", { number: i + 1 }),
         args: [arg],
         expected,
         visibility: "public",

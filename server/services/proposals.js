@@ -35,6 +35,8 @@ export function computeHunks(before, after) {
         end: a.length,
         replacement: b.join(""),
         summary: "Gesamte Datei (Vergleichsgrenze)",
+        summaryKey: "serverFeature:proposal.wholeFile",
+        summaryParams: {},
         dependsOn: [],
       },
     ];
@@ -80,6 +82,12 @@ export function computeHunks(before, after) {
     ...e,
     id: `hunk-${n + 1}`,
     summary: `Zeile ${e.start + 1}: ${e.end - e.start} entfernt, ${lines(e.replacement).length} hinzugefügt`,
+    summaryKey: "serverFeature:proposal.hunkSummary",
+    summaryParams: {
+      line: e.start + 1,
+      removed: e.end - e.start,
+      added: lines(e.replacement).length,
+    },
     dependsOn: [],
   }));
   // Conservative lexical dependency: a newly introduced identifier referenced
@@ -116,11 +124,21 @@ export function selectHunks(proposal, ids) {
     new Set(ids).size !== ids.length ||
     ids.some((id) => !proposal.hunks.some((h) => h.id === id))
   )
-    throw new AppError("Bitte gültige, eindeutige Teiländerungen auswählen.");
+    throw new AppError(
+      "Bitte gültige, eindeutige Teiländerungen auswählen.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:proposal.invalidHunks", params: {} },
+    );
   const chosen = proposal.hunks.filter((h) => ids.includes(h.id));
   for (const h of chosen)
     if (h.dependsOn.some((id) => !ids.includes(id)))
-      throw new AppError("Abhängige Teiländerungen gemeinsam auswählen.");
+      throw new AppError(
+        "Abhängige Teiländerungen gemeinsam auswählen.",
+        undefined,
+        undefined,
+        { messageKey: "serverFeature:proposal.dependencies", params: {} },
+      );
   const result = lines(proposal.before.content || "");
   for (const h of [...chosen].reverse())
     result.splice(h.start, h.end - h.start, ...lines(h.replacement));
@@ -175,7 +193,10 @@ async function load(sessionId, id) {
     p = await readJSON(file(sessionId, id));
   } catch (e) {
     if (e.code === "ENOENT")
-      throw new AppError("Vorschlag nicht gefunden.", 404);
+      throw new AppError("Vorschlag nicht gefunden.", 404, undefined, {
+        messageKey: "serverFeature:proposal.notFound",
+        params: {},
+      });
     throw e;
   }
   if (p.application && p.status === "pending_review") {
@@ -231,13 +252,19 @@ export async function proposeFile(
     Buffer.byteLength(content) > 2 * 1024 * 1024 ||
     content.includes("\0")
   )
-    throw new AppError("Ungültiger oder zu großer Vorschlag.", 413);
+    throw new AppError("Ungültiger oder zu großer Vorschlag.", 413, undefined, {
+      messageKey: "serverFeature:proposal.invalid",
+      params: {},
+    });
   const relative = normalizePath(input);
   if (
     operationId !== undefined &&
     (typeof operationId !== "string" || operationId.length > 200)
   )
-    throw new AppError("Ungültige Vorgangskennung.");
+    throw new AppError("Ungültige Vorgangskennung.", undefined, undefined, {
+      messageKey: "serverFeature:proposal.invalidOperation",
+      params: {},
+    });
   const fingerprint = hash(
     JSON.stringify([relative, content, expectedVersion, reason, turnId]),
   );
@@ -250,7 +277,15 @@ export async function proposeFile(
       const old = await readJSON(f);
       if (old.operationId === operationId && operationId !== undefined) {
         if (old.fingerprint !== fingerprint)
-          throw new AppError("Vorgangskennung bereits anders verwendet.", 409);
+          throw new AppError(
+            "Vorgangskennung bereits anders verwendet.",
+            409,
+            undefined,
+            {
+              messageKey: "serverFeature:proposal.operationConflict",
+              params: {},
+            },
+          );
         const current = await load(sessionId, old.proposalId);
         return {
           type: "write_file",
@@ -267,6 +302,7 @@ export async function proposeFile(
         "Vorschlagsbasis inzwischen verändert.",
         409,
         "CONFLICT",
+        { messageKey: "serverFeature:proposal.baseChanged", params: {} },
       );
     const p = {
       schemaVersion: 1,
@@ -323,7 +359,10 @@ export async function decideProposal(sid, id, action, request = {}) {
     if (action === "reject") {
       if (p.status === "rejected") return metadata(p);
       if (!["pending_review", "stale"].includes(p.status))
-        throw new AppError("Vorschlag bereits entschieden.", 409, "CONFLICT");
+        throw new AppError("Vorschlag bereits entschieden.", 409, "CONFLICT", {
+          messageKey: "serverFeature:proposal.alreadyDecided",
+          params: {},
+        });
       p.status = "rejected";
       p.decidedAt = new Date().toISOString();
       await persist(p);
@@ -341,6 +380,7 @@ export async function decideProposal(sid, id, action, request = {}) {
           "Vorschlag bereits übernommen oder anderer Vorgang offen.",
           409,
           "CONFLICT",
+          { messageKey: "serverFeature:proposal.alreadyApplied", params: {} },
         );
       if (p.status !== "pending_review") return metadata(p);
     }
@@ -352,6 +392,7 @@ export async function decideProposal(sid, id, action, request = {}) {
         "Vorschlag veraltet. Bitte auf dem aktuellen Dateistand neu erstellen.",
         409,
         "CONFLICT",
+        { messageKey: "serverFeature:proposal.stale", params: {} },
       );
     const content = selectHunks(p, ids);
     p.application ??= {

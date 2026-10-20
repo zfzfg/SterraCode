@@ -24,6 +24,10 @@ export async function getOpenAIKey() {
         "OpenAI-Secret-Datei fehlt, ist leer oder nicht lesbar.",
         503,
         "OPENAI_SECRET_UNAVAILABLE",
+        {
+          messageKey: "serverFeature:credentials.secretUnreadable",
+          params: {},
+        },
       );
     }
   }
@@ -33,6 +37,7 @@ export async function getOpenAIKey() {
       "Bitte einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen.",
       400,
       "OPENAI_KEY_REQUIRED",
+      { messageKey: "serverFeature:credentials.keyRequired", params: {} },
     );
   return key;
 }
@@ -52,12 +57,21 @@ export async function getProviderCredentials() {
 }
 export async function updateProviderCredentials({ provider, apiKey, ...rest }) {
   if (provider !== "openai" || Object.keys(rest).length)
-    throw new AppError("Nur OpenAI-Zugangsdaten können hier geändert werden.");
+    throw new AppError(
+      "Nur OpenAI-Zugangsdaten können hier geändert werden.",
+      undefined,
+      undefined,
+      {
+        messageKey: "serverFeature:credentials.providerUnsupported",
+        params: {},
+      },
+    );
   if (process.env.STERRACODE_OPENAI_API_KEY_FILE)
     throw new AppError(
       "Die OpenAI-Zugangsdaten werden durch eine schreibgeschützte Secret-Datei vorgegeben.",
       409,
       "EXTERNAL_SECRET",
+      { messageKey: "serverFeature:credentials.externalSecret", params: {} },
     );
   if (
     apiKey !== null &&
@@ -67,6 +81,7 @@ export async function updateProviderCredentials({ provider, apiKey, ...rest }) {
       "Bitte einen gültigen OpenAI-API-Schlüssel angeben.",
       400,
       "INVALID_API_KEY",
+      { messageKey: "serverFeature:credentials.invalidKey", params: {} },
     );
   return serial("provider-credentials", async () => {
     const next = await saved();

@@ -1,0 +1,22 @@
+{
+  "tutor.label": "Tutor language",
+  "tutor.help": "Applies to future responses. Existing messages and files stay unchanged.",
+  "tutor.legacy": "User’s language (legacy behaviour)",
+  "errors.tutorLocale": "Invalid tutor language.",
+  "deletion.pending": "Deletion pending · manage to continue",
+  "manage.title": "Manage session",
+  "empty": "No sessions yet. Start with your own learning goal.",
+  "recent": "Recently edited",
+  "new.title": "New session",
+  "new.server": "Files and learning progress are saved on the SterraCode server.",
+  "new.local": "Files and learning progress are saved locally on your computer.",
+  "name": "Name",
+  "new.defaultTitle": "My new session",
+  "new.create": "Create session",
+  "action": "Action",
+  "rename": "Rename",
+  "delete.action": "Delete session (with backup)",
+  "delete.stop": "Please stop the current AI response first.",
+  "delete.confirm": "Delete session?",
+  "delete.description": "“{{title}}” will be removed from the list. A backup is kept locally."
+}

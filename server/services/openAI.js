@@ -10,8 +10,12 @@ let transport = (...args) => fetch(...args);
 export function setOpenAITransportForTests(value) {
   transport = value || ((...args) => fetch(...args));
 }
-const fail = (message, code = "OPENAI_UNAVAILABLE", status = 503) =>
-  new AppError(message, status, code);
+const fail = (
+  message,
+  code = "OPENAI_UNAVAILABLE",
+  status = 503,
+  metadata = {},
+) => new AppError(message, status, code, metadata);
 async function safeJSON(response) {
   try {
     return await response.json();
@@ -20,6 +24,7 @@ async function safeJSON(response) {
       "OpenAI hat keine gültige JSON-Antwort geliefert.",
       "OPENAI_INVALID_RESPONSE",
       502,
+      { messageKey: "serverFeature:openAI.invalidJson", params: {} },
     );
   }
 }
@@ -45,6 +50,9 @@ async function request(endpoint, { body, signal, timeout = 20000 } = {}) {
     if (signal?.aborted) throw signal.reason;
     throw fail(
       "Die OpenAI-API ist nicht erreichbar oder hat das Zeitlimit überschritten.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:openAI.unavailable", params: {} },
     );
   }
   if (!response.ok) {
@@ -58,23 +66,28 @@ async function request(endpoint, { body, signal, timeout = 20000 } = {}) {
       throw fail(
         "OpenAI hat die Kontextgrenze des Modells gemeldet. Den Kontext über /compact verdichten oder ein anderes Modell auswählen.",
         "CONTEXT_UNVERIFIED",
+        undefined,
+        { messageKey: "serverFeature:openAI.contextLimit", params: {} },
       );
     if ([401, 403].includes(response.status))
       throw fail(
         "OpenAI-Zugang abgewiesen. API-Schlüssel und Modellberechtigung prüfen.",
         "OPENAI_AUTH_FAILED",
         502,
+        { messageKey: "serverFeature:openAI.accessDenied", params: {} },
       );
     if (response.status === 429)
       throw fail(
         "OpenAI-Anfrage begrenzt. API-Kontingent und Ratenlimit prüfen.",
         "OPENAI_RATE_LIMITED",
         429,
+        { messageKey: "serverFeature:openAI.rateLimited", params: {} },
       );
     throw fail(
       "OpenAI hat die Anfrage abgewiesen. Modell-ID, Responses-Unterstützung und Einstellungen prüfen.",
       "OPENAI_REQUEST_FAILED",
       502,
+      { messageKey: "serverFeature:openAI.requestFailed", params: {} },
     );
   }
   return response;
@@ -87,13 +100,20 @@ async function countPayload(payload, signal) {
     throw fail(
       "OpenAI liefert keine gültige Tokenzählung.",
       "CONTEXT_UNVERIFIED",
+      undefined,
+      { messageKey: "serverFeature:openAI.invalidTokenCount", params: {} },
     );
   return value.input_tokens;
 }
 export async function listOpenAIModels(signal) {
   const response = await safeJSON(await request("/models", { signal }));
   if (!Array.isArray(response.data))
-    throw fail("OpenAI liefert keine gültige Modellliste.");
+    throw fail(
+      "OpenAI liefert keine gültige Modellliste.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:openAI.invalidModels", params: {} },
+    );
   return response.data
     .filter((model) => typeof model.id === "string")
     .map((model) => ({ identifier: model.id, displayName: model.id }))
@@ -161,6 +181,7 @@ async function responsePayload(body, signal, onToken, onReasoning) {
         "OpenAI hat die Antwort abgebrochen.",
         "OPENAI_RESPONSE_FAILED",
         502,
+        { messageKey: "serverFeature:openAI.cancelledResponse", params: {} },
       );
     return result;
   }
@@ -187,6 +208,7 @@ async function responsePayload(body, signal, onToken, onReasoning) {
         "OpenAI hat die Antwort vorzeitig abgebrochen.",
         "OPENAI_RESPONSE_FAILED",
         502,
+        { messageKey: "serverFeature:openAI.incompleteResponse", params: {} },
       );
   }
   try {
@@ -198,6 +220,7 @@ async function responsePayload(body, signal, onToken, onReasoning) {
           "OpenAI-Stream überschreitet das Ausgabelimit.",
           "OUTPUT_LIMIT",
           502,
+          { messageKey: "serverFeature:openAI.outputLimit", params: {} },
         );
       const frames = buffer.split(/\r?\n\r?\n/);
       buffer = frames.pop() || "";
@@ -216,6 +239,7 @@ async function responsePayload(body, signal, onToken, onReasoning) {
       "OpenAI-Verbindung vor Abschluss unterbrochen. Die sichtbare Teilantwort bleibt erhalten.",
       "OPENAI_STREAM_INTERRUPTED",
       502,
+      { messageKey: "serverFeature:openAI.interrupted", params: {} },
     );
   return completed;
 }
@@ -249,6 +273,7 @@ export async function connectOpenAIModel(settings, signal) {
       "Bitte eine OpenAI-Modell-ID in den Einstellungen auswählen.",
       400,
       "NO_MODEL",
+      { messageKey: "serverFeature:openAI.selectModel", params: {} },
     );
   const info = {
     identifier,
@@ -288,6 +313,7 @@ export async function connectOpenAIModel(settings, signal) {
           "OpenAI liefert keinen gültigen komprimierten Kontext.",
           "OPENAI_INVALID_RESPONSE",
           502,
+          { messageKey: "serverFeature:openAI.invalidCompaction", params: {} },
         );
       return {
         output: result.output,
@@ -394,6 +420,8 @@ export async function testOpenAIConnection(settings, signal) {
         error instanceof AppError
           ? error.message
           : "OpenAI hat keine gültige Antwort geliefert.",
+      errorKey: error.messageKey || "serverFeature:openAI.invalidAnswer",
+      errorParams: error.params || {},
     };
   }
 }
@@ -439,6 +467,7 @@ export async function runOpenAIModelPass({
         "OpenAI hat keine abgeschlossene gültige Antwort geliefert.",
         "OPENAI_INVALID_RESPONSE",
         502,
+        { messageKey: "serverFeature:openAI.responseInvalid", params: {} },
       );
     const raw = (
       response.status === "incomplete" ? [] : response.output || []
@@ -457,6 +486,7 @@ export async function runOpenAIModelPass({
           "OpenAI hat einen ungültigen Werkzeugaufruf geliefert.",
           "OPENAI_INVALID_RESPONSE",
           502,
+          { messageKey: "serverFeature:openAI.invalidToolCall", params: {} },
         );
       callIds.add(id);
       let args;
@@ -505,6 +535,8 @@ export async function runOpenAIModelPass({
             tool: call.function.name,
             code: "INVALID_TOOL_REQUEST",
             error: "OpenAI hat ungültige Werkzeugargumente geliefert.",
+            messageKey: "serverFeature:openAI.invalidToolArguments",
+            params: {},
           },
           call,
         );
@@ -521,6 +553,8 @@ export async function runOpenAIModelPass({
             tool: call.function.name,
             code: "INVALID_TOOL_REQUEST",
             error: "Unbekanntes Werkzeug.",
+            messageKey: "serverFeature:openAI.unknownTool",
+            params: {},
           },
           call,
         );
@@ -546,6 +580,7 @@ export async function runOpenAIModelPass({
         "OpenAI hat keine gültige vollständige Antwort geliefert.",
         "OPENAI_INVALID_RESPONSE",
         502,
+        { messageKey: "serverFeature:openAI.fullResponseInvalid", params: {} },
       );
     error.passStats = { visibleChars, executedTools };
     throw error;

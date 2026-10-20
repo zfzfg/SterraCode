@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { createIcon, button } from "./icons.js";
 export const $ = (id) => document.getElementById(id);
 export function node(tag, className = "", text) {
@@ -12,7 +13,7 @@ export function toast(message, type = "info") {
   n.append(
     createIcon(type === "error" ? "warning" : "check"),
     node("span", "", message),
-    button("Schließen", "close", () => n.remove(), "icon-only"),
+    button(t("common:actions.close"), "close", () => n.remove(), "icon-only"),
   );
   $("toasts").append(n);
   if (type !== "error") setTimeout(() => n.remove(), 6000);
@@ -34,17 +35,14 @@ export function formDialog({
   title,
   description = "",
   fields = [],
-  submit = "Speichern",
+  submit = t("common:actions.save"),
   danger = false,
   onPreview,
   onSave,
   actions = [],
 }) {
   const dialog = $("app-dialog");
-  if (dialog.open)
-    return Promise.reject(
-      new Error("Bitte den geöffneten Dialog zuerst schließen."),
-    );
+  if (dialog.open) return Promise.reject(new Error(t("common:dialog.open")));
   return new Promise((resolve) => {
     const form = node("form", "dialog-form");
     form.method = "dialog";
@@ -54,7 +52,12 @@ export function formDialog({
     const head = node("div", "dialog-heading");
     head.append(
       heading,
-      button("Schließen", "close", () => dialog.close(), "icon-only"),
+      button(
+        t("common:actions.close"),
+        "close",
+        () => dialog.close(),
+        "icon-only",
+      ),
     );
     form.append(head);
     if (description) form.append(node("p", "muted", description));
@@ -73,7 +76,7 @@ export function formDialog({
       advanced = node("details", "advanced"),
       advancedBody = node("div", "form-fields");
     advanced.append(
-      node("summary", "", "Erweiterte Einstellungen"),
+      node("summary", "", t("common:dialog.advanced")),
       advancedBody,
     );
     const basic = node("div", "form-fields");
@@ -123,6 +126,22 @@ export function formDialog({
       (field.advanced ? advancedBody : basic).append(label);
       hasAdvanced ||= field.advanced;
       controls.set(field.name, { input, field });
+      input.addEventListener("input", () => input.setCustomValidity(""));
+      input.addEventListener("invalid", () => {
+        input.setCustomValidity(
+          input.validity.valueMissing
+            ? t("common:validation.required")
+            : input.validity.tooShort
+              ? t("common:validation.minimum", { count: input.minLength })
+              : input.validity.rangeUnderflow ||
+                  input.validity.rangeOverflow ||
+                  input.validity.stepMismatch ||
+                  input.validity.typeMismatch ||
+                  input.validity.badInput
+                ? t("common:validation.invalid")
+                : "",
+        );
+      });
       input.addEventListener("input", () => onPreview?.(values()));
     }
     function values() {
@@ -141,7 +160,7 @@ export function formDialog({
     error.setAttribute("role", "alert");
     form.append(error);
     const footer = node("div", "dialog-footer"),
-      cancel = button("Abbrechen", null, () => dialog.close()),
+      cancel = button(t("common:actions.cancel"), null, () => dialog.close()),
       save = button(submit, null, null, danger ? "danger" : "primary");
     save.type = "submit";
     footer.append(cancel, save);
@@ -191,7 +210,7 @@ export async function confirmDialog(title, description) {
     await formDialog({
       title,
       description,
-      submit: "Bestätigen",
+      submit: t("common:actions.confirm"),
       danger: true,
     }),
   );

@@ -1,8 +1,8 @@
 {
   "name": "sterracode",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
-  "description": "KI-gestützte Coding-Lernumgebung mit LM Studio",
+  "description": "AI-assisted programming learning workspace with LM Studio or OpenAI",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
@@ -12,7 +12,11 @@
     "test:e2e": "playwright test",
     "test:docker": "node tests/docker/smoke.mjs",
     "test:context:live": "node scripts/check-context-live.mjs",
-    "format:check": "prettier --check public server runner docker tests scripts *.config.js"
+    "audit:i18n": "node tools/i18n/audit.mjs",
+    "audit:i18n:strict": "node tools/i18n/audit.mjs --scope product --strict",
+    "test:i18n-audit": "vitest run tests/i18n-audit.test.js",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "format:check": "prettier --check public server runner shared docker tests scripts tools/i18n *.config.js"
   },
   "engines": {
     "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
@@ -21,6 +25,7 @@
     "@lmstudio/sdk": "2.1.0",
     "css-tree": "^3.2.1",
     "express": "^4.18.0",
+    "i18next": "26.5.3",
     "monaco-editor": "^0.47.0",
     "parse5": "^8.0.1"
   },

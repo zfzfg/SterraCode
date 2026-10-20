@@ -1,90 +1,50 @@
-# Runner v1
+# Runner protocol v1
 
-Der Runner startet nur unter Linux als Steuerbenutzer root. Nutzerprogramme laufen
-über den kompilierten `launch.c`-Helfer als UID `10002`, Primärgruppe `10001`, ohne
-Zusatzgruppen und mit `no_new_privs`. Der Helfer bleibt als Subreaper bestehen und
-beendet auch doppelt geforkte Kinder und eigene Prozessgruppen. Die gemeinsame
-Ausführungs-UID isoliert Lern-Sessions nicht gegeneinander.
+Release 1.1.0. The runner controls Linux execution as root; learner programs run through the compiled `launch.c` helper as UID 10002 / primary GID 10001, without supplementary groups, with `no_new_privs`. The helper remains a subreaper and stops double-forked children and separate process groups. The shared execution UID does **not** isolate learning sessions from one another. [German historical guide](README.de.md).
 
-Auch Versionsprüfungen starten unter der Ausführungs-UID mit derselben bereinigten
-Umgebung. `XDG_RUNTIME_DIR` liegt in einem der UID gehörenden Verzeichnis mit
-Modus `0700` auf dem Werkzeugcache. Dies berücksichtigt die im Oktober 2026
-geänderte .NET-Named-Mutex-Verwaltung, die sonst beim passwd-Home `/nonexistent`
-an `NuGet-Migrations` scheitern kann ([.NET Runtime #135726](https://github.com/dotnet/runtime/issues/135726)).
+Version probes use the same execution UID and cleaned environment. `XDG_RUNTIME_DIR` is an execution-UID-owned mode-0700 directory on the tool cache, including for .NET/NuGet initialization. App secrets and package-manager credentials are not inherited by programs.
 
-Jeder HTTP-Aufruf, einschließlich `/v1/health`, benötigt `Authorization: Bearer`
-mit dem Schlüssel aus `STERRACODE_RUNNER_SECRET_FILE`. Der Schlüssel wird weder
-als Prozessargument noch in einer Kindprozessumgebung übergeben. App und Runner
-senden `X-Runner-Protocol: 1`; abweichende Protokolle werden abgewiesen.
+Every HTTP request, including health, requires `Authorization: Bearer` using `STERRACODE_RUNNER_SECRET_FILE`. The key is never a child argument/environment value. App and runner send `X-Runner-Protocol: 1`; incompatible protocols are rejected.
 
-## Interne API
+## Internal API
 
-| Methode und Pfad                             | Zweck                                                            |
-| -------------------------------------------- | ---------------------------------------------------------------- |
-| `GET /v1/health`                             | Minimale Prozessgesundheit                                       |
-| `GET /v1/status`                             | Betriebszustand, aktive Aufträge und gesperrte Sessions          |
-| `GET /v1/runtimes`                           | Installationsstand aller neun Sprachadapter                      |
-| `POST /v1/jobs`                              | Auftrag mit UUID `id`, Session und relativen Quelldaten annehmen |
-| `GET /v1/jobs/:id/output?sessionId=&offset=` | Neue Ausgabe mit UTF-8-Byteoffset                                |
-| `POST /v1/jobs/:id/input`                    | `{sessionId,input}` zeilenweise eingeben                         |
-| `DELETE /v1/jobs/:id`                        | `{sessionId}` kontrolliert stoppen                               |
-| `POST /v1/sessions/:id/block`                | Dauerhafte Startsperre setzen und Prozesse stoppen               |
-| `DELETE /v1/sessions/:id/block`              | Startsperre ausdrücklich aufheben                                |
-| `POST /v1/sessions/:id/stop`                 | Prozesse der Session stoppen                                     |
-| `POST /v1/maintenance`                       | Neue Ausführungen sperren; optional `stopRunning`                |
-| `DELETE /v1/maintenance`                     | Wartung beenden, sofern kein Paketjob läuft                      |
-| `GET /v1/programs`                           | Katalog, Programmzustand und aktiver Paketauftrag                |
-| `POST /v1/programs/:id/actions`              | `install`, `remove`, `repair` oder `retry`                       |
-| `GET /v1/program-jobs/:id`                   | Paketauftrag lesen                                               |
-| `POST /v1/program-jobs/:id/cancel`           | Noch wartenden Paketauftrag abbrechen                            |
-| `GET /v1/cache`                              | Größen und freier Speicher                                       |
-| `DELETE /v1/cache`                           | Nicht mehr benötigte Paketcaches bereinigen                      |
+| Method/path                                  | Purpose                                                |
+| -------------------------------------------- | ------------------------------------------------------ |
+| `GET /v1/health`                             | Minimal process health                                 |
+| `GET /v1/status`                             | Operating state, active jobs, blocked sessions         |
+| `GET /v1/runtimes`                           | Installation/capabilities of all nine adapters         |
+| `POST /v1/jobs`                              | Admit a UUID job with session and relative source data |
+| `GET /v1/jobs/:id/output?sessionId=&offset=` | Output using UTF-8 byte offsets                        |
+| `POST /v1/jobs/:id/input`                    | `{sessionId,input}` stdin                              |
+| `DELETE /v1/jobs/:id`                        | Stop with `{sessionId}`                                |
+| `POST /v1/sessions/:id/block`                | Persistently block starts and stop jobs                |
+| `DELETE /v1/sessions/:id/block`              | Explicitly unblock starts                              |
+| `POST /v1/sessions/:id/stop`                 | Stop session processes                                 |
+| `POST /v1/maintenance`                       | Block starts; optional `stopRunning`                   |
+| `DELETE /v1/maintenance`                     | End maintenance if no package job is active            |
+| `GET /v1/programs`                           | Catalog, installed state, current package job          |
+| `POST /v1/programs/:id/actions`              | `install`, `remove`, `repair`, `retry`                 |
+| `GET /v1/program-jobs/:id`                   | Package job state                                      |
+| `POST /v1/program-jobs/:id/cancel`           | Cancel a waiting package job                           |
+| `GET /v1/cache`                              | Sizes and free space                                   |
+| `DELETE /v1/cache`                           | Clear disposable package downloads                     |
 
-Auftragsjournal und Sollmanifest werden mit Dateisynchronisierung, atomarem
-Umbenennen und Verzeichnissynchronisierung geschrieben. Ein fehlgeschlagener
-Journalzugriff verhindert den Start. Wiederholte IDs mit gleichem kanonischen
-Inhalt liefern denselben Auftrag; geänderter Inhalt ergibt
-`409 IDEMPOTENCY_CONFLICT`. Nach einem Neustart werden unfertige Aufträge als
-`interrupted` protokolliert und nicht erneut gestartet. Ausgabe verfällt nach
-fünf Minuten, der dauerhafte Identitätsnachweis bleibt erhalten.
+Journals and the desired manifest use file sync, atomic rename, and directory sync. Journal failure prevents execution. The same ID/canonical payload returns the same job; changed data produces `409 IDEMPOTENCY_CONFLICT`. Restart marks unfinished jobs `interrupted` without replay. Output expires after five minutes; durable identity evidence remains.
 
-Die Reservierung von einem Auftrag je Session, vier Aufträgen insgesamt und zwei
-kompilierenden Aufträgen erfolgt im selben serialisierten Annahmeabschnitt.
-Wartung sperrt Starts vor dem Warten auf laufende Prozesse. Ein wartender Paketjob
-kann abgebrochen werden oder nach ausdrücklichem `stopRunning` fortfahren.
+Admission reserves one job per session, four overall, and two compilation slots in one serialized section. Maintenance blocks starts before waiting. A waiting package job can be canceled or continue after explicit `stopRunning`.
 
-## Paketquellen und Updates
+## Packages and recovery
 
-`catalog/versions.lock` bindet die Debian-Suite, Architektur, Basisimage und
-Katalogversion. Die primären Debian-/Microsoft-Pakete haben genaue Versionen und
-SHA-256-Prüfsummen aus den offiziellen Paketindizes. apt prüft signierte Quellen;
-Microsofts öffentlicher Schlüssel ist mitgeliefert. Go verwendet ein festes
-Herstellerarchiv, SHA-256 und die offiziellen Go-Downloadmetadaten. Rust verwendet
-feste Compiler-, Cargo- und Standardbibliotheksarchive, deren URL und Prüfsumme
-gegen das GPG-verifizierte Hersteller-Manifest geprüft werden. Kein Browseraufruf
-kann Paket-URLs oder Installationsskripte vorgeben.
+`catalog/versions.lock` pins Debian suite, architecture, base image, and catalog version. Debian/Microsoft packages have exact versions and SHA-256 values from signed indexes; the Microsoft public key is included. Go archives use pinned vendor metadata/checksums. Rust compiler/Cargo/library archives are checked against the GPG-verified vendor manifest. Browser callers cannot supply arbitrary package URLs or scripts.
 
-Jede erfolgreiche Installation speichert die tatsächlich aufgelöste komplette
-Paketabhängigkeit mit Version, Architektur und Cacheprüfsumme. Beim Ersetzen des
-Containers werden diese Pakete aus dem Cache installiert; fehlende Cachedateien
-werden ausschließlich mit den gespeicherten exakten Versionen nachgeladen.
-Beschädigte Pakete werden abgewiesen. Entfernte Programme werden nicht durch
-Settings-Backups oder eine erneut gesetzte Initialprogrammliste wiederhergestellt.
-Architektur- und Suitewechsel erfordern eine ausdrückliche Manifestmigration.
-`linux/arm64` ist bis zur vollständigen Adapterprüfung gesperrt.
+Successful installs record resolved dependencies, versions, architecture, and cached checksums. Container replacement restores those exact packages; missing cache entries are fetched only at the saved exact versions. Corrupt downloads fail. Removed runtimes are not reintroduced by settings backups or initial-program settings. Suite/architecture changes require explicit manifest migration; ARM64 is not accepted yet.
 
-Für einen Releasewechsel: Basisimage-Digest und Katalogquelle prüfen, genaue
-Paket-/Archivversionen und Prüfsummen aktualisieren, Manifestwiederherstellung
-prüfen und sämtliche Sprach-Smokes auf der freizugebenden Architektur ausführen.
+Release changes require checking base/catalog sources, exact versions/checksums, manifest restoration, and all runtime smokes on the accepted architecture. The application release number is separate from protocol version 1 and catalog version `2026.10.19.1`.
 
-## Prüfungen
+## Localization and tests
 
-Python meldet neben `file` und `trace` den Modus `test` mit `testAdapterVersion: 1`. Der Auftrag `{type: "test", test: {suite, files}}` wird vor Reservierung validiert und belegt genau einen Session-/Runner-Slot. `runner/grading/adapter.js` startet pro Fall einen frischen Prozess über denselben Launcher mit höchstens zwei Sekunden, für die Suite insgesamt 30 Sekunden. Die festen Harness-Rückgabedaten erscheinen als begrenzte `testResults`, getrennt von stdout; Erfolg bewertet erst die App. Snapshot und Fallverzeichnisse werden nach Abschluss über die bestehende sichere Verzeichnisbereinigung entfernt. Abbruch und Runner-Neustart werden nicht automatisch wiederholt. Der Container-Nachweis `node tests/docker/grading-smoke.mjs` verwendet ein eigenes Compose-Projekt mit Wegwerf-Volumes.
+The runner is independent of i18next. Own messages add stable `messageKey`/scalar `params` descriptors for the app to translate. Statuses, error codes, IDs, package logs, compiler diagnostics, learner stdout, and journal identities remain original data. Package progress describes six phases, rather than time remaining. Both app and runner images include shared contracts and must be upgraded together.
 
-`npm test` führt die Runner-Vertrags-, Client- und Paketmanifesttests aus.
-`npm run test:docker` installiert und entfernt die optionalen Laufzeiten wirklich.
-Zusätzlich prüft `tests/docker/runner-live.mjs` im Runner echte Zeitlimits,
-UTF-8-Ausgabegrenzen, große stdin-Eingaben, konkurrierende Symlinkwechsel und einen
-durch das Container-PID-Limit begrenzten Fork-Sturm. Dieser native Test startet
-erst nach abgeschlossener Paketwartung und entfernt ausschließlich seine eigene
-zufällige Session sowie die eigene Testdatei im Zustandsvolume.
+Python advertises `file`, `trace`, and `test` with adapter version 1. A test job validates `{type: "test", test: {suite, files}}` before reservation and occupies one ordinary slot. The grading adapter starts a fresh process per case, limited to two seconds per case / 30 seconds per suite. Bounded `testResults` are separate from stdout; the app determines assessment. Snapshot/case directories use the common safe cleanup. Cancellation/restart never automatically replays jobs. This is learning feedback, not a tamper-resistant examination system.
+
+`npm test` covers protocol/client/manifest contracts. `npm run test:docker` uses disposable projects; `STERRACODE_DOCKER_FULL=1` additionally installs and exercises every optional runtime. `node tests/docker/grading-smoke.mjs` and `node tests/docker/trace-smoke.mjs` test their adapters. `tests/docker/runner-live.mjs` exercises real timeouts, UTF-8 output limits, large stdin, symlink races, and a fork storm bounded by the container PID limit, after package maintenance finishes. It removes only its own random session and test state file.

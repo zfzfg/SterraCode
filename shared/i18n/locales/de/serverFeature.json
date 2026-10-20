@@ -1,0 +1,239 @@
+{
+  "chat": {
+    "invalidFeedback": "Ungültiges Feedback.",
+    "messageMissing": "Nachricht nicht gefunden."
+  },
+  "profile": {
+    "confirmDelete": "Löschen muss ausdrücklich bestätigt werden.",
+    "confirmHistory": "Historische Übernahme muss bestätigt werden."
+  },
+  "programs": {
+    "localMode": "Die Programmverwaltung steht im Dockerbetrieb zur Verfügung. Beim lokalen Start werden die installierten Hostprogramme verwendet.",
+    "invalidAction": "Unbekanntes Programm oder unbekannte Aktion.",
+    "invalidJob": "Ungültiger Auftrag."
+  },
+  "auth": {
+    "passwordLength": "Das Passwort muss zwischen 12 und 1024 Zeichen lang sein.",
+    "rateLimited": "Zu viele Anmeldeversuche. Bitte in 15 Minuten erneut versuchen.",
+    "setupComplete": "Die Einrichtung ist bereits abgeschlossen.",
+    "invalidSetupKey": "Einrichtungsschlüssel ist ungültig oder abgelaufen.",
+    "setupRequired": "Bitte zuerst die Einrichtung abschließen.",
+    "invalidPassword": "Ungültiges Passwort.",
+    "invalidCurrentPassword": "Das bisherige Passwort ist ungültig.",
+    "protectedSetupRequired": "Bitte zuerst die geschützte Einrichtung abschließen.",
+    "loginRequired": "Bitte am Server anmelden."
+  },
+  "learning": {
+    "taskChanged": "Die Aufgabe wurde verändert. Bitte neu laden.",
+    "nextHint": "Bitte den nächsten Hinweis einzeln öffnen.",
+    "invalidJournal": "Ein Journaleintrag benötigt höchstens 2.000 Zeichen und eine Version.",
+    "journalChanged": "Der Journaleintrag wurde inzwischen verändert. Bitte neu laden.",
+    "journalFull": "Das Journal enthält bereits 200 Aufgabenstände. Bitte für weitere Einträge eine neue Session verwenden."
+  },
+  "lmStudio": {
+    "contextTimeout": "LM-Studio-Kontextprüfung hat das Zeitlimit überschritten. Verbindung und geladenes Modell prüfen.",
+    "invalidUrl": "Ungültige LM-Studio-URL.",
+    "secretUnreadable": "LM-Studio-Secret-Datei ist nicht lesbar.",
+    "selectModel": "Bitte in LM Studio ein Modell laden und auswählen.",
+    "modelNotLoaded": "Das ausgewählte Modell ist nicht geladen. Bitte in LM Studio laden und die Modellauswahl aktualisieren.",
+    "containerAddress": "Die gespeicherte LM-Studio-Adresse zeigt im Container auf die App selbst. Bitte host.docker.internal oder die LAN-Adresse des Modellservers verwenden.",
+    "offline": "LM Studio ist über das native SDK nicht erreichbar. Adresse, Netzwerkfreigabe und Secret-Datei prüfen.",
+    "incompleteToolCall": "Unvollständiger Werkzeugaufruf.",
+    "responseTimeout": "LM Studio hat nicht innerhalb von 120 Sekunden geantwortet.",
+    "ambiguousToolCall": "Werkzeugaufruf konnte nicht eindeutig zugeordnet werden."
+  },
+  "process": {
+    "projectTooDeep": "Projektstruktur ist zu tief.",
+    "tooManySources": "Zu viele Quelldateien.",
+    "dotnetSdk": "Ein .NET SDK ab Version 6 wird benötigt.",
+    "dotnetExecutable": "Keine ausführbare .NET-Anwendung erzeugt.",
+    "idempotencyConflict": "Die Auftrags-ID wurde bereits mit anderen Daten verwendet.",
+    "aiDisabled": "KI-Terminalbefehle sind deaktiviert.",
+    "alreadyRunningStop": "In dieser Session läuft bereits ein Prozess. Bitte zuerst stoppen.",
+    "commandRequired": "Ein gültiger Befehl ist erforderlich.",
+    "busy": "Die lokale Ausführung ist ausgelastet.",
+    "alreadyRunning": "In dieser Session läuft bereits ein Prozess.",
+    "notFound": "Prozess nicht gefunden.",
+    "invalidOffset": "Ungültige Ausgabeposition.",
+    "notAwaitingInput": "Der Prozess erwartet keine Eingabe.",
+    "invalidInput": "Ungültige Eingabe.",
+    "languageDisabled": "Diese Sprache ist in den Einstellungen deaktiviert.",
+    "runtimeMissing": "Laufzeit fehlt: {{runtime}} installieren und Anwendung neu prüfen.",
+    "startFailed": "Start fehlgeschlagen: {{detail}}",
+    "unsupportedLanguage": "Sprache nicht unterstützt.",
+    "pythonMissing": "Python-Laufzeit fehlt. Laufzeitverwaltung öffnen."
+  },
+  "openAI": {
+    "invalidJson": "OpenAI hat keine gültige JSON-Antwort geliefert.",
+    "unavailable": "Die OpenAI-API ist nicht erreichbar oder hat das Zeitlimit überschritten.",
+    "contextLimit": "OpenAI hat die Kontextgrenze des Modells gemeldet. Den Kontext über /compact verdichten oder ein anderes Modell auswählen.",
+    "accessDenied": "OpenAI-Zugang abgewiesen. API-Schlüssel und Modellberechtigung prüfen.",
+    "rateLimited": "OpenAI-Anfrage begrenzt. API-Kontingent und Ratenlimit prüfen.",
+    "requestFailed": "OpenAI hat die Anfrage abgewiesen. Modell-ID, Responses-Unterstützung und Einstellungen prüfen.",
+    "invalidTokenCount": "OpenAI liefert keine gültige Tokenzählung.",
+    "invalidModels": "OpenAI liefert keine gültige Modellliste.",
+    "cancelledResponse": "OpenAI hat die Antwort abgebrochen.",
+    "incompleteResponse": "OpenAI hat die Antwort vorzeitig abgebrochen.",
+    "outputLimit": "OpenAI-Stream überschreitet das Ausgabelimit.",
+    "interrupted": "OpenAI-Verbindung vor Abschluss unterbrochen. Die sichtbare Teilantwort bleibt erhalten.",
+    "selectModel": "Bitte eine OpenAI-Modell-ID in den Einstellungen auswählen.",
+    "invalidCompaction": "OpenAI liefert keinen gültigen komprimierten Kontext.",
+    "responseInvalid": "OpenAI hat keine abgeschlossene gültige Antwort geliefert.",
+    "invalidToolCall": "OpenAI hat einen ungültigen Werkzeugaufruf geliefert.",
+    "fullResponseInvalid": "OpenAI hat keine gültige vollständige Antwort geliefert.",
+    "invalidAnswer": "OpenAI hat keine gültige Antwort geliefert.",
+    "invalidToolArguments": "OpenAI hat ungültige Werkzeugargumente geliefert.",
+    "unknownTool": "Unbekanntes Werkzeug."
+  },
+  "preview": {
+    "invalidResource": "Ungültige Ressourcenadresse.",
+    "htmlDepth": "HTML-Verschachtelung zu tief (maximal 100 Ebenen).",
+    "htmlNodes": "Zu viele HTML-Knoten (maximal 10.000).",
+    "tooManyScripts": "Zu viele Skripte (maximal 100).",
+    "classicScripts": "Nur klassische JavaScript-Skripte werden unterstützt; Module und Importmaps nicht.",
+    "scriptExtension": "Lokale Skripte müssen .js-Dateien sein.",
+    "stylesheetExtension": "Stylesheets müssen .css-Dateien sein.",
+    "selectHtml": "Bitte eine HTML-Einstiegsdatei auswählen.",
+    "expectedVersions": "Erwartete Dateiversionen (maximal 50) erforderlich.",
+    "invalidVersion": "Ungültige Dateiversion.",
+    "tooLarge": "Vorschau zu groß (50 Dateien / 2 MiB).",
+    "filesChanged": "Dateien während der Erfassung geändert.",
+    "preparedTooLarge": "Aufbereitete Vorschau zu groß.",
+    "notFound": "Vorschau fehlt oder wurde bereits aufgeräumt.",
+    "expired": "Vorschau abgelaufen. Bitte neu laden.",
+    "relativeResources": "Nur relative Ressourcen ohne Traversal sind erlaubt: {{reference}}",
+    "cssInvalid": "CSS konnte nicht aufbereitet werden: {{file}}",
+    "cssImport": "CSS-@import wird nicht unterstützt: {{file}}. Bitte mehrere lokale Stylesheets verlinken.",
+    "cssUrl": "CSS-url() benötigt eine Bild-Daten-URL oder lokale SVG-ID: {{file}}",
+    "removedElement": "{{tag}} wird in der Vorschau entfernt.",
+    "stylesheetLinks": "Nur Stylesheet-Links werden unterstützt.",
+    "unsupportedAttribute": "Attribut {{name}} wird nicht unterstützt; DOM-Ereignisse mit addEventListener anbinden.",
+    "removedResource": "Ressource/Navigation entfernt: {{reference}}. Unterstützt werden Bild-Daten-URLs und SVG-IDs.",
+    "versionMissing": "Dateiversion fehlt: {{file}}. Bitte speichern und erneut laden.",
+    "fileChanged": "Dateistand geändert: {{file}}",
+    "suppressed": "Weitere Meldungen zusammengefasst",
+    "unserializable": "[Nicht darstellbar]",
+    "resourceFailed": "Ressource konnte nicht geladen werden",
+    "policyBlocked": "Vorschau-Policy blockiert: {{directive}}",
+    "navigationUnsupported": "Navigation ist in der Vorschau nicht unterstützt."
+  },
+  "proposal": {
+    "invalidHunks": "Bitte gültige, eindeutige Teiländerungen auswählen.",
+    "dependencies": "Abhängige Teiländerungen gemeinsam auswählen.",
+    "notFound": "Vorschlag nicht gefunden.",
+    "invalid": "Ungültiger oder zu großer Vorschlag.",
+    "invalidOperation": "Ungültige Vorgangskennung.",
+    "operationConflict": "Vorgangskennung bereits anders verwendet.",
+    "baseChanged": "Vorschlagsbasis inzwischen verändert.",
+    "alreadyDecided": "Vorschlag bereits entschieden.",
+    "alreadyApplied": "Vorschlag bereits übernommen oder anderer Vorgang offen.",
+    "stale": "Vorschlag veraltet. Bitte auf dem aktuellen Dateistand neu erstellen.",
+    "wholeFile": "Gesamte Datei (Vergleichsgrenze)",
+    "hunkSummary": "Zeile {{line}}: {{removed}} entfernt, {{added}} hinzugefügt"
+  },
+  "credentials": {
+    "secretUnreadable": "OpenAI-Secret-Datei fehlt, ist leer oder nicht lesbar.",
+    "keyRequired": "Bitte einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen.",
+    "providerUnsupported": "Nur OpenAI-Zugangsdaten können hier geändert werden.",
+    "externalSecret": "Die OpenAI-Zugangsdaten werden durch eine schreibgeschützte Secret-Datei vorgegeben.",
+    "invalidKey": "Bitte einen gültigen OpenAI-API-Schlüssel angeben."
+  },
+  "runner": {
+    "notConfigured": "Docker-Runner ist nicht konfiguriert.",
+    "invalidEndpoint": "Ungültiger Runner-Endpunkt.",
+    "secretUnreadable": "Runner-Dienstschlüssel ist nicht lesbar.",
+    "protocolMismatch": "App und Runner haben inkompatible Protokollversionen. Zusammen aktualisieren.",
+    "unavailable": "Der Runner ist nicht erreichbar. Es wurde kein lokaler Prozess gestartet.",
+    "requestFailed": "Runner-Anfrage fehlgeschlagen."
+  },
+  "files": {
+    "directoryLinks": "Verzeichnisverknüpfungen sind im Workspace nicht erlaubt.",
+    "regularOnly": "Nur reguläre Dateien dürfen übernommen werden.",
+    "backupChanged": "Eine Datei wurde während der Sicherung verändert. Vorgang bitte wiederholen.",
+    "notEnoughSpace": "Zu wenig freier Speicher für die Sicherung. Bisherige Daten bleiben erhalten."
+  },
+  "terminal": {
+    "invalidCursor": "Ungültiger Terminal-Cursor für diesen Prozess oder diese Laufzeit."
+  },
+  "tests": {
+    "conflict": "Aufgaben-, Suite- oder Quellstand geändert. Bitte erneut prüfen.",
+    "notFound": "Testlauf nicht gefunden.",
+    "invalidConcepts": "Ungültige Konzept-IDs.",
+    "suiteMissing": "Testsuite fehlt.",
+    "modeRequired": "Testsuite benötigt assessmentMode tests.",
+    "unsupportedField": "Nicht unterstütztes Aufgabenfeld.",
+    "invalidDescription": "Ungültige Aufgabenbeschreibung.",
+    "runnerUnsupported": "Runner unterstützt keine Python-Funktionstests.",
+    "invalidSolutionHelp": "Ungültige Angabe zur Lösungshilfe.",
+    "noResult": "Noch kein auswertbares Ergebnis.",
+    "runtimeInOutput": "siehe Fallausgabe"
+  },
+  "snapshot": {
+    "versionsMissing": "Erwartete Dateiversionen fehlen.",
+    "invalidManifest": "Ungültiges Snapshot-Manifest.",
+    "operationConflict": "operationId mit anderen Daten verwendet."
+  },
+  "tools": {
+    "aborted": "Abgebrochen.",
+    "invalidQuestionOptions": "Ungültige Frageoptionen.",
+    "planChanged": "Der Lernplan wurde inzwischen verändert. Bitte erneut lesen.",
+    "profileDisabled": "Sprachprofil ist deaktiviert.",
+    "invalidField": "Ungültiges Tool-Feld: {{name}}",
+    "unknownTool": "Unbekanntes Tool: {{name}}"
+  },
+  "trace": {
+    "notFound": "Trace nicht gefunden.",
+    "runnerUnsupported": "Dieser Runner unterstützt noch keine Python-Traces.",
+    "fileChanged": "Dateistand geändert. Bitte speichern und erneut starten.",
+    "snapshotChanged": "Datei während der Snapshot-Erfassung geändert.",
+    "invalidPage": "Ungültige Trace-Seite (höchstens 50 Ereignisse).",
+    "limitations": "Nur Python-Hauptthread und ausgewählte Quellen; native Bibliotheken, Threads und asynchrone Abläufe werden nicht vollständig beobachtet. Rückwärtsschritte spielen gespeicherte Zustände ab und machen keine Seiteneffekte rückgängig."
+  },
+  "workspace": {
+    "invalidRelativePath": "Ungültiger relativer Dateipfad.",
+    "invalidPath": "Ungültiger Dateiname oder Pfad.",
+    "notAFile": "Der Pfad ist keine Datei.",
+    "fileTooLarge": "Die Datei ist größer als 2 MiB.",
+    "changedWhileReading": "Die Datei wurde während des Lesens verändert. Bitte erneut laden.",
+    "utf8Required": "Nur UTF-8-Textdateien können im Editor bearbeitet werden.",
+    "linkDenied": "Verknüpfung nicht erlaubt.",
+    "invalidLineRange": "Ungültiger Zeilenbereich.",
+    "notFound": "Datei nicht gefunden.",
+    "rangeAfterEnd": "Der Zeilenbereich liegt hinter der Datei.",
+    "invalidContent": "Ungültiger oder zu großer Dateiinhalt.",
+    "versionConflict": "Datei inzwischen verändert. Bitte vergleichen oder neu laden; deine Änderungen bleiben im Editor.",
+    "changeNotFound": "Änderung nicht gefunden.",
+    "undoConflict": "Diese Datei wurde danach verändert. Rückgängig würde neuere Änderungen überschreiben.",
+    "directoryTooDeep": "Die Verzeichnisstruktur ist zu tief.",
+    "tooManyEntries": "Der Workspace enthält mehr als 5000 Einträge.",
+    "nameExists": "Dieser Name existiert bereits.",
+    "moveIntoSelf": "Ein Ordner kann nicht in sich selbst verschoben werden.",
+    "targetExists": "Der Zielname existiert bereits."
+  },
+  "diagnostics": {
+    "volumeReadOnly": "Volume ist nicht beschreibbar.",
+    "runnerUnavailable": "Runner ist nicht erreichbar. Datei- und Sessionarbeit bleibt möglich.",
+    "externalSource": ".env / Prozessumgebung (Neustart erforderlich)",
+    "localSource": "Prozessumgebung / lokale Standardwerte"
+  },
+  "reason": {
+    "timeout": "Zeitlimit überschritten.",
+    "outputLimit": "Ausgabelimit erreicht.",
+    "stopped": "Vom Nutzer gestoppt.",
+    "runnerRestarted": "Durch Runner-Neustart unterbrochen.",
+    "resourceLimit": "Ressourcenlimit erreicht oder Prozess beendet.",
+    "processUnavailable": "Prozess nicht mehr verfügbar.",
+    "connectionLost": "Runner-Verbindung unterbrochen.",
+    "startFailed": "Start fehlgeschlagen.",
+    "invalidTrace": "Ungültige Aufzeichnungsdaten.",
+    "incompleteTrace": "Aufzeichnung unvollständig.",
+    "eventLimit": "Ereignislimit erreicht.",
+    "traceSizeLimit": "Größenlimit der Aufzeichnung erreicht.",
+    "completed": "Vollständig aufgezeichnet.",
+    "programError": "Programm mit Fehler beendet."
+  },
+  "models": {
+    "openAIOffline": "OpenAI ist nicht erreichbar. API-Schlüssel, Internetzugang und Berechtigung prüfen.",
+    "lmStudioOffline": "LM Studio ist nicht erreichbar. Server in LM Studio starten, URL und Secret-Datei prüfen."
+  }
+}

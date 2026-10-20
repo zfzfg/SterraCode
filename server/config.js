@@ -142,6 +142,10 @@ export function getServerConfig(config = loadConfig()) {
     allowedOrigins: [...config.allowedOrigins],
     trustedProxies: [...config.trustedProxies],
     source: config.source,
+    sourceKey: config.authRequired
+      ? "serverFeature:diagnostics.externalSource"
+      : "serverFeature:diagnostics.localSource",
+    sourceParams: {},
     readOnly: true,
     restartRequiredForChanges: true,
     lmStudioOverride: Boolean(config.lmStudioOverrideUrl),

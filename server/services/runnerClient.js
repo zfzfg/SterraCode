@@ -23,9 +23,13 @@ export async function runnerRequest(
       "Docker-Runner ist nicht konfiguriert.",
       503,
       "RUNNER_UNAVAILABLE",
+      { messageKey: "serverFeature:runner.notConfigured", params: {} },
     );
   if (!route.startsWith("/v1/"))
-    throw new AppError("Ungültiger Runner-Endpunkt.", 500);
+    throw new AppError("Ungültiger Runner-Endpunkt.", 500, undefined, {
+      messageKey: "serverFeature:runner.invalidEndpoint",
+      params: {},
+    });
   let secret;
   try {
     secret = (await fs.readFile(file, "utf8")).trim();
@@ -34,6 +38,7 @@ export async function runnerRequest(
       "Runner-Dienstschlüssel ist nicht lesbar.",
       503,
       "RUNNER_UNAVAILABLE",
+      { messageKey: "serverFeature:runner.secretUnreadable", params: {} },
     );
   }
   for (let attempt = 0; ; attempt++) {
@@ -53,6 +58,7 @@ export async function runnerRequest(
           "App und Runner haben inkompatible Protokollversionen. Zusammen aktualisieren.",
           503,
           "RUNNER_PROTOCOL_MISMATCH",
+          { messageKey: "serverFeature:runner.protocolMismatch", params: {} },
         );
       const value = await response.json();
       if (!response.ok)
@@ -60,6 +66,11 @@ export async function runnerRequest(
           value.error || "Runner-Anfrage fehlgeschlagen.",
           response.status,
           value.code || "RUNNER_ERROR",
+          value.messageKey
+            ? { messageKey: value.messageKey, params: value.params || {} }
+            : !value.error
+              ? { messageKey: "serverFeature:runner.requestFailed", params: {} }
+              : {},
         );
       return value;
     } catch (error) {
@@ -69,6 +80,7 @@ export async function runnerRequest(
           "Der Runner ist nicht erreichbar. Es wurde kein lokaler Prozess gestartet.",
           503,
           "RUNNER_UNAVAILABLE",
+          { messageKey: "serverFeature:runner.unavailable", params: {} },
         );
       await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
     }

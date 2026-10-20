@@ -2,6 +2,17 @@ import { node } from "./ui.js";
 import { state } from "./state.js";
 
 const sections = new Map();
+export const captureTaskSections = () => [...sections];
+export function restoreTaskSections(saved) {
+  if (!Array.isArray(saved)) return;
+  for (const entry of saved.slice(-100))
+    if (
+      Array.isArray(entry) &&
+      typeof entry[0] === "string" &&
+      typeof entry[1] === "boolean"
+    )
+      sections.set(entry[0], entry[1]);
+}
 
 export function taskSection(task, name, label) {
   const key = `${state.session.id}:${task.id}:${task.taskVersion || 1}:${name}`;

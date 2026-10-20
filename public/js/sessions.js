@@ -3,6 +3,7 @@ import { state, emit } from "./state.js";
 import { button } from "./icons.js";
 import { $, node, formDialog, confirmDialog } from "./ui.js";
 import { flush, openEditorFile } from "./editor.js";
+import { t, getLocale, LOCALES, formatDate } from "./i18n.js";
 export const languageOptions = [
   ["python", "Python"],
   ["javascript", "JavaScript"],
@@ -33,23 +34,17 @@ export function renderSessions() {
       node(
         "span",
         "session-meta",
-        `${languageOptions.find((l) => l.value === s.language)?.label || s.language} · ${new Date(s.updatedAt).toLocaleDateString("de-DE")}`,
+        `${languageOptions.find((l) => l.value === s.language)?.label || s.language} · ${formatDate(s.updatedAt)}`,
       ),
     );
     if (s.deleting) {
       open.disabled = true;
-      open.append(
-        node(
-          "span",
-          "session-meta",
-          "Löschen ausstehend · zum Fortsetzen verwalten",
-        ),
-      );
+      open.append(node("span", "session-meta", t("sessions:deletion.pending")));
     }
     row.append(
       open,
       button(
-        "Session verwalten",
+        t("sessions:manage.title"),
         "settings",
         () => manageSession(s),
         "icon-only",
@@ -58,44 +53,49 @@ export function renderSessions() {
     list.append(row);
   }
   if (!state.sessions.length)
-    list.append(
-      node(
-        "p",
-        "empty-small",
-        "Noch keine Sessions. Starte mit einem eigenen Lernziel.",
-      ),
-    );
+    list.append(node("p", "empty-small", t("sessions:empty")));
   const recent = $("recent-sessions");
   recent.replaceChildren();
   if (state.sessions.length)
-    recent.append(node("span", "eyebrow", "Zuletzt bearbeitet"));
+    recent.append(node("span", "eyebrow", t("sessions:recent")));
   for (const s of state.sessions.slice(0, 3))
     recent.append(button(s.title, "file", () => openSession(s.id)));
 }
 export async function createSession() {
   await flush();
   await formDialog({
-    title: "Neue Session",
+    title: t("sessions:new.title"),
     description: state.server.authRequired
-      ? "Dateien und Lernfortschritt werden auf dem SterraCode-Server gespeichert."
-      : "Dateien und Lernfortschritt werden lokal auf deinem Rechner gespeichert.",
+      ? t("sessions:new.server")
+      : t("sessions:new.local"),
     fields: [
       {
         name: "title",
-        label: "Name",
-        value: "Meine neue Session",
+        label: t("sessions:name"),
+        value: t("sessions:new.defaultTitle"),
         required: true,
         maxLength: 200,
       },
       {
         name: "language",
-        label: "Programmiersprache",
+        label: t("app:static.programmingLanguage"),
         type: "select",
         value: state.session?.language || "python",
         options: languageOptions,
       },
+      {
+        name: "tutorLocale",
+        label: t("sessions:tutor.label"),
+        type: "select",
+        value: getLocale(),
+        options: Object.entries(LOCALES).map(([value, entry]) => ({
+          value,
+          label: entry.name,
+        })),
+        help: t("sessions:tutor.help"),
+      },
     ],
-    submit: "Session erstellen",
+    submit: t("sessions:new.create"),
     onSave: async (data) => {
       const s = await api("/api/sessions", { method: "POST", body: data });
       await openSession(s.id);
@@ -130,34 +130,49 @@ async function emitAbort() {
 }
 async function manageSession(session) {
   const result = await formDialog({
-    title: "Session verwalten",
+    title: t("sessions:manage.title"),
     fields: [
       {
         name: "title",
-        label: "Name",
+        label: t("sessions:name"),
         value: session.title,
         required: true,
         maxLength: 200,
       },
       {
         name: "action",
-        label: "Aktion",
+        label: t("sessions:action"),
         type: "select",
         options: [
-          { value: "rename", label: "Umbenennen" },
-          { value: "delete", label: "Session löschen (mit Sicherung)" },
+          { value: "rename", label: t("sessions:rename") },
+          { value: "delete", label: t("sessions:delete.action") },
         ],
+      },
+      {
+        name: "tutorLocale",
+        label: t("sessions:tutor.label"),
+        type: "select",
+        value: session.tutorLocale || "legacy",
+        options: [
+          ...(!session.tutorLocale
+            ? [{ value: "legacy", label: t("sessions:tutor.legacy") }]
+            : []),
+          ...Object.entries(LOCALES).map(([value, entry]) => ({
+            value,
+            label: entry.name,
+          })),
+        ],
+        help: t("sessions:tutor.help"),
       },
     ],
   });
   if (!result) return;
   if (result.action === "delete") {
-    if (state.busy)
-      throw new Error("Bitte die laufende KI-Antwort zuerst stoppen.");
+    if (state.busy) throw new Error(t("sessions:delete.stop"));
     if (
       !(await confirmDialog(
-        "Session löschen?",
-        `„${session.title}“ wird aus der Liste entfernt. Eine Sicherung bleibt lokal erhalten.`,
+        t("sessions:delete.confirm"),
+        t("sessions:delete.description", { title: session.title }),
       ))
     )
       return;
@@ -173,13 +188,20 @@ async function manageSession(session) {
       $("welcome").hidden = false;
       $("panes").hidden = true;
       $("compact-tabs").hidden = true;
-      $("session-title").textContent = "Dein Lernarbeitsplatz";
+      $("session-title").textContent = t("app:static.workplace");
       emit("session-opened", null);
     }
   } else {
     const updated = await api(sessionURL(session.id), {
       method: "PATCH",
-      body: { title: result.title },
+      body: {
+        title: result.title,
+        ...(result.tutorLocale !== "legacy"
+          ? { tutorLocale: result.tutorLocale }
+          : {}),
+        expectedRevision:
+          state.session?.id === session.id ? state.session.revision : undefined,
+      },
     });
     if (state.session?.id === session.id) {
       state.session = updated;

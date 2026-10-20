@@ -49,11 +49,14 @@ export function requireAuthentication(config, auth) {
       return next();
     }
     const setupRequired = (await auth.status()).setupRequired;
+    const messageKey = setupRequired
+      ? "serverFeature:auth.protectedSetupRequired"
+      : "serverFeature:auth.loginRequired";
     res.status(401).json({
-      error: setupRequired
-        ? "Bitte zuerst die geschützte Einrichtung abschließen."
-        : "Bitte am Server anmelden.",
+      error: req.t(messageKey),
       code: setupRequired ? "SETUP_REQUIRED" : "AUTH_REQUIRED",
+      messageKey,
+      params: {},
     });
   });
 }

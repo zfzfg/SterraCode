@@ -1,0 +1,17 @@
+{
+  "actions.close": "Schließen",
+  "actions.save": "Speichern",
+  "actions.cancel": "Abbrechen",
+  "actions.confirm": "Bestätigen",
+  "dialog.open": "Bitte den geöffneten Dialog zuerst schließen.",
+  "dialog.advanced": "Erweiterte Einstellungen",
+  "locale.label": "Oberflächensprache",
+  "errors.generic": "Ein Fehler ist aufgetreten. Bitte erneut versuchen.",
+  "validation.required": "Bitte dieses Feld ausfüllen.",
+  "validation.minimum": "Bitte mindestens {{count}} Zeichen eingeben.",
+  "network.unavailable": "Der SterraCode-Server ist nicht erreichbar. Bitte Serveradresse und Verbindung prüfen.",
+  "network.invalid": "Ungültige Serverantwort.",
+  "network.interrupted": "Die Verbindung wurde unterbrochen. Bereits ausgeführte Schritte bleiben gespeichert.",
+  "validation.invalid": "Bitte einen gültigen Wert eingeben.",
+  "locale.loadFailed": "Die Sprachdateien konnten nicht geladen werden. Bitte erneut versuchen."
+}

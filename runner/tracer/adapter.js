@@ -13,8 +13,8 @@ export const TRACE_LIMITS = {
 };
 export function validateTrace(
   trace,
-  fail = (message) => {
-    throw new Error(message);
+  fail = (message, metadata = {}) => {
+    throw Object.assign(new Error(message), metadata);
   },
 ) {
   if (
@@ -26,7 +26,10 @@ export function validateTrace(
     typeof trace.stdin !== "string" ||
     trace.stdin.length > 65536
   )
-    return fail("Ungültiger Trace-Snapshot.");
+    return fail("Ungültiger Trace-Snapshot.", {
+      messageKey: "runner:trace.snapshot",
+      params: {},
+    });
   let bytes = 0;
   const names = new Set();
   for (const file of trace.files) {
@@ -50,12 +53,18 @@ export function validateTrace(
       names.has(file.path) ||
       typeof file.content !== "string"
     )
-      return fail("Ungültiger Trace-Quellpfad.");
+      return fail("Ungültiger Trace-Quellpfad.", {
+        messageKey: "runner:trace.path",
+        params: {},
+      });
     names.add(file.path);
     bytes += Buffer.byteLength(file.content);
   }
   if (bytes > 1024 * 1024 || !names.has(trace.entry))
-    return fail("Trace-Snapshot zu groß oder Einstieg fehlt.");
+    return fail("Trace-Snapshot zu groß oder Einstieg fehlt.", {
+      messageKey: "runner:trace.size",
+      params: {},
+    });
   return {
     entry: trace.entry,
     stdin: trace.stdin,

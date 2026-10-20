@@ -1,3 +1,4 @@
+import { t, getLocale, getFormatLocale } from "./i18n.js";
 import { api } from "./api.js";
 import { state } from "./state.js";
 import { node, toast } from "./ui.js";
@@ -5,44 +6,44 @@ import { openSession, loadSessions } from "./sessions.js";
 import { randomUUID } from "./uuid.js";
 import { flush } from "./editor.js";
 
-const kinds = {
-  test_run: "Testbeobachtung",
-  tutor: "Tutorbeurteilung",
-  self_assessment: "Selbsteinschätzung",
-  assisted: "Aufgabe mit Lösungshilfe",
-  legacy: "Übernommener Altbestand",
-};
-const statuses = {
-  unpracticed: "Noch nicht geübt / wenig Belege",
-  practicing: "In Übung",
-  recently_demonstrated: "Zuletzt selbstständig testgeprüft (eigene Angabe)",
-};
-const outcomes = {
-  passed: "bestanden",
-  failed: "fehlgeschlagen",
-  unsure: "noch unsicher",
-  confident: "fühle mich sicher",
-  unavailable: "technisch nicht auswertbar",
-};
-const help = {
-  independent: "selbstständig (eigene Angabe)",
-  assisted: "mit Lösungshilfe",
-  not_recorded: "nicht erfasst",
-};
+const kinds = () => ({
+  test_run: t("features:profile.testEvidence"),
+  tutor: t("features:profile.tutorEvidence"),
+  self_assessment: t("features:profile.selfEvidence"),
+  assisted: t("features:profile.assistedEvidence"),
+  legacy: t("features:profile.legacyEvidence"),
+});
+const statuses = () => ({
+  unpracticed: t("features:profile.unpracticed"),
+  practicing: t("features:profile.practicing"),
+  recently_demonstrated: t("features:profile.demonstrated"),
+});
+const outcomes = () => ({
+  passed: t("features:profile.passed"),
+  failed: t("features:profile.failed"),
+  unsure: t("features:profile.unsure"),
+  confident: t("features:profile.confident"),
+  unavailable: t("features:profile.unavailable"),
+});
+const help = () => ({
+  independent: t("features:profile.independent"),
+  assisted: t("features:profile.assisted"),
+  not_recorded: t("features:profile.notRecorded"),
+});
 let loading = 0;
 export async function openProfile() {
   const sequence = ++loading,
     dialog = document.getElementById("profile-dialog");
   if (!dialog.open) dialog.showModal();
   const content = node("div", "profile-content"),
-    title = node("h2", "", "Dein Lernprofil");
+    title = node("h2", "", t("features:profile.title"));
   title.id = "profile-title";
   dialog.setAttribute("aria-labelledby", title.id);
-  const close = node("button", "", "Schließen");
+  const close = node("button", "", t("features:shared.close"));
   close.onclick = () => dialog.close();
   const header = node("div", "dialog-heading");
   header.append(title, close);
-  const status = node("p", "", "Lernprofil wird geladen …");
+  const status = node("p", "", t("features:profile.loading"));
   status.setAttribute("role", "status");
   dialog.replaceChildren(header, status, content);
   const action = (label, fn, parent = content) => {
@@ -74,10 +75,10 @@ export async function openProfile() {
     const p = await api("/api/profile");
     if (sequence !== loading || !dialog.open) return;
     status.textContent = p.enabled
-      ? "Freiwilliges Lernprofil. Wenige Belege sind keine Kompetenzmessung. Lernpausen senken keine Stufe."
-      : "Das sessionübergreifende Lernprofil ist deaktiviert. Aufgaben und Tests funktionieren weiterhin.";
+      ? t("features:profile.help")
+      : t("features:profile.disabled");
     action(
-      p.enabled ? "Profil deaktivieren" : "Profil aktivieren",
+      p.enabled ? t("features:profile.disable") : t("features:profile.enable"),
       async () => {
         state.settings = await api("/api/chat/settings", {
           method: "PATCH",
@@ -86,7 +87,7 @@ export async function openProfile() {
         await openProfile();
       },
     );
-    action("Profil exportieren", async () => {
+    action(t("features:profile.export"), async () => {
       const data = await api("/api/profile/export"),
         link = node("a"),
         url = URL.createObjectURL(
@@ -99,10 +100,9 @@ export async function openProfile() {
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
-    const reset = check("Profil und Wiederholungsdaten bewusst löschen");
-    action("Profil zurücksetzen", async () => {
-      if (!reset.checked)
-        throw new Error("Bitte die Löschbestätigung markieren.");
+    const reset = check(t("features:profile.confirmReset"));
+    action(t("features:profile.reset"), async () => {
+      if (!reset.checked) throw new Error(t("features:profile.checkReset"));
       await api("/api/profile", { method: "DELETE", body: { confirm: true } });
       await openProfile();
     });
@@ -116,14 +116,14 @@ export async function openProfile() {
       form.append(l);
       return i;
     };
-    const goal = field("Mein persönliches Lernziel", p.goal);
+    const goal = field(t("features:profile.goal"), p.goal);
     goal.maxLength = 500;
-    const zone = field("Zeitzone (z. B. Europe/Berlin)", p.timeZone),
+    const zone = field(t("features:profile.timeZone"), p.timeZone),
       intervals = field(
-        "Leitner-Intervalle in Tagen (fünf Werte)",
+        t("features:profile.intervals"),
         p.intervals.join(", "),
       );
-    const save = node("button", "", "Lernziel und Planung speichern");
+    const save = node("button", "", t("features:profile.save"));
     save.type = "submit";
     form.append(save);
     form.onsubmit = async (e) => {
@@ -143,22 +143,15 @@ export async function openProfile() {
       }
     };
     content.append(form);
-    const history = check(
-      "Alte Sessionabschlüsse ausdrücklich als historische Angaben übernehmen",
-    );
-    action("Historische Angaben übernehmen", async () => {
-      if (!history.checked)
-        throw new Error("Bitte die historische Übernahme markieren.");
+    const history = check(t("features:profile.confirmHistory"));
+    action(t("features:profile.importHistory"), async () => {
+      if (!history.checked) throw new Error(t("features:profile.checkHistory"));
       await post("/api/profile/import-history", { confirm: true });
       await openProfile();
     });
-    content.append(
-      node("h3", "", "Freiwillige Wiederholungen (höchstens drei)"),
-    );
+    content.append(node("h3", "", t("features:profile.reviews")));
     if (!p.reviews.length)
-      content.append(
-        node("p", "muted", "Gerade keine Wiederholung vorgeschlagen."),
-      );
+      content.append(node("p", "muted", t("features:profile.noReviews")));
     for (const r of p.reviews) {
       const card = node("section", "profile-card");
       card.append(
@@ -166,16 +159,21 @@ export async function openProfile() {
         node(
           "p",
           "",
-          `${r.reason} Vorgesehen seit ${r.dueDay} (${p.timeZone}).`,
+          t("features:profile.dueSince", {
+            p1: r.reason,
+            p2: r.dueDay,
+            p3: p.timeZone,
+          }),
         ),
       );
       action(
-        "Wiederholung starten",
+        t("features:profile.startReview"),
         async () => {
-          if (state.busy)
-            throw new Error("Bitte die laufende Tutorantwort zuerst beenden.");
+          if (state.busy) throw new Error(t("features:profile.finishResponse"));
           await flush();
-          const s = await post(`/api/profile/reviews/${r.reviewId}/start`, {});
+          const s = await post(`/api/profile/reviews/${r.reviewId}/start`, {
+            tutorLocale: getLocale(),
+          });
           await loadSessions();
           dialog.close();
           await openSession(s.id);
@@ -183,16 +181,10 @@ export async function openProfile() {
         card,
       ).disabled = !r.exercise;
       if (!r.exercise)
-        card.append(
-          node(
-            "p",
-            "",
-            "Für diese Sprache ist noch keine geprüfte Offlineaufgabe verfügbar.",
-          ),
-        );
+        card.append(node("p", "", t("features:profile.noExercise")));
       for (const [label, value] of [
-        ["Heute überspringen", "skip"],
-        ["In drei Tagen erinnern", "snooze"],
+        [t("features:profile.skip"), "skip"],
+        [t("features:profile.snooze"), "snooze"],
       ])
         action(
           label,
@@ -206,7 +198,7 @@ export async function openProfile() {
         );
       content.append(card);
     }
-    content.append(node("h3", "", "Konzepte und Belege"));
+    content.append(node("h3", "", t("features:profile.concepts")));
     for (const language of [...new Set(p.concepts.map((c) => c.language))]) {
       const section = node("section");
       section.append(node("h4", "", language));
@@ -217,12 +209,15 @@ export async function openProfile() {
           node(
             "p",
             "",
-            `${statuses[c.status]}${c.lastReviewedAt ? ` · Letzte Übung: ${new Date(c.lastReviewedAt).toLocaleString("de-DE", { timeZone: p.timeZone })}` : ""}`,
+            `${statuses()[c.status]}${c.lastReviewedAt ? t("features:profile.lastPractice", { p1: new Date(c.lastReviewedAt).toLocaleString(getFormatLocale(), { timeZone: p.timeZone }) }) : ""}`,
           ),
           node(
             "p",
             "muted",
-            `Gruppe: ${c.group}. Voraussetzungen: ${c.prerequisites.join(", ") || "keine"}. Werden nicht automatisch als gekonnt gewertet.`,
+            t("features:profile.prerequisites", {
+              p1: c.group,
+              p2: c.prerequisites.join(", ") || t("features:shared.none"),
+            }),
           ),
         );
         if (c.nextReviewAt)
@@ -230,12 +225,19 @@ export async function openProfile() {
             node(
               "p",
               "",
-              `Leitner-Stufe ${c.reviewStage + 1} · Nächste Wiederholung: ${c.nextReviewAt}`,
+              t("features:profile.nextReview", {
+                p1: c.reviewStage + 1,
+                p2: c.nextReviewAt,
+              }),
             ),
           );
         if (c.suggestedExercise)
           card.append(
-            node("p", "", `Nächste passende Übung: ${c.suggestedExercise}`),
+            node(
+              "p",
+              "",
+              t("features:profile.nextExercise", { p1: c.suggestedExercise }),
+            ),
           );
         const historical = p.legacyConcepts.filter((v) => v.conceptId === c.id);
         if (historical.length)
@@ -243,7 +245,9 @@ export async function openProfile() {
             node(
               "p",
               "",
-              `Historische Angaben ohne genaues Übungsdatum: ${historical.map((v) => v.label).join(", ")}. Kein Testnachweis.`,
+              t("features:profile.historicalConcept", {
+                p1: historical.map((v) => v.label).join(", "),
+              }),
             ),
           );
         const analogies = p.concepts.filter(
@@ -257,12 +261,18 @@ export async function openProfile() {
             node(
               "p",
               "",
-              `Mögliche Analogie: ${analogies.map((v) => v.id).join(", ")}. Das belegt nicht automatisch dieses Konzept.`,
+              t("features:profile.analogy", {
+                p1: analogies.map((v) => v.id).join(", "),
+              }),
             ),
           );
         const evidence = node("details");
         evidence.append(
-          node("summary", "", `Herkunft und Verlauf (${c.evidence.length})`),
+          node(
+            "summary",
+            "",
+            t("features:profile.evidenceCount", { p1: c.evidence.length }),
+          ),
         );
         for (const id of c.evidence.slice(-20).reverse()) {
           const e = p.events.find((e) => e.eventId === id);
@@ -270,22 +280,29 @@ export async function openProfile() {
             node(
               "p",
               "",
-              `${kinds[e.evidence.kind]} · ${outcomes[e.evidence.outcome]} · ${e.evidence.kind === "legacy" ? "Historische Angabe ohne gesichertes Übungsdatum" : e.occurredAt} · Aufgabe ${e.taskId || "–"}, Stand ${e.taskVersion || "–"} · Beleg ${e.evidence.testRunId || e.eventId} · Hilfe: ${help[e.evidence.assistance]}`,
+              t("features:profile.evidenceDetails", {
+                p1: kinds()[e.evidence.kind],
+                p2: outcomes()[e.evidence.outcome],
+                p3:
+                  e.evidence.kind === "legacy"
+                    ? t("features:profile.undatedHistory")
+                    : e.occurredAt,
+                p4: e.taskId || "–",
+                p5: e.taskVersion || "–",
+                p6: e.evidence.testRunId || e.eventId,
+                p7: help()[e.evidence.assistance],
+              }),
             ),
           );
         }
         card.append(evidence);
         if (c.evidence.length > 20)
           evidence.append(
-            node(
-              "p",
-              "muted",
-              "Die neuesten 20 Belege sind sichtbar. Alle Belege stehen im Profilexport.",
-            ),
+            node("p", "muted", t("features:profile.recentEvidence")),
           );
         for (const [label, outcome] of [
-          ["Das beherrsche ich noch nicht", "unsure"],
-          ["Ich fühle mich sicher", "confident"],
+          [t("features:profile.notMastered"), "unsure"],
+          [t("features:profile.feelConfident"), "confident"],
         ]) {
           const operationId = randomUUID();
           action(
@@ -305,35 +322,40 @@ export async function openProfile() {
       content.append(section);
     }
     const timeline = node("details");
-    timeline.append(
-      node("summary", "", "Verlauf aller Lernbelege (neueste 50)"),
-    );
+    timeline.append(node("summary", "", t("features:profile.timeline")));
     for (const e of p.events.slice(-50).reverse())
       timeline.append(
         node(
           "p",
           "",
-          `${kinds[e.evidence.kind]} · ${outcomes[e.evidence.outcome]} · ${e.language} · ${e.evidence.kind === "legacy" ? "historische Angabe" : e.occurredAt} · Aufgabe ${e.taskId || "–"} · ${e.conceptIds.join(", ") || "keine Konzeptzuordnung"}${e.legacyConceptLabels?.length ? ` · Altbezeichnungen: ${e.legacyConceptLabels.join(", ")}` : ""}`,
+          t("features:profile.timelineDetails", {
+            p1: kinds()[e.evidence.kind],
+            p2: outcomes()[e.evidence.outcome],
+            p3: e.language,
+            p4:
+              e.evidence.kind === "legacy"
+                ? t("features:profile.historical")
+                : e.occurredAt,
+            p5: e.taskId || "–",
+            p6: e.conceptIds.join(", ") || t("features:profile.noConcept"),
+            p7: e.legacyConceptLabels?.length
+              ? t("features:profile.legacyLabels", {
+                  p1: e.legacyConceptLabels.join(", "),
+                })
+              : "",
+          }),
         ),
       );
     content.append(timeline);
     const legacy = node("details");
     legacy.append(
-      node(
-        "summary",
-        "",
-        "Historische Angaben (keine nachträglichen Testbelege)",
-      ),
+      node("summary", "", t("features:profile.history")),
       node("pre", "", JSON.stringify(p.legacy, null, 2)),
     );
     content.append(legacy);
     const privacy = node("details");
     privacy.append(
-      node(
-        "summary",
-        "",
-        "Diese Profilangaben erhält der ausgewählte KI-Anbieter bei der nächsten Tutorantwort",
-      ),
+      node("summary", "", t("features:profile.privacy")),
       node("pre", "", p.tutorContext),
     );
     content.append(privacy);
@@ -341,10 +363,10 @@ export async function openProfile() {
     status.textContent = e.message;
     status.setAttribute("role", "alert");
     if (e.code === "PROFILE_CORRUPT") {
-      const confirmed = check("Beschädigtes Profil bewusst löschen");
-      action("Beschädigtes Profil zurücksetzen", async () => {
+      const confirmed = check(t("features:profile.confirmCorrupt"));
+      action(t("features:profile.resetCorrupt"), async () => {
         if (!confirmed.checked)
-          throw new Error("Bitte die Löschbestätigung markieren.");
+          throw new Error(t("features:profile.checkReset"));
         await api("/api/profile", {
           method: "DELETE",
           body: { confirm: true },

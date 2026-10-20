@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { api, workspaceURL, sessionURL } from "./api.js";
 import { state } from "./state.js";
 import { node } from "./ui.js";
@@ -6,22 +7,24 @@ import { flush, refreshEditor, fileLanguage } from "./editor.js";
 import { loadFiles } from "./workspace.js";
 import { randomUUID } from "./uuid.js";
 
-const labels = {
-  pending_review: "Offener Vorschlag",
-  applied: "Übernommen",
-  partially_applied: "Teilweise übernommen",
-  rejected: "Abgelehnt",
-  stale: "Basis verändert",
-  undone: "Rückgängig gemacht",
-  pending: "Unterbrochene Änderung",
-};
+const labels = () => ({
+  pending_review: t("features:diffInspector.pending"),
+  applied: t("features:diffInspector.applied"),
+  partially_applied: t("features:diffInspector.partiallyApplied"),
+  rejected: t("features:diffInspector.rejected"),
+  stale: t("features:diffInspector.stale"),
+  undone: t("features:shared.undone"),
+  pending: t("features:diffInspector.interrupted"),
+});
 function modal(title) {
   const previous = document.activeElement;
   const dialog = node("dialog", "diff-dialog");
   const heading = node("h2", "", title);
   heading.id = `diff-${randomUUID()}`;
   dialog.setAttribute("aria-labelledby", heading.id);
-  const close = button("Schließen", "close", () => dialog.close());
+  const close = button(t("features:shared.close"), "close", () =>
+    dialog.close(),
+  );
   const header = node("div", "dialog-heading");
   header.append(heading, close);
   dialog.append(header);
@@ -49,8 +52,8 @@ async function refresh(sid) {
   window.dispatchEvent(new CustomEvent("diff-decided"));
 }
 export async function inspectDiff(sid, id, proposal = false) {
-  const dialog = modal("Änderung ansehen");
-  const info = node("p", "", "Vergleich wird geladen …");
+  const dialog = modal(t("features:shared.inspectChange"));
+  const info = node("p", "", t("features:diffInspector.loading"));
   dialog.append(info);
   let ed, original, modified;
   const dispose = () => {
@@ -67,22 +70,10 @@ export async function inspectDiff(sid, id, proposal = false) {
         ? await api(`${workspaceURL(sid)}/changes/${data.changeId}`)
         : null;
     if (!dialog.isConnected) return;
-    info.textContent = `${data.historicalPath || data.path} · ${labels[data.status] || data.status} · ${data.reason || "KI-Änderung"}`;
-    dialog.append(
-      node(
-        "p",
-        "muted",
-        "Links: vorher / entfernte Zeilen. Rechts: nachher / hinzugefügte Zeilen. Die Begründung ist keine Garantie für korrekten Code.",
-      ),
-    );
+    info.textContent = `${data.historicalPath || data.path} · ${labels()[data.status] || data.status} · ${data.reason || t("features:shared.aiChange")}`;
+    dialog.append(node("p", "muted", t("features:diffInspector.help")));
     if (!proposal && !data.diffAvailable) {
-      dialog.append(
-        node(
-          "p",
-          "",
-          "Der historische Nachher-Inhalt fehlt. Ein zuverlässiger Vergleich ist für diesen alten Eintrag nicht verfügbar.",
-        ),
-      );
+      dialog.append(node("p", "", t("features:diffInspector.noAfter")));
     } else {
       const container = node("div", "diff-editor");
       dialog.append(container);
@@ -117,7 +108,9 @@ export async function inspectDiff(sid, id, proposal = false) {
         { once: true },
       );
       dialog.append(
-        button("Nächster Unterschied", null, () => ed.goToDiff("next")),
+        button(t("features:diffInspector.next"), null, () =>
+          ed.goToDiff("next"),
+        ),
       );
     }
     const controls = node("div", "diff-actions");
@@ -135,15 +128,11 @@ export async function inspectDiff(sid, id, proposal = false) {
       }
     };
     if (proposal && data.status === "pending_review") {
-      dialog.append(
-        node(
-          "p",
-          "muted",
-          "Nahe Änderungen bilden eine gemeinsame Teiländerung. Getrennte Blöcke können fachlich zusammengehören; nach einer Teilübernahme bitte prüfen und testen. Übrige Blöcke werden mit dieser Entscheidung geschlossen.",
-        ),
-      );
+      dialog.append(node("p", "muted", t("features:diffInspector.hunksHelp")));
       const choices = node("fieldset");
-      choices.append(node("legend", "", "Teiländerungen auswählen"));
+      choices.append(
+        node("legend", "", t("features:diffInspector.selectHunks")),
+      );
       const inputs = data.hunks.map((h) => {
         const label = node("label", "diff-hunk");
         const input = node("input");
@@ -155,7 +144,9 @@ export async function inspectDiff(sid, id, proposal = false) {
           document.createTextNode(
             h.summary +
               (h.dependsOn.length
-                ? ` (benötigt ${h.dependsOn.join(", ")})`
+                ? t("features:diffInspector.depends", {
+                    p1: h.dependsOn.join(", "),
+                  })
                 : ""),
           ),
         );
@@ -167,10 +158,10 @@ export async function inspectDiff(sid, id, proposal = false) {
       choices.addEventListener("change", () => {
         operationId = randomUUID();
       });
-      const apply = button("Auswahl übernehmen", "check", () =>
+      const apply = button(t("features:diffInspector.apply"), "check", () =>
         perform(async () => {
           if (state.busy)
-            throw new Error("Bitte zuerst den aktuellen KI-Turn beenden.");
+            throw new Error(t("features:diffInspector.finishTurn"));
           await flush();
           await api(`${url}/apply`, {
             method: "POST",
@@ -189,16 +180,16 @@ export async function inspectDiff(sid, id, proposal = false) {
     }
     if (proposal && ["pending_review", "stale"].includes(data.status))
       controls.append(
-        button("Ablehnen", "close", () =>
+        button(t("features:diffInspector.reject"), "close", () =>
           perform(() => api(`${url}/reject`, { method: "POST", body: {} })),
         ),
       );
     const changeId = proposal ? data.changeId : id;
     if (changeId && ["applied", "partially_applied"].includes(data.status)) {
-      const undo = button("Rückgängig", "undo", () =>
+      const undo = button(t("features:shared.undo"), "undo", () =>
         perform(async () => {
           if (state.busy)
-            throw new Error("Bitte zuerst den aktuellen KI-Turn beenden.");
+            throw new Error(t("features:diffInspector.finishTurn"));
           await flush();
           await api(`${workspaceURL(sid)}/changes/${changeId}/undo`, {
             method: "POST",
@@ -216,10 +207,10 @@ export async function inspectDiff(sid, id, proposal = false) {
   }
 }
 export async function showDiffHistory() {
-  if (!state.session) throw new Error("Bitte zuerst eine Session auswählen.");
+  if (!state.session) throw new Error(t("features:shared.selectSession"));
   const sid = state.session.id;
-  const dialog = modal("KI-Dateiänderungen und Vorschläge");
-  const loading = node("p", "", "Historie wird geladen …");
+  const dialog = modal(t("features:diffInspector.title"));
+  const loading = node("p", "", t("features:diffInspector.loadingHistory"));
   dialog.append(loading);
   try {
     const [proposals, changes] = await Promise.all([
@@ -227,8 +218,7 @@ export async function showDiffHistory() {
       api(`${workspaceURL(sid)}/changes`),
     ]);
     if (!dialog.isConnected) return;
-    loading.textContent =
-      "Auch ohne KI verfügbar. Offene Vorschläge verändern noch keine Dateien.";
+    loading.textContent = t("features:diffInspector.historyHelp");
     const list = node("div", "diff-history");
     dialog.append(list);
     for (const [records, isProposal] of [
@@ -238,7 +228,7 @@ export async function showDiffHistory() {
       for (const record of records) {
         list.append(
           button(
-            `${isProposal ? "Vorschlag" : "Änderung"}: ${record.path} · ${labels[record.status] || record.status} · ${record.reason || "KI-Änderung"}`,
+            `${isProposal ? t("features:diffInspector.proposal") : t("features:tracer.change")}: ${record.path} · ${labels()[record.status] || record.status} · ${record.reason || t("features:shared.aiChange")}`,
             "file",
             () => {
               dialog.close();
@@ -252,7 +242,7 @@ export async function showDiffHistory() {
         );
       }
     if (!proposals.length && !changes.length)
-      list.append(node("p", "", "Noch keine KI-Dateiänderungen vorhanden."));
+      list.append(node("p", "", t("features:diffInspector.empty")));
   } catch (e) {
     loading.textContent = e.message;
   }

@@ -1,0 +1,123 @@
+{
+  "questions": {
+    "onboarding": {
+      "question": "Would you like to create a learning plan?",
+      "options": {
+        "create_plan": "Yes, please",
+        "start_directly": "Start directly"
+      }
+    },
+    "plan-completed": {
+      "question": "You have completed all topics. Would you like to continue with a more advanced learning plan?",
+      "options": {
+        "continue_plan": "Yes, continue",
+        "finish_today": "Finish for today"
+      }
+    }
+  },
+  "concepts": {
+    "variables": "Variables",
+    "conditions": "Conditions",
+    "loops": "Loops",
+    "lists": "Lists",
+    "functions": "Functions",
+    "strings": "Strings"
+  },
+  "review": {
+    "title": "Optional review: {{concept}}",
+    "reason": "An optional review after some time has passed.",
+    "contract": "File: main.py; function: {{function}}(value). The tests check behaviour, not the syntax you use.",
+    "case": "Example {{number}}",
+    "variables": "Return twice the number.",
+    "conditions": "Return whether the number is greater than zero.",
+    "loops": "Use a loop to add the numbers from 1 to n, inclusive.",
+    "lists": "Return the first item in the list, or None for an empty list.",
+    "functions": "Write a function that returns the square of the number.",
+    "strings": "Return the string in reverse order."
+  },
+  "tutor": {
+    "toolLimit": "The tool limit has been reached. Completed steps are saved. You can continue the work with another message.",
+    "noTools": "This model does not support tools. The tutor cannot use file or terminal actions with it.",
+    "retry": "The LM Studio connection was interrupted. Retrying in {{seconds}} seconds ({{attempt}}/3) …",
+    "toolResultUnknown": "Execution was interrupted; its result is unknown. Check the current file or process state. Do not automatically repeat the call.",
+    "toolNotExecuted": "This tool call was cancelled before execution.",
+    "connectionInterrupted": "The previous server connection was interrupted.",
+    "toolLimitShort": "Tool limit reached.",
+    "aborted": "Response stopped."
+  },
+  "errors": {
+    "locale": "Invalid content language.",
+    "answerRequired": "An answer is required.",
+    "questionMissing": "Question not found.",
+    "questionAnswered": "This question has already been answered.",
+    "optionInvalid": "This answer option does not belong to the question.",
+    "contentProvenance": "Invalid learning content provenance.",
+    "conceptList": "Invalid concept list.",
+    "projectTask": "Invalid project task.",
+    "projectChecklist": "Invalid project checklist.",
+    "projectPackage": "Invalid project package (format 1, at most 50 files / 3 MiB of JSON).",
+    "projectFileType": "Only approved source files without links are allowed.",
+    "projectPaths": "Duplicate or conflicting file paths in the package.",
+    "projectManifest": "The file manifest does not match or exceeds 2 MiB.",
+    "projectActiveFile": "The active file is missing from the package.",
+    "projectTestEntry": "The test suite entry file is missing from the package.",
+    "projectSource": "Specify exactly one template or project package.",
+    "projectTemplate": "Project template not found.",
+    "projectOperation": "This operation belongs to a different package.",
+    "projectInterrupted": "The import was interrupted or the session was deleted. Start a new import.",
+    "projectSelection": "Select 1–50 approved source files explicitly.",
+    "projectFileChanged": "A source file has changed. Reload it.",
+    "projectSize": "The package exceeds 2 MiB of source code.",
+    "projectTaskChanged": "The task has changed. Reload it.",
+    "projectExportChanged": "A source file changed during export.",
+    "profileCorrupt": "The language profile is damaged. The original file is preserved.",
+    "profileDisabled": "The learning profile is disabled.",
+    "profileEvidence": "Different learning evidence uses the same ID.",
+    "profileAssessment": "Invalid self-assessment.",
+    "profileTimeZone": "Invalid time zone.",
+    "profileGoal": "The learning goal is too long.",
+    "profileIntervals": "Invalid intervals.",
+    "reviewOutdated": "This review is no longer current.",
+    "reviewAction": "Invalid review action.",
+    "messageInvalid": "Invalid message.",
+    "contextAction": "Invalid context action.",
+    "turnBusy": "A response is already running for this session.",
+    "retryInvalid": "This response cannot be continued.",
+    "answerProcessed": "The answer has already been processed.",
+    "messageRequired": "A message is required.",
+    "toolRequest": "The model returned an unreadable tool call. Continue with a model that supports tools.",
+    "responseLimit": "The model reached its response limit. The partial response is saved; you can continue it.",
+    "responseEmpty": "The model returned no visible response. Send again or choose another model.",
+    "stopTurn": "Stop the current response first.",
+    "messageMissing": "Message not found.",
+    "userMessageMissing": "There is no user message.",
+    "reviewUnavailable": "There is no verified offline exercise for this programming language yet.",
+    "reviewTask": "The review task does not match.",
+    "reviewTests": "The test results are no longer current.",
+    "contextModelChanged": "The model or context size changed during the response. Send again; saved steps are preserved.",
+    "contextTooLarge": "The current request, required recovery data and tools do not fit in the context window. Load a larger context window in LM Studio or shorten the current message.",
+    "contextLinks": "Context links are not allowed.",
+    "contextSize": "LM Studio returned an invalid context size. Reload the model.",
+    "contextTokens": "Exact token measurement is unavailable. Check the model and chat template in LM Studio.",
+    "resultOffset": "Invalid result offset.",
+    "resultMissing": "The tool result does not belong to this session or has been deleted.",
+    "resultEnd": "The offset is beyond the end of the result.",
+    "resultReferenceSize": "The context window is too small for a result reference.",
+    "resultExcerptSize": "The context window is too small for the next result excerpt.",
+    "conceptUnknown": "Unknown concept: {{value}}",
+    "contextTokenConnection": "Exact token measurement is unavailable. Check the model and connection in LM Studio: {{error}}",
+    "contextTemplate": "The prompt template could not be verified. Reload the model in LM Studio: {{error}}",
+    "openAIModel": "Select an OpenAI model ID.",
+    "lmStudioModel": "Load and select a model in LM Studio."
+  },
+  "context": {
+    "cacheNotSaved": "The context cache could not be saved. The full chat is saved; it will be compressed again after restarting.",
+    "consolidating": "Merging older summaries …",
+    "digest": "Older context details were replaced with a size-limited digest. Originals are preserved in the chat.",
+    "compacting": "Compressing context … {{chunk}}/{{total}}",
+    "summaryFailed": "Context summary failed: {{error}}",
+    "structuralDigest": "A context section was preserved as a structural digest; older details remain available in the full chat."
+  },
+  "projectExportLimitations": "Source code and the visible task; no runtime environment or full application backup. This is not an atomic snapshot relative to external programs.",
+  "profileContext": "\n[SHARED LEARNING PROFILE – EVIDENCE, NOT A GUARANTEE OF COMPETENCE]\n{{content}}\nGroups across programming languages may suggest analogies. Prerequisites are not automatically demonstrated."
+}

@@ -6,6 +6,7 @@ import {
   assertSessionWritable,
 } from "./storage.js";
 import * as local from "./localProcesses.js";
+import { describeProcess } from "./processReasons.js";
 import {
   runnerEnabled,
   runnerRequest,
@@ -28,6 +29,12 @@ export async function getRuntimes(probeFn) {
       reason: enabled
         ? runtime.reason
         : "Diese Sprache ist in den Einstellungen deaktiviert.",
+      ...(!enabled
+        ? {
+            reasonKey: "serverFeature:process.languageDisabled",
+            reasonParams: {},
+          }
+        : {}),
     };
   });
 }
@@ -49,12 +56,14 @@ export async function startProcess(options) {
       "KI-Terminalbefehle sind deaktiviert.",
       403,
       "TERMINAL_DISABLED",
+      { messageKey: "serverFeature:process.aiDisabled", params: {} },
     );
   if (options.file && !settings.allowedLanguages.includes(options.language))
     throw new AppError(
       "Diese Sprache ist in den Einstellungen deaktiviert.",
       400,
       "RUNTIME_MISSING",
+      { messageKey: "serverFeature:process.languageDisabled", params: {} },
     );
   const id = options.idempotencyId || randomUUID();
   const payload = {
@@ -79,11 +88,13 @@ export async function startProcess(options) {
       : {}),
   };
   try {
-    return await runnerRequest("/v1/jobs", {
-      method: "POST",
-      body: payload,
-      timeout: 15000,
-    });
+    return describeProcess(
+      await runnerRequest("/v1/jobs", {
+        method: "POST",
+        body: payload,
+        timeout: 15000,
+      }),
+    );
   } catch (error) {
     if (error.code !== "RUNNER_UNAVAILABLE") throw error;
     try {
@@ -96,23 +107,26 @@ export async function startProcess(options) {
       body: payload,
       timeout: 15000,
       retries: 1,
-    });
+    }).then(describeProcess);
   }
 }
 export function readProcess(id, sessionId, offset = 0) {
   if (!runnerEnabled()) return local.readProcess(id, sessionId, offset);
   if (!Number.isInteger(offset) || offset < 0)
-    throw new AppError("Ungültige Ausgabeposition.");
+    throw new AppError("Ungültige Ausgabeposition.", undefined, undefined, {
+      messageKey: "serverFeature:process.invalidOffset",
+      params: {},
+    });
   return runnerRequest(
     `/v1/jobs/${encodeURIComponent(id)}/output?sessionId=${encodeURIComponent(sessionId)}&offset=${offset}`,
-  );
+  ).then(describeProcess);
 }
 export function inputProcess(id, sessionId, input) {
   return runnerEnabled()
     ? runnerRequest(`/v1/jobs/${encodeURIComponent(id)}/input`, {
         method: "POST",
         body: { sessionId, input },
-      })
+      }).then(describeProcess)
     : local.inputProcess(id, sessionId, input);
 }
 export function stopProcess(id, sessionId) {
@@ -121,7 +135,7 @@ export function stopProcess(id, sessionId) {
         method: "DELETE",
         body: { sessionId },
         timeout: 15000,
-      })
+      }).then(describeProcess)
     : local.stopProcess(id, sessionId);
 }
 export async function waitProcess(id, sessionId) {

@@ -1,0 +1,123 @@
+{
+  "questions": {
+    "onboarding": {
+      "question": "Möchtest du einen Lernplan erstellen?",
+      "options": {
+        "create_plan": "Ja, bitte",
+        "start_directly": "Direkt anfangen"
+      }
+    },
+    "plan-completed": {
+      "question": "Du hast alle Themen abgeschlossen. Möchtest du mit einem weiterführenden Lernplan fortfahren?",
+      "options": {
+        "continue_plan": "Ja, fortsetzen",
+        "finish_today": "Für heute abschließen"
+      }
+    }
+  },
+  "concepts": {
+    "variables": "Variablen",
+    "conditions": "Bedingungen",
+    "loops": "Schleifen",
+    "lists": "Listen",
+    "functions": "Funktionen",
+    "strings": "Zeichenketten"
+  },
+  "review": {
+    "title": "Freiwillige Wiederholung: {{concept}}",
+    "reason": "Freiwillige Wiederholung nach zeitlichem Abstand.",
+    "contract": "Datei: main.py; Funktion: {{function}}(value). Die Tests prüfen Verhalten, nicht die verwendete Syntax.",
+    "case": "Beispiel {{number}}",
+    "variables": "Gib das Doppelte der Zahl zurück.",
+    "conditions": "Gib zurück, ob die Zahl größer als null ist.",
+    "loops": "Addiere mit einer Schleife die Zahlen von 1 bis n (einschließlich).",
+    "lists": "Gib das erste Listenelement zurück, bei einer leeren Liste None.",
+    "functions": "Schreibe eine Funktion, die das Quadrat der Zahl zurückgibt.",
+    "strings": "Gib die Zeichenkette in umgekehrter Reihenfolge zurück."
+  },
+  "tutor": {
+    "toolLimit": "Das Tool-Limit wurde erreicht. Die ausgeführten Schritte sind gespeichert. Du kannst die Arbeit mit einer weiteren Nachricht fortsetzen.",
+    "noTools": "Dieses Modell unterstützt keine Werkzeuge. Datei- und Terminalaktionen stehen dem Tutor damit nicht zur Verfügung.",
+    "retry": "LM Studio wurde unterbrochen. Neuer Versuch in {{seconds}} Sekunden ({{attempt}}/3) …",
+    "toolResultUnknown": "Die Ausführung wurde unterbrochen; ihr Ergebnis ist unbekannt. Aktuellen Datei-/Prozesszustand prüfen, den Aufruf nicht automatisch wiederholen.",
+    "toolNotExecuted": "Dieser Werkzeugaufruf wurde vor der Ausführung abgebrochen.",
+    "connectionInterrupted": "Die vorherige Serververbindung wurde unterbrochen.",
+    "toolLimitShort": "Tool-Limit erreicht.",
+    "aborted": "Antwort abgebrochen."
+  },
+  "errors": {
+    "locale": "Ungültige Inhaltssprache.",
+    "answerRequired": "Eine Antwort ist erforderlich.",
+    "questionMissing": "Frage nicht gefunden.",
+    "questionAnswered": "Diese Frage wurde bereits beantwortet.",
+    "optionInvalid": "Diese Antwortoption gehört nicht zur gestellten Frage.",
+    "contentProvenance": "Ungültige Herkunftsangaben für Lerninhalte.",
+    "conceptList": "Ungültige Konzeptliste.",
+    "projectTask": "Ungültige Projektaufgabe.",
+    "projectChecklist": "Ungültige Projektprüfliste.",
+    "projectPackage": "Ungültiges Projektpaket (Format 1, höchstens 50 Dateien / 3 MiB JSON).",
+    "projectFileType": "Nur freigegebene Quelltextdateien ohne Links sind erlaubt.",
+    "projectPaths": "Doppelte oder kollidierende Dateipfade im Paket.",
+    "projectManifest": "Dateimanifest stimmt nicht oder überschreitet 2 MiB.",
+    "projectActiveFile": "Die aktive Datei fehlt im Paket.",
+    "projectTestEntry": "Der Testsuite-Einstieg fehlt im Paket.",
+    "projectSource": "Genau eine Vorlage oder ein Projektpaket angeben.",
+    "projectTemplate": "Projektvorlage nicht gefunden.",
+    "projectOperation": "Diese Operation gehört zu einem anderen Paket.",
+    "projectInterrupted": "Der Import wurde unterbrochen oder die Session gelöscht. Bitte einen neuen Import starten.",
+    "projectSelection": "Bitte 1–50 freigegebene Quelldateien ausdrücklich auswählen.",
+    "projectFileChanged": "Eine Quelldatei wurde verändert. Bitte neu laden.",
+    "projectSize": "Das Paket überschreitet 2 MiB Quelltext.",
+    "projectTaskChanged": "Die Aufgabe wurde verändert. Bitte neu laden.",
+    "projectExportChanged": "Quelldatei während des Exports verändert.",
+    "profileCorrupt": "Sprachprofil ist beschädigt. Die Originaldatei bleibt erhalten.",
+    "profileDisabled": "Lernprofil ist deaktiviert.",
+    "profileEvidence": "Abweichender Lernbeleg mit gleicher ID.",
+    "profileAssessment": "Ungültige Selbsteinschätzung.",
+    "profileTimeZone": "Ungültige Zeitzone.",
+    "profileGoal": "Lernziel zu lang.",
+    "profileIntervals": "Ungültige Intervalle.",
+    "reviewOutdated": "Wiederholung nicht mehr aktuell.",
+    "reviewAction": "Ungültige Wiederholungsaktion.",
+    "messageInvalid": "Ungültige Nachricht.",
+    "contextAction": "Ungültige Kontextaktion.",
+    "turnBusy": "Für diese Session läuft bereits eine Antwort.",
+    "retryInvalid": "Diese Antwort kann nicht fortgesetzt werden.",
+    "answerProcessed": "Antwort bereits verarbeitet.",
+    "messageRequired": "Eine Nachricht ist erforderlich.",
+    "toolRequest": "Das Modell hat einen unlesbaren Werkzeugaufruf geliefert. Bitte mit einem werkzeugfähigen Modell fortsetzen.",
+    "responseLimit": "Das Modell hat sein Antwortlimit erreicht. Die Teilantwort ist gespeichert; du kannst sie fortsetzen.",
+    "responseEmpty": "Das Modell hat keine sichtbare Antwort geliefert. Bitte erneut senden oder ein anderes Modell auswählen.",
+    "stopTurn": "Bitte die laufende Antwort zuerst stoppen.",
+    "messageMissing": "Nachricht nicht gefunden.",
+    "userMessageMissing": "Keine Nutzer-Nachricht vorhanden.",
+    "reviewUnavailable": "Für diese Sprache gibt es noch keine geprüfte Offlineaufgabe.",
+    "reviewTask": "Wiederholungsaufgabe stimmt nicht überein.",
+    "reviewTests": "Teststand ist nicht aktuell.",
+    "contextModelChanged": "Modell oder Kontextgröße wurde während der Antwort geändert. Bitte erneut senden; gespeicherte Schritte bleiben erhalten.",
+    "contextTooLarge": "Der aktuelle Auftrag, notwendige Wiederherstellungsdaten und Werkzeuge passen nicht ins Kontextfenster. In LM Studio ein größeres Kontextfenster laden oder die aktuelle Nachricht kürzen.",
+    "contextLinks": "Kontext-Verknüpfungen sind nicht erlaubt.",
+    "contextSize": "LM Studio liefert keine gültige Kontextgröße. Modell erneut laden.",
+    "contextTokens": "Genaue Tokenprüfung nicht verfügbar. Modell und Chattemplate in LM Studio prüfen.",
+    "resultOffset": "Ungültige Ergebnisposition.",
+    "resultMissing": "Werkzeugergebnis gehört nicht zu dieser Session oder wurde gelöscht.",
+    "resultEnd": "Die Position liegt hinter dem Ergebnis.",
+    "resultReferenceSize": "Das Kontextfenster ist zu klein für eine Ergebnisreferenz.",
+    "resultExcerptSize": "Das Kontextfenster ist zu klein für den nächsten Ergebnisausschnitt.",
+    "conceptUnknown": "Unbekanntes Konzept: {{value}}",
+    "contextTokenConnection": "Genaue Tokenprüfung nicht verfügbar. Modell und Verbindung in LM Studio prüfen: {{error}}",
+    "contextTemplate": "Prompttemplate konnte nicht geprüft werden. Modell in LM Studio erneut laden: {{error}}",
+    "openAIModel": "Bitte eine OpenAI-Modell-ID auswählen.",
+    "lmStudioModel": "Bitte in LM Studio ein Modell laden und auswählen."
+  },
+  "context": {
+    "cacheNotSaved": "Der Kontextcache konnte nicht gespeichert werden. Der vollständige Chat ist gespeichert; nach Neustart wird erneut komprimiert.",
+    "consolidating": "Ältere Zusammenfassungen werden zusammengeführt …",
+    "digest": "Ältere Kontextdetails wurden durch einen begrenzten Digest ersetzt. Originale bleiben im Chat erhalten.",
+    "compacting": "Kontext wird komprimiert … {{chunk}}/{{total}}",
+    "summaryFailed": "Kontextzusammenfassung fehlgeschlagen: {{error}}",
+    "structuralDigest": "Ein Kontextabschnitt wurde als struktureller Digest erhalten; ältere Details sind im vollständigen Chat nachlesbar."
+  },
+  "projectExportLimitations": "Quelltext und sichtbare Aufgabe; keine Ausführungsumgebung oder vollständige App-Sicherung. Keine atomare Aufnahme gegenüber externen Programmen.",
+  "profileContext": "\n[FREIGEGEBENES LERNPROFIL – BELEGE, KEINE KOMPETENZGARANTIE]\n{{content}}\nSprachübergreifende Gruppen sind mögliche Analogien. Voraussetzungen sind nicht automatisch belegt."
+}

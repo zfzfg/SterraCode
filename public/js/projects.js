@@ -1,3 +1,4 @@
+import { t, getLocale, getFormatLocale } from "./i18n.js";
 import { api, workspaceURL, sessionURL } from "./api.js";
 import { state } from "./state.js";
 import { node, toast, formDialog } from "./ui.js";
@@ -11,7 +12,7 @@ function dialog(title) {
   const heading = node("h2", "", title);
   heading.id = "learning-dialog-title";
   box.setAttribute("aria-labelledby", heading.id);
-  const close = node("button", "", "Schließen");
+  const close = node("button", "", t("features:shared.close"));
   close.onclick = () => box.close();
   box.append(heading, close);
   document.body.append(box);
@@ -44,40 +45,71 @@ async function finishImport(box, session, sourceId) {
 }
 export async function openProjects() {
   const sourceId = state.session?.id;
-  const box = dialog("Projektwerkstatt");
-  const status = node("p", "", "Vorlagen werden geladen …");
+  const box = dialog(t("features:projects.title"));
+  const status = node("p", "", t("features:projects.loading"));
   status.setAttribute("role", "status");
   box.append(status);
   try {
     const templates = await api("/api/projects/templates");
     if (!box.isConnected) return;
-    status.textContent =
-      "Vorlagen und Pakete öffnen eine neue Session. Es werden keine Programme installiert oder gestartet.";
-    for (const t of templates) {
+    status.textContent = t("features:projects.help");
+    for (const template of templates) {
       const card = node("section", "project-card");
       card.append(
-        node("h3", "", t.title),
-        node("p", "", t.goal),
-        node("p", "", `Voraussetzungen: ${t.prerequisites.join(", ")}`),
-        node("p", "", `Erster Meilenstein: ${t.milestone}`),
-        node("p", "", `${t.runtime} · Funktionen: ${t.features.join(", ")}`),
+        node("h3", "", template.title),
+        node("p", "", template.goal),
+        node(
+          "p",
+          "",
+          t("features:projects.prerequisites", {
+            p1: template.prerequisites.join(", "),
+          }),
+        ),
+        node(
+          "p",
+          "",
+          t("features:projects.milestone", { p1: template.milestone }),
+        ),
+        node(
+          "p",
+          "",
+          t("features:projects.features", {
+            p1: template.runtime,
+            p2: template.features.join(", "),
+          }),
+        ),
         node(
           "p",
           "muted",
-          `${t.origin} · Version ${t.version} · ${t.license} · Dateien: ${t.files.join(", ")}`,
+          t("features:projects.origin", {
+            p1: template.origin,
+            p2: template.version,
+            p3: template.license,
+            p4: template.files.join(", "),
+          }),
         ),
       );
       const list = node("ul");
-      for (const item of t.checklist) list.append(node("li", "", item));
-      const start = node("button", "", `${t.title} starten`);
+      for (const item of template.checklist) list.append(node("li", "", item));
+      const start = node(
+        "button",
+        "",
+        t("features:projects.start", { p1: template.title }),
+      );
       const operationId = randomUUID();
+      const contentLocale = getLocale();
       start.onclick = async () => {
         start.disabled = true;
         try {
           await flush();
           const session = await api("/api/projects/import", {
             method: "POST",
-            body: { templateId: t.id, operationId },
+            body: {
+              templateId: template.id,
+              operationId,
+              contentLocale,
+              tutorLocale: contentLocale,
+            },
           });
           await finishImport(box, session, sourceId);
         } catch (e) {
@@ -88,24 +120,17 @@ export async function openProjects() {
       card.append(list, start);
       box.append(card);
     }
-    const label = node(
-      "label",
-      "",
-      "Projektpaket auswählen (JSON, maximal 3 MiB)",
-    );
+    const label = node("label", "", t("features:projects.selectPackage"));
     const input = node("input");
     input.type = "file";
     input.accept = ".json,application/json";
     label.append(input);
     const review = node("p");
-    const importButton = node(
-      "button",
-      "",
-      "Paket in neue Session importieren",
-    );
+    const importButton = node("button", "", t("features:projects.import"));
     importButton.disabled = true;
     let pkg,
       operationId,
+      contentLocale,
       generation = 0;
     input.onchange = async () => {
       const token = ++generation;
@@ -115,7 +140,7 @@ export async function openProjects() {
         const file = input.files[0];
         if (!file) return;
         if (file.size > 3 * 1024 * 1024)
-          throw new Error("Das Paket ist größer als 3 MiB.");
+          throw new Error(t("features:projects.tooLarge"));
         const candidate = JSON.parse(await file.text());
         if (token !== generation || !box.isConnected) return;
         if (
@@ -124,10 +149,16 @@ export async function openProjects() {
           !Array.isArray(candidate.files) ||
           candidate.files.some((f) => typeof f?.path !== "string")
         )
-          throw new Error("Kein unterstütztes SterraCode-Projektpaket.");
-        review.textContent = `${candidate.title} · ${candidate.language} · Dateien: ${candidate.files.map((f) => f.path).join(", ")} · Aufgabe: ${candidate.task?.title || "keine"}. Das Paket wird serverseitig auf Pfade, Umfang und Manifest geprüft.`;
+          throw new Error(t("features:projects.unsupported"));
+        review.textContent = t("features:projects.packagePreview", {
+          p1: candidate.title,
+          p2: candidate.language,
+          p3: candidate.files.map((f) => f.path).join(", "),
+          p4: candidate.task?.title || t("features:projects.noTask"),
+        });
         pkg = candidate;
         operationId = randomUUID();
+        contentLocale = getLocale();
         importButton.disabled = false;
       } catch (e) {
         if (token === generation) review.textContent = e.message;
@@ -140,7 +171,12 @@ export async function openProjects() {
         await flush();
         const session = await api("/api/projects/import", {
           method: "POST",
-          body: { package: pkg, operationId },
+          body: {
+            package: pkg,
+            operationId,
+            contentLocale,
+            tutorLocale: contentLocale,
+          },
         });
         await finishImport(box, session, sourceId);
       } catch (e) {
@@ -157,23 +193,17 @@ export async function openProjects() {
 }
 
 export async function openExport() {
-  if (!state.session) throw new Error("Bitte zuerst eine Session öffnen.");
+  if (!state.session) throw new Error(t("features:shared.openSession"));
   await flush();
   const sessionId = state.session.id;
-  const box = dialog("Projekt exportieren");
-  box.append(
-    node(
-      "p",
-      "",
-      "Wähle den Quelltext bewusst aus. Sichtbare Aufgabe und Tests werden mitgenommen. Profile, Journal, Zugangsdaten, Backups und Ausführungsartefakte gehören nicht zum Paket. Prüfe deine Quelldateien vor dem Weitergeben auf persönliche Inhalte.",
-    ),
-  );
+  const box = dialog(t("features:projects.export"));
+  box.append(node("p", "", t("features:projects.exportHelp")));
   try {
     const files = await api(`${workspaceURL(sessionId)}/project-files`);
     if (!box.isConnected || state.session?.id !== sessionId) return;
     const inputs = [];
     const fieldset = node("fieldset");
-    fieldset.append(node("legend", "", "Quelldateien (höchstens 50 / 2 MiB)"));
+    fieldset.append(node("legend", "", t("features:projects.sources")));
     for (const p of files) {
       const label = node("label", "package-file");
       const input = node("input");
@@ -183,18 +213,18 @@ export async function openExport() {
       fieldset.append(label);
       inputs.push(input);
     }
-    const save = node("button", "", "Ausgewählte Dateien exportieren");
+    const save = node("button", "", t("features:projects.exportSelected"));
     const status = node("p");
     status.setAttribute("role", "status");
     save.onclick = async () => {
       save.disabled = true;
       try {
         if (state.session?.id !== sessionId)
-          throw new Error("Die Session wurde gewechselt.");
+          throw new Error(t("features:projects.sessionChanged"));
         await flush();
         const paths = inputs.filter((i) => i.checked).map((i) => i.value);
         if (!paths.length || paths.length > 50)
-          throw new Error("Bitte 1–50 Dateien auswählen.");
+          throw new Error(t("features:projects.selectFiles"));
         const session = await api(sessionURL(sessionId));
         const expectedVersions = {};
         for (const p of paths)
@@ -215,7 +245,7 @@ export async function openExport() {
         });
         if (!box.isConnected || state.session?.id !== sessionId) return;
         download(pkg);
-        status.textContent = "Projektpaket erstellt.";
+        status.textContent = t("features:projects.created");
       } catch (e) {
         if (box.isConnected) status.textContent = e.message;
       } finally {
@@ -229,27 +259,15 @@ export async function openExport() {
 }
 
 export async function openJournal() {
-  if (!state.session) throw new Error("Bitte zuerst eine Session öffnen.");
+  if (!state.session) throw new Error(t("features:shared.openSession"));
   const sessionId = state.session.id;
-  const box = dialog("Lernjournal");
-  box.append(
-    node(
-      "p",
-      "muted",
-      "Deine freiwilligen persönlichen Notizen. Leerer Text entfernt einen Eintrag.",
-    ),
-  );
+  const box = dialog(t("features:projects.journal"));
+  box.append(node("p", "muted", t("features:projects.journalHelp")));
   try {
     const entries = await api(`${workspaceURL(sessionId)}/journal`);
     if (!box.isConnected || state.session?.id !== sessionId) return;
     if (!entries.some((e) => e.text))
-      box.append(
-        node(
-          "p",
-          "",
-          "Noch keine Einträge. Du kannst direkt bei einer Aufgabe einen Satz festhalten.",
-        ),
-      );
+      box.append(node("p", "", t("features:projects.noJournal")));
     for (const entry of entries.filter((e) => e.text).reverse()) {
       const card = node("section", "project-card");
       card.append(
@@ -257,19 +275,25 @@ export async function openJournal() {
         node(
           "p",
           "muted",
-          `Persönlicher Eintrag · Aufgabenstand ${entry.taskVersion} · ${new Date(entry.updatedAt).toLocaleString("de-DE")}${entry.testRunId ? ` · Testlauf ${entry.testRunId}` : ""}`,
+          t("features:projects.journalDetails", {
+            p1: entry.taskVersion,
+            p2: new Date(entry.updatedAt).toLocaleString(getFormatLocale()),
+            p3: entry.testRunId
+              ? t("features:projects.testRun", { p1: entry.testRunId })
+              : "",
+          }),
         ),
         node("p", "", entry.text),
       );
-      const edit = node("button", "", "Eintrag bearbeiten");
+      const edit = node("button", "", t("features:projects.editEntry"));
       edit.onclick = async () => {
         box.close();
         await formDialog({
-          title: "Journaleintrag bearbeiten",
+          title: t("features:projects.editJournal"),
           fields: [
             {
               name: "text",
-              label: "Persönliche Reflexion",
+              label: t("features:projects.reflection"),
               type: "textarea",
               maxLength: 2000,
               value: entry.text,

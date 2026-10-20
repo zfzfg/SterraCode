@@ -1,3 +1,4 @@
+import { t, translateMessage } from "./i18n.js";
 import { explainError } from "./errorCatalog.js";
 import { state } from "./state.js";
 import { node, toast } from "./ui.js";
@@ -8,7 +9,7 @@ export function errorCard(data) {
   const sessionId = data.sessionId || state.session?.id;
   const info = explainError(data);
   const card = node("section", "error-card");
-  card.setAttribute("aria-label", "Fehlerkarte");
+  card.setAttribute("aria-label", t("features:errorCards.label"));
   card.append(
     node("strong", "", `${info.category}: ${info.title}`),
     node("p", "", info.explanation),
@@ -18,11 +19,18 @@ export function errorCard(data) {
       node(
         "small",
         "muted",
-        `Lauf: ${data.runId}${data.historical ? " · gespeicherter Stand; Editor zeigt aktuelle Datei" : ""}`,
+        t("features:errorCards.run", {
+          p1: data.runId,
+          p2: data.historical ? t("features:errorCards.historical") : "",
+        }),
       ),
     );
   if (data.file && Number.isInteger(data.line) && data.line > 0) {
-    const jump = node("button", "", `Zur Zeile: ${data.file}:${data.line}`);
+    const jump = node(
+      "button",
+      "",
+      t("features:errorCards.jump", { p1: data.file, p2: data.line }),
+    );
     jump.onclick = async () => {
       if (state.session?.id !== sessionId) return;
       try {
@@ -40,11 +48,17 @@ export function errorCard(data) {
   }
   const original = node("details");
   original.append(
-    node("summary", "", "Originalmeldung"),
+    node("summary", "", t("features:errorCards.original")),
     node(
       "pre",
       "",
-      data.message || data.reason || data.kind || "Keine weitere Meldung.",
+      translateMessage(
+        data,
+        data.message ||
+          data.reason ||
+          data.kind ||
+          t("features:errorCards.noMessage"),
+      ),
     ),
   );
   card.append(original);

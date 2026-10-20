@@ -16,6 +16,7 @@ import {
 } from "./storage.js";
 import { readFile, resolvePath } from "./workspace.js";
 import { runTrace, validateTrace } from "../../runner/tracer/adapter.js";
+import { reasonMetadata } from "./processReasons.js";
 
 export const MAX_OUTPUT = 1024 * 1024;
 const jobs = new Map();
@@ -92,7 +93,11 @@ export async function getRuntimes(probeFn = probe) {
             available: enabled,
             command,
             version: result.output?.trim() || "",
-            prefix: command === "py" ? ["-3"] : [],
+            // All process output is decoded as UTF-8, including Windows pipes.
+            prefix: [
+              ...(command === "py" ? ["-3"] : []),
+              ...(language === "python" ? ["-X", "utf8"] : []),
+            ],
             sdkMajor:
               language === "csharp"
                 ? Number(result.output.match(/\d+/)?.[0])
@@ -100,6 +105,12 @@ export async function getRuntimes(probeFn = probe) {
             reason: enabled
               ? ""
               : "Diese Sprache ist in den Einstellungen deaktiviert.",
+            ...(!enabled
+              ? {
+                  reasonKey: "serverFeature:process.languageDisabled",
+                  reasonParams: {},
+                }
+              : {}),
           };
         }
       }
@@ -109,6 +120,15 @@ export async function getRuntimes(probeFn = probe) {
         enabled: settings.allowedLanguages.includes(language),
         available: false,
         reason: `Laufzeit fehlt: ${language === "csharp" ? ".NET SDK" : language === "java" ? "JDK mit java und javac" : specs[language].map((s) => s[0]).join(" / ")} installieren und Anwendung neu prüfen.`,
+        reasonKey: "serverFeature:process.runtimeMissing",
+        reasonParams: {
+          runtime:
+            language === "csharp"
+              ? ".NET SDK"
+              : language === "java"
+                ? "JDK (java, javac)"
+                : specs[language].map((s) => s[0]).join(" / "),
+        },
       };
     }),
   );
@@ -179,7 +199,12 @@ async function launch(
     child.stdout.on("data", (d) => append(job, d));
     child.stderr.on("data", (d) => append(job, d));
     child.on("error", (error) => {
-      append(job, Buffer.from(`\nStart fehlgeschlagen: ${error.message}\n`));
+      job.systemMessages.push({
+        message: `Start fehlgeschlagen: ${error.message}`,
+        messageKey: "serverFeature:process.startFailed",
+        params: { detail: error.message },
+        outputOffset: job.output.length,
+      });
     });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -189,7 +214,11 @@ async function launch(
   });
 }
 async function sourceFiles(root, extension, depth = 0) {
-  if (depth > 20) throw new AppError("Projektstruktur ist zu tief.");
+  if (depth > 20)
+    throw new AppError("Projektstruktur ist zu tief.", undefined, undefined, {
+      messageKey: "serverFeature:process.projectTooDeep",
+      params: {},
+    });
   const result = [];
   for (const e of await fs.readdir(root, { withFileTypes: true })) {
     if (
@@ -202,7 +231,11 @@ async function sourceFiles(root, extension, depth = 0) {
         ...(await sourceFiles(path.join(root, e.name), extension, depth + 1)),
       );
     else if (e.name.endsWith(extension)) result.push(path.join(root, e.name));
-    if (result.length > 1000) throw new AppError("Zu viele Quelldateien.");
+    if (result.length > 1000)
+      throw new AppError("Zu viele Quelldateien.", undefined, undefined, {
+        messageKey: "serverFeature:process.tooManySources",
+        params: {},
+      });
   }
   return result;
 }
@@ -261,7 +294,12 @@ async function runCode(job, root, file, language, runtime, settings) {
     }
     if (language === "csharp") {
       if (!runtime.sdkMajor || runtime.sdkMajor < 6)
-        throw new AppError("Ein .NET SDK ab Version 6 wird benötigt.");
+        throw new AppError(
+          "Ein .NET SDK ab Version 6 wird benötigt.",
+          undefined,
+          undefined,
+          { messageKey: "serverFeature:process.dotnetSdk", params: {} },
+        );
       const projects = await sourceFiles(root, ".csproj");
       let project = projects[0];
       if (!project) {
@@ -284,7 +322,12 @@ async function runCode(job, root, file, language, runtime, settings) {
         n.endsWith(".runtimeconfig.json"),
       );
       if (!runtimeConfig)
-        throw new AppError("Keine ausführbare .NET-Anwendung erzeugt.");
+        throw new AppError(
+          "Keine ausführbare .NET-Anwendung erzeugt.",
+          undefined,
+          undefined,
+          { messageKey: "serverFeature:process.dotnetExecutable", params: {} },
+        );
       return await run(runtime.command, [
         path.join(build, runtimeConfig.replace(".runtimeconfig.json", ".dll")),
       ]);
@@ -307,15 +350,15 @@ export async function startProcess({
   const root = await getWorkspacePath(sessionId);
   const settings = await getSettings();
   if (test) {
-    test = validateTest(test, (m) => {
-      throw new AppError(m);
+    test = validateTest(test, (m, metadata = {}) => {
+      throw new AppError(m, 400, "INVALID_REQUEST", metadata);
     });
     file = test.suite.entry.path;
     language = "python";
   }
   if (trace) {
-    trace = validateTrace(trace, (message) => {
-      throw new AppError(message);
+    trace = validateTrace(trace, (message, metadata = {}) => {
+      throw new AppError(message, 400, "INVALID_REQUEST", metadata);
     });
     file = trace.entry;
     language = "python";
@@ -337,6 +380,7 @@ export async function startProcess({
         "Die Auftrags-ID wurde bereits mit anderen Daten verwendet.",
         409,
         "IDEMPOTENCY_CONFLICT",
+        { messageKey: "serverFeature:process.idempotencyConflict", params: {} },
       );
     return snapshot(previous);
   }
@@ -345,11 +389,14 @@ export async function startProcess({
       "KI-Terminalbefehle sind deaktiviert.",
       403,
       "TERMINAL_DISABLED",
+      { messageKey: "serverFeature:process.aiDisabled", params: {} },
     );
   if ([...jobs.values()].some((j) => j.sessionId === sessionId && !j.exited))
     throw new AppError(
       "In dieser Session läuft bereits ein Prozess. Bitte zuerst stoppen.",
       409,
+      undefined,
+      { messageKey: "serverFeature:process.alreadyRunningStop", params: {} },
     );
   let runtime;
   if (file) {
@@ -359,13 +406,23 @@ export async function startProcess({
         runtime?.reason || "Sprache nicht unterstützt.",
         400,
         "RUNTIME_MISSING",
+        {
+          messageKey:
+            runtime?.reasonKey || "serverFeature:process.unsupportedLanguage",
+          params: runtime?.reasonParams || {},
+        },
       );
   } else if (
     typeof command !== "string" ||
     !command.trim() ||
     command.length > 10000
   )
-    throw new AppError("Ein gültiger Befehl ist erforderlich.");
+    throw new AppError(
+      "Ein gültiger Befehl ist erforderlich.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:process.commandRequired", params: {} },
+    );
   await assertSessionWritable(sessionId);
   if (
     (trace || test) &&
@@ -375,9 +432,15 @@ export async function startProcess({
       "Die lokale Ausführung ist ausgelastet.",
       429,
       "RUNNER_BUSY",
+      { messageKey: "serverFeature:process.busy", params: {} },
     );
   if ([...jobs.values()].some((j) => j.sessionId === sessionId && !j.exited))
-    throw new AppError("In dieser Session läuft bereits ein Prozess.", 409);
+    throw new AppError(
+      "In dieser Session läuft bereits ein Prozess.",
+      409,
+      undefined,
+      { messageKey: "serverFeature:process.alreadyRunning", params: {} },
+    );
   const job = {
     id: idempotencyId || randomUUID(),
     request,
@@ -385,6 +448,7 @@ export async function startProcess({
     actor,
     command: command || `${language} ${file}`,
     output: "",
+    systemMessages: [],
     bytes: 0,
     decoder: new StringDecoder("utf8"),
     exited: false,
@@ -422,7 +486,13 @@ export async function startProcess({
                 timeout: settings.executionTimeout,
               });
     } catch (error) {
-      append(job, Buffer.from(`\n${error.message}\n`));
+      job.systemMessages.push({
+        message: error.message,
+        ...(error.messageKey
+          ? { messageKey: error.messageKey, params: error.params || {} }
+          : {}),
+        outputOffset: job.output.length,
+      });
       job.exitCode = -1;
     } finally {
       if (trace || test)
@@ -443,7 +513,10 @@ export async function startProcess({
 function owned(id, sessionId) {
   const job = jobs.get(id);
   if (!job || job.sessionId !== sessionId)
-    throw new AppError("Prozess nicht gefunden.", 404);
+    throw new AppError("Prozess nicht gefunden.", 404, undefined, {
+      messageKey: "serverFeature:process.notFound",
+      params: {},
+    });
   return job;
 }
 function snapshot(job, offset = 0) {
@@ -457,21 +530,36 @@ function snapshot(job, offset = 0) {
     exited: job.exited,
     exitCode: job.exitCode,
     reason: job.reason,
+    ...reasonMetadata(job.reason),
+    systemMessages: job.systemMessages.filter(
+      (message) => message.outputOffset >= offset,
+    ),
     ...(job.testResults === undefined ? {} : { testResults: job.testResults }),
     ...(job.traceData === undefined ? {} : { traceData: job.traceData }),
   };
 }
 export function readProcess(id, sessionId, offset = 0) {
   if (!Number.isInteger(offset) || offset < 0)
-    throw new AppError("Ungültige Ausgabeposition.");
+    throw new AppError("Ungültige Ausgabeposition.", undefined, undefined, {
+      messageKey: "serverFeature:process.invalidOffset",
+      params: {},
+    });
   return snapshot(owned(id, sessionId), offset);
 }
 export function inputProcess(id, sessionId, input) {
   const job = owned(id, sessionId);
   if (job.exited || !job.child?.stdin?.writable)
-    throw new AppError("Der Prozess erwartet keine Eingabe.");
+    throw new AppError(
+      "Der Prozess erwartet keine Eingabe.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:process.notAwaitingInput", params: {} },
+    );
   if (typeof input !== "string" || input.length > 65536)
-    throw new AppError("Ungültige Eingabe.");
+    throw new AppError("Ungültige Eingabe.", undefined, undefined, {
+      messageKey: "serverFeature:process.invalidInput",
+      params: {},
+    });
   job.child.stdin.write(input + "\n");
   return snapshot(job);
 }

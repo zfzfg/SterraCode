@@ -19,6 +19,8 @@ import { isTransientEngineError } from "./context/core/retry.js";
 import { getProfile, profileToPromptText } from "./profileManager.js";
 import { appendStateSnapshot } from "./context/prompt.js";
 import { turnUsage } from "./modelUsage.js";
+import { applicationOption } from "./applicationQuestions.js";
+import { t } from "./i18n.js";
 
 const active = new Map();
 export function abortAllTurns() {
@@ -34,9 +36,19 @@ export function abortTurn(sessionId) {
 export function isActive(sessionId) {
   return active.has(sessionId);
 }
-export async function answerQuestion(sessionId, questionId, answer) {
-  if (typeof answer !== "string" || !answer.trim() || answer.length > 20000)
-    throw new AppError("Eine Antwort ist erforderlich.");
+export async function answerQuestion(sessionId, questionId, answer, optionId) {
+  if (
+    optionId === undefined &&
+    (typeof answer !== "string" || !answer.trim() || answer.length > 20000)
+  )
+    throw new AppError(
+      "Eine Antwort ist erforderlich.",
+      400,
+      "INVALID_REQUEST",
+      {
+        messageKey: "learningContent:errors.answerRequired",
+      },
+    );
   let answerMessage;
   const session = await mutateSession(sessionId, (s) => {
     const q = s.messages.find(
@@ -51,16 +63,40 @@ export async function answerQuestion(sessionId, questionId, answer) {
             }
           })()),
     );
-    if (!q) throw new AppError("Frage nicht gefunden.", 404);
+    if (!q)
+      throw new AppError("Frage nicht gefunden.", 404, "INVALID_REQUEST", {
+        messageKey: "learningContent:errors.questionMissing",
+      });
     const event = q.event || JSON.parse(q.content);
+    if (optionId !== undefined) {
+      const canonical = applicationOption(event, optionId);
+      if (!canonical)
+        throw new AppError(
+          "Diese Antwortoption gehört nicht zur gestellten Frage.",
+          400,
+          "INVALID_REQUEST",
+          {
+            messageKey: "learningContent:errors.optionInvalid",
+          },
+        );
+      answer = canonical;
+    }
     if (event.answer) {
       answerMessage = s.messages.find((m) => m.id === event.answerMessageId);
       if (answerMessage?.content === answer.trim()) return;
-      throw new AppError("Diese Frage wurde bereits beantwortet.", 409);
+      throw new AppError(
+        "Diese Frage wurde bereits beantwortet.",
+        409,
+        "INVALID_REQUEST",
+        {
+          messageKey: "learningContent:errors.questionAnswered",
+        },
+      );
     }
     answerMessage = message("user", answer.trim(), { questionId });
     event.answer = answer.trim();
     event.answerMessageId = answerMessage.id;
+    if (optionId !== undefined) event.answerOptionId = optionId;
     if (q.event) q.event = event;
     else q.content = JSON.stringify(event);
     s.messages.push(answerMessage);
@@ -81,12 +117,18 @@ export async function runTeacher({
   validateSessionId(sessionId);
   validateSessionId(turnId);
   if (typeof userMessage !== "string" || userMessage.length > 50000)
-    throw new AppError("Ungültige Nachricht.");
+    throw new AppError("Ungültige Nachricht.", 400, "INVALID_REQUEST", {
+      messageKey: "learningContent:errors.messageInvalid",
+      params: {},
+    });
   if (
     contextAction !== undefined &&
     !["compact", "usage"].includes(contextAction)
   )
-    throw new AppError("Ungültige Kontextaktion.");
+    throw new AppError("Ungültige Kontextaktion.", 400, "INVALID_REQUEST", {
+      messageKey: "learningContent:errors.contextAction",
+      params: {},
+    });
   const action =
     contextAction ||
     (!existingUserMessageId && !retryOf ? contextCommand(userMessage) : null);
@@ -97,7 +139,10 @@ export async function runTeacher({
       retryOf ||
       (userMessage.trim() && !contextCommand(userMessage)))
   )
-    throw new AppError("Ungültige Kontextaktion.");
+    throw new AppError("Ungültige Kontextaktion.", 400, "INVALID_REQUEST", {
+      messageKey: "learningContent:errors.contextAction",
+      params: {},
+    });
   const controller = new AbortController();
   await serial(`lifecycle:${sessionId}`, async () => {
     await assertSessionWritable(sessionId);
@@ -106,6 +151,7 @@ export async function runTeacher({
         "Für diese Session läuft bereits eine Antwort.",
         409,
         "TURN_BUSY",
+        { messageKey: "learningContent:errors.turnBusy", params: {} },
       );
     active.set(sessionId, controller);
   });
@@ -156,6 +202,10 @@ export async function runTeacher({
                 error: began
                   ? "Die Ausführung wurde unterbrochen; ihr Ergebnis ist unbekannt. Aktuellen Datei-/Prozesszustand prüfen, den Aufruf nicht automatisch wiederholen."
                   : "Dieser Werkzeugaufruf wurde vor der Ausführung abgebrochen.",
+                messageKey: began
+                  ? "learningContent:tutor.toolResultUnknown"
+                  : "learningContent:tutor.toolNotExecuted",
+                params: {},
               }),
               { tool_call_id: call.id, turnId: m.turnId },
             ),
@@ -190,6 +240,13 @@ export async function runTeacher({
           : "Bitte in LM Studio ein Modell laden und auswählen.",
         400,
         "NO_MODEL",
+        {
+          messageKey:
+            settings.provider === "openai"
+              ? "learningContent:errors.openAIModel"
+              : "learningContent:errors.lmStudioModel",
+          params: {},
+        },
       );
     session = await mutateSession(sessionId, (s) => {
       s.turns ||= {};
@@ -199,21 +256,44 @@ export async function runTeacher({
           !previous ||
           !["error", "aborted", "running"].includes(previous.status)
         )
-          throw new AppError("Diese Antwort kann nicht fortgesetzt werden.");
+          throw new AppError(
+            "Diese Antwort kann nicht fortgesetzt werden.",
+            400,
+            "INVALID_REQUEST",
+            { messageKey: "learningContent:errors.retryInvalid", params: {} },
+          );
         if (previous.status === "running") {
           previous.status = "aborted";
           previous.error = "Die vorherige Serververbindung wurde unterbrochen.";
+          previous.errorKey = "learningContent:tutor.connectionInterrupted";
+          previous.errorParams = {};
         }
       } else if (existingUserMessageId) {
         const m = s.messages.find(
           (m) => m.id === existingUserMessageId && m.role === "user",
         );
         if (!m || m.turnId)
-          throw new AppError("Antwort bereits verarbeitet.", 409);
+          throw new AppError(
+            "Antwort bereits verarbeitet.",
+            409,
+            "INVALID_REQUEST",
+            {
+              messageKey: "learningContent:errors.answerProcessed",
+              params: {},
+            },
+          );
         m.turnId = turnId;
       } else if (!action) {
         if (!userMessage.trim())
-          throw new AppError("Eine Nachricht ist erforderlich.");
+          throw new AppError(
+            "Eine Nachricht ist erforderlich.",
+            400,
+            "INVALID_REQUEST",
+            {
+              messageKey: "learningContent:errors.messageRequired",
+              params: {},
+            },
+          );
         s.messages.push(message("user", userMessage.trim(), { turnId }));
       }
       s.turns[turnId] = {
@@ -242,7 +322,7 @@ export async function runTeacher({
       await manager.initialize();
     } catch (error) {
       if (action !== "usage" || controller.signal.aborted) throw error;
-      usage = estimatedUsage(session, settings, error.message);
+      usage = estimatedUsage(session, settings, error.message, error);
     }
     const definitions =
       connection?.model.trainedForToolUse === false
@@ -254,8 +334,9 @@ export async function runTeacher({
           );
     if (connection?.model.trainedForToolUse === false && !action)
       emit("notice", {
-        message:
-          "Dieses Modell unterstützt keine Werkzeuge. Datei- und Terminalaktionen stehen dem Tutor damit nicht zur Verfügung.",
+        message: t(session.tutorLocale, "learningContent:tutor.noTools"),
+        messageKey: "learningContent:tutor.noTools",
+        params: {},
       });
     const profile = settings.crossChatProfileEnabled
       ? profileToPromptText(await getProfile(), session.language)
@@ -275,7 +356,7 @@ export async function runTeacher({
           usage = prepared.contextUsage;
         } catch (error) {
           if (action !== "usage" || controller.signal.aborted) throw error;
-          usage = estimatedUsage(session, settings, error.message);
+          usage = estimatedUsage(session, settings, error.message, error);
         }
       }
       if (action === "usage")
@@ -304,6 +385,7 @@ export async function runTeacher({
         sessionId,
         turnId,
         language: session.language,
+        tutorLocale: session.tutorLocale,
         learningPlan: session.learningPlan,
         signal: controller.signal,
         onProcess: (job) => emit("process", job),
@@ -395,6 +477,8 @@ export async function runTeacher({
                   type: "tool_error",
                   tool: call.function.name,
                   error: "Tool-Limit erreicht.",
+                  messageKey: "learningContent:tutor.toolLimitShort",
+                  params: {},
                 };
               else {
                 controller.signal.throwIfAborted();
@@ -451,7 +535,12 @@ export async function runTeacher({
           ) {
             const wait = [1000, 5000, 15000][retries++];
             emit("notice", {
-              message: `LM Studio wurde unterbrochen. Neuer Versuch in ${wait / 1000} Sekunden (${retries}/3) …`,
+              message: t(session.tutorLocale, "learningContent:tutor.retry", {
+                seconds: wait / 1000,
+                attempt: retries,
+              }),
+              messageKey: "learningContent:tutor.retry",
+              params: { seconds: wait / 1000, attempt: retries },
             });
             await delay(wait, undefined, { signal: controller.signal });
             await manager.replaceConnection(
@@ -467,6 +556,7 @@ export async function runTeacher({
             "Das Modell hat einen unlesbaren Werkzeugaufruf geliefert. Bitte mit einem werkzeugfähigen Modell fortsetzen.",
             502,
             "INVALID_TOOL_REQUEST",
+            { messageKey: "learningContent:errors.toolRequest", params: {} },
           );
         if (!result.capped) {
           if (
@@ -478,20 +568,35 @@ export async function runTeacher({
               "Das Modell hat sein Antwortlimit erreicht. Die Teilantwort ist gespeichert; du kannst sie fortsetzen.",
               400,
               "RESPONSE_LIMIT",
+              {
+                messageKey: "learningContent:errors.responseLimit",
+                params: {},
+              },
             );
           if (result.empty)
             throw new AppError(
               "Das Modell hat keine sichtbare Antwort geliefert. Bitte erneut senden oder ein anderes Modell auswählen.",
               502,
               "EMPTY_RESPONSE",
+              {
+                messageKey: "learningContent:errors.responseEmpty",
+                params: {},
+              },
             );
           break;
         }
         if (toolCount >= settings.maxToolCallsPerTurn) {
           const m = message(
             "assistant",
-            "Das Tool-Limit wurde erreicht. Die ausgeführten Schritte sind gespeichert. Du kannst die Arbeit mit einer weiteren Nachricht fortsetzen.",
-            { turnId },
+            t(session.tutorLocale, "learningContent:tutor.toolLimit"),
+            {
+              turnId,
+              application: {
+                version: 1,
+                template: "tool-limit",
+                locale: session.tutorLocale || "de",
+              },
+            },
           );
           await mutateSession(sessionId, (s) => s.messages.push(m));
           emit("message", m);
@@ -508,7 +613,7 @@ export async function runTeacher({
         ).contextUsage;
       } catch (error) {
         if (controller.signal.aborted) throw error;
-        usage = estimatedUsage(session, settings, error.message);
+        usage = estimatedUsage(session, settings, error.message, error);
         emit("context-usage", usage);
       }
     }
@@ -538,6 +643,10 @@ export async function runTeacher({
       const turn = s.turns[turnId];
       turn.status = aborted ? "aborted" : "error";
       turn.error = aborted ? "Antwort abgebrochen." : error.message;
+      turn.errorKey = aborted
+        ? "learningContent:tutor.aborted"
+        : error.messageKey;
+      turn.errorParams = aborted ? {} : error.params;
       turn.code = error.code || "MODEL_ERROR";
       if (fullText && !assistantSaved)
         s.messages.push(
@@ -559,8 +668,12 @@ export async function runTeacher({
             ...manager.usage,
             stale: true,
             error: aborted ? "Antwort abgebrochen." : error.message,
+            errorKey: aborted
+              ? "learningContent:tutor.aborted"
+              : error.messageKey,
+            errorParams: aborted ? {} : error.params,
           }
-        : estimatedUsage(s, settings, error.message);
+        : estimatedUsage(s, settings, error.message, error);
       const consumption = turnUsage(s.messages, turnId);
       if (consumption) {
         turn.usage = consumption;
@@ -605,18 +718,30 @@ function rebuild(s) {
 }
 export async function editUserMessage({ sessionId, messageId, newContent }) {
   if (isActive(sessionId))
-    throw new AppError("Bitte die laufende Antwort zuerst stoppen.", 409);
+    throw new AppError(
+      "Bitte die laufende Antwort zuerst stoppen.",
+      409,
+      "INVALID_REQUEST",
+      { messageKey: "learningContent:errors.stopTurn", params: {} },
+    );
   if (
     typeof newContent !== "string" ||
     !newContent.trim() ||
     newContent.length > 50000
   )
-    throw new AppError("Ungültige Nachricht.");
+    throw new AppError("Ungültige Nachricht.", 400, "INVALID_REQUEST", {
+      messageKey: "learningContent:errors.messageInvalid",
+      params: {},
+    });
   return mutateSession(sessionId, (s) => {
     const index = s.messages.findIndex(
       (m) => m.id === messageId && m.role === "user",
     );
-    if (index < 0) throw new AppError("Nachricht nicht gefunden.", 404);
+    if (index < 0)
+      throw new AppError("Nachricht nicht gefunden.", 404, "INVALID_REQUEST", {
+        messageKey: "learningContent:errors.messageMissing",
+        params: {},
+      });
     s.messages = [
       ...s.messages.slice(0, index + 1),
       ...s.messages
@@ -632,6 +757,7 @@ export async function editUserMessage({ sessionId, messageId, newContent }) {
         const e = eventOf(q);
         if (e?.questionId === m.questionId) {
           e.answer = m.content;
+          delete e.answerOptionId;
           if (q.event) q.event = e;
           else q.content = JSON.stringify(e);
         }
@@ -643,11 +769,22 @@ export async function editUserMessage({ sessionId, messageId, newContent }) {
 }
 export async function deleteLastUserMessage({ sessionId }) {
   if (isActive(sessionId))
-    throw new AppError("Bitte die laufende Antwort zuerst stoppen.", 409);
+    throw new AppError(
+      "Bitte die laufende Antwort zuerst stoppen.",
+      409,
+      "INVALID_REQUEST",
+      { messageKey: "learningContent:errors.stopTurn", params: {} },
+    );
   let deletedMessages = [];
   const session = await mutateSession(sessionId, (s) => {
     let index = s.messages.findLastIndex((m) => m.role === "user");
-    if (index < 0) throw new AppError("Keine Nutzer-Nachricht vorhanden.");
+    if (index < 0)
+      throw new AppError(
+        "Keine Nutzer-Nachricht vorhanden.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "learningContent:errors.userMessageMissing", params: {} },
+      );
     deletedMessages = s.messages.slice(index);
     s.messages = [
       ...s.messages.slice(0, index),
@@ -662,6 +799,7 @@ export async function deleteLastUserMessage({ sessionId }) {
       ) {
         delete e.answer;
         delete e.answerMessageId;
+        delete e.answerOptionId;
         if (m.event) m.event = e;
         else m.content = JSON.stringify(e);
       }

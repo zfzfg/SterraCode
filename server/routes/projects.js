@@ -4,7 +4,7 @@ import { listProjectTemplates, importProject } from "../services/projects.js";
 const router = express.Router();
 router.get(
   "/templates",
-  route(async (req, res) => res.json(listProjectTemplates())),
+  route(async (req, res) => res.json(listProjectTemplates(req.uiLocale))),
 );
 router.post(
   "/import",

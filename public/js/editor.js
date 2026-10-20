@@ -1,3 +1,4 @@
+import { t, getLocale, LOCALES } from "./i18n.js";
 import { api, workspaceURL } from "./api.js";
 import { state, emit } from "./state.js";
 import { $, toast, formDialog } from "./ui.js";
@@ -27,6 +28,13 @@ export const fileLanguage = (file) =>
   languages[file?.split(".").pop()?.toLowerCase()] || "plaintext";
 const draftKey = (record) =>
   `sterracode:draft:${record.sessionId}:${record.path}`;
+function removeDraft(record) {
+  try {
+    localStorage.removeItem(draftKey(record));
+  } catch {
+    /* Successful server saves do not depend on Web Storage. */
+  }
+}
 function draft(record) {
   try {
     localStorage.setItem(
@@ -39,30 +47,31 @@ function draft(record) {
   } catch {
     if (!record.storageWarning) {
       record.storageWarning = true;
-      toast(
-        "Die lokale Notfallsicherung ist voll. Bitte Datei speichern.",
-        "error",
-      );
+      toast(t("features:editor.backupFull"), "error");
     }
   }
 }
 function status(record = current) {
   if (record === current) {
     $("save-status").textContent = record?.error
-      ? "Speichern fehlgeschlagen – prüfen"
+      ? t("features:editor.saveError")
       : record?.saving
-        ? "Wird gespeichert"
+        ? t("features:editor.saving")
         : record?.dirty
-          ? "Geändert"
-          : "Gespeichert";
+          ? t("features:editor.changed")
+          : t("features:editor.saved");
     $("save-status").classList.toggle("error", Boolean(record?.error));
-    $("save-status").title = record?.error?.message || "Dateistand";
+    $("save-status").title =
+      record?.error?.message || t("features:editor.fileState");
     emit("save-state", record);
   }
 }
 export function initEditor() {
   return new Promise((resolve, reject) => {
-    window.require.config({ paths: { vs: "/monaco/vs" } });
+    window.require.config({
+      paths: { vs: "/monaco/vs" },
+      "vs/nls": { availableLanguages: { "*": LOCALES[getLocale()].monaco } },
+    });
     window.require(
       ["vs/editor/editor.main"],
       () => {
@@ -89,7 +98,7 @@ export function initEditor() {
         editor.addAction({
           // Keep the existing shortcut without embedding editor content in the request.
           id: "explain-selection",
-          label: "Code erklären",
+          label: t("features:editor.explain"),
           contextMenuGroupId: "navigation",
           run: (ed) => {
             const text = ed.getModel()?.getValueInRange(ed.getSelection());
@@ -148,7 +157,7 @@ async function save(record) {
     .then((result) => {
       record.version = result.version;
       record.dirty = record.model.getValue() !== content;
-      if (!record.dirty) localStorage.removeItem(draftKey(record));
+      if (!record.dirty) removeDraft(record);
       else draft(record);
     })
     .catch((error) => {
@@ -170,13 +179,39 @@ export async function flush() {
   if (record.saving) await record.saving;
   while (record.dirty) await save(record);
 }
+// A language reload must also wait for records that are no longer selected.
+export async function flushAll() {
+  for (const record of models.values()) {
+    clearTimeout(record.timer);
+    if (record.saving) await record.saving;
+    while (record.dirty) await save(record);
+  }
+}
+export function captureEditorState() {
+  return current
+    ? {
+        sessionId: current.sessionId,
+        path: current.path,
+        viewState: editor?.saveViewState(),
+      }
+    : null;
+}
+export function restoreEditorState(saved) {
+  if (
+    saved?.sessionId === current?.sessionId &&
+    saved?.path === current?.path &&
+    saved.viewState
+  ) {
+    editor.restoreViewState(saved.viewState);
+  }
+}
 export async function openEditorFile(sessionId, file) {
   const request = ++navigationVersion;
   await flush();
   if (!file) {
     current = null;
     editor.setModel(null);
-    $("file-path").textContent = "Keine Datei geöffnet";
+    $("file-path").textContent = t("features:editor.noFile");
     status();
     return true;
   }
@@ -192,11 +227,13 @@ export async function openEditorFile(sessionId, file) {
     const name = file.split("/").pop();
     const isJavaClass = /\.class$/i.test(file);
     await formDialog({
-      title: isJavaClass ? "Kompilierte Java-Datei" : "Keine Textdatei",
+      title: isJavaClass
+        ? t("features:editor.javaClass")
+        : t("features:editor.notText"),
       description: isJavaClass
-        ? `„${name}“ enthält Java-Bytecode, den der Compiler aus einer .java-Datei erzeugt hat. Bearbeite die zugehörige .java-Datei und führe deinen Code anschließend erneut aus. Die .class-Datei wird dabei neu erzeugt. Deine aktuell geöffnete Datei bleibt erhalten.`
-        : `„${name}“ ist eine Binärdatei oder verwendet eine andere Textkodierung als UTF-8. Sie kann hier nicht als Quelltext bearbeitet werden. Deine aktuell geöffnete Datei bleibt erhalten.`,
-      submit: "Verstanden",
+        ? t("features:editor.binaryJava", { p1: name })
+        : t("features:editor.binary", { p1: name }),
+      submit: t("features:editor.understood"),
     });
     return false;
   }
@@ -229,9 +266,7 @@ export async function openEditorFile(sessionId, file) {
         model.setValue(recovered.content);
         record.version = recovered.baseVersion;
         record.dirty = true;
-        toast(
-          "Ein ungespeicherter lokaler Stand wurde im Editor wiederhergestellt.",
-        );
+        toast(t("features:editor.recovered"));
       }
     } catch {}
     model.onDidChangeContent(() => {
@@ -290,44 +325,43 @@ export async function resolveSave() {
   const remote = await api(
     `${workspaceURL(record.sessionId)}/files/content?path=${encodeURIComponent(record.path)}`,
   ).catch((e) => {
-    if (e.status === 404) return { content: "Die Datei wurde entfernt." };
+    if (e.status === 404) return { content: t("features:editor.removed") };
     throw e;
   });
   const result = await formDialog({
-    title: "Dateistände vergleichen",
-    description:
-      "Der lokale Text bleibt erhalten. Sichere ihn als neue Datei oder lade den Serverstand ausdrücklich neu.",
+    title: t("features:editor.compare"),
+    description: t("features:editor.keepLocal"),
     fields: [
       {
         name: "remote",
-        label: "Serverstand",
+        label: t("features:editor.serverVersion"),
         type: "textarea",
         value: remote.content,
         readOnly: true,
       },
       {
         name: "local",
-        label: "Dein lokaler Stand",
+        label: t("features:editor.localVersion"),
         type: "textarea",
         value: record.model.getValue(),
         readOnly: true,
       },
       {
         name: "action",
-        label: "Aktion",
+        label: t("features:editor.action"),
         type: "select",
         options: [
-          { value: "copy", label: "Lokalen Stand als neue Datei sichern" },
-          { value: "reload", label: "Serverstand laden" },
+          { value: "copy", label: t("features:editor.copyLocal") },
+          { value: "reload", label: t("features:editor.loadServer") },
         ],
       },
       {
         name: "path",
-        label: "Name der Sicherungsdatei",
+        label: t("features:editor.backupName"),
         value: `recovered-${Date.now()}-${record.path.split("/").pop()}`,
       },
     ],
-    submit: "Ausführen",
+    submit: t("features:editor.execute"),
   });
   if (!result) return;
   if (result.action === "copy") {
@@ -340,11 +374,11 @@ export async function resolveSave() {
       },
     });
     emit("files-changed");
-    toast(`Lokaler Stand in ${result.path} gesichert.`);
+    toast(t("features:editor.localSaved", { p1: result.path }));
   }
   record.dirty = false;
   record.error = null;
-  localStorage.removeItem(draftKey(record));
+  removeDraft(record);
   if (remote.version) {
     record.loading = true;
     record.model.setValue(remote.content);

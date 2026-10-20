@@ -82,6 +82,8 @@ export const PROGRAMS = [
   },
 ].map((program) => ({
   ...program,
+  descriptionKey: `runner:catalog.${program.id}`,
+  descriptionParams: {},
   language: program.id === "git" ? null : program.id,
   base: Boolean(program.base),
 }));

@@ -1,0 +1,123 @@
+{
+  "questions": {
+    "onboarding": {
+      "question": "¿Quieres crear un plan de aprendizaje?",
+      "options": {
+        "create_plan": "Sí, por favor",
+        "start_directly": "Empezar directamente"
+      }
+    },
+    "plan-completed": {
+      "question": "Has completado todos los temas. ¿Quieres continuar con un plan de aprendizaje más avanzado?",
+      "options": {
+        "continue_plan": "Sí, continuar",
+        "finish_today": "Terminar por hoy"
+      }
+    }
+  },
+  "concepts": {
+    "variables": "Variables",
+    "conditions": "Condiciones",
+    "loops": "Bucles",
+    "lists": "Listas",
+    "functions": "Funciones",
+    "strings": "Cadenas de texto"
+  },
+  "review": {
+    "title": "Repaso voluntario: {{concept}}",
+    "reason": "Un repaso voluntario después de un tiempo.",
+    "contract": "Archivo: main.py; función: {{function}}(value). Las pruebas comprueban el comportamiento, no la sintaxis que uses.",
+    "case": "Ejemplo {{number}}",
+    "variables": "Devuelve el doble del número.",
+    "conditions": "Devuelve si el número es mayor que cero.",
+    "loops": "Usa un bucle para sumar los números del 1 al n, ambos incluidos.",
+    "lists": "Devuelve el primer elemento de la lista, o None si está vacía.",
+    "functions": "Escribe una función que devuelva el cuadrado del número.",
+    "strings": "Devuelve la cadena de texto en orden inverso."
+  },
+  "tutor": {
+    "toolLimit": "Se ha alcanzado el límite de herramientas. Los pasos completados están guardados. Puedes continuar con otro mensaje.",
+    "noTools": "Este modelo no admite herramientas. El tutor no puede usar acciones de archivos ni de terminal con él.",
+    "retry": "Se interrumpió la conexión con LM Studio. Nuevo intento en {{seconds}} segundos ({{attempt}}/3) …",
+    "toolResultUnknown": "Se interrumpió la ejecución y se desconoce el resultado. Comprueba el estado actual del archivo o proceso. No repitas la llamada automáticamente.",
+    "toolNotExecuted": "Esta llamada a una herramienta se canceló antes de ejecutarse.",
+    "connectionInterrupted": "Se interrumpió la conexión anterior con el servidor.",
+    "toolLimitShort": "Se ha alcanzado el límite de herramientas.",
+    "aborted": "Respuesta detenida."
+  },
+  "errors": {
+    "locale": "Idioma del contenido no válido.",
+    "answerRequired": "Debes escribir una respuesta.",
+    "questionMissing": "No se ha encontrado la pregunta.",
+    "questionAnswered": "Esta pregunta ya tiene una respuesta.",
+    "optionInvalid": "Esta opción de respuesta no pertenece a la pregunta.",
+    "contentProvenance": "Los datos de procedencia del contenido de aprendizaje no son válidos.",
+    "conceptList": "La lista de conceptos no es válida.",
+    "projectTask": "La tarea del proyecto no es válida.",
+    "projectChecklist": "La lista de comprobación del proyecto no es válida.",
+    "projectPackage": "Paquete de proyecto no válido (formato 1, máximo 50 archivos / 3 MiB de JSON).",
+    "projectFileType": "Solo se permiten archivos de código fuente autorizados sin enlaces.",
+    "projectPaths": "El paquete contiene rutas duplicadas o incompatibles.",
+    "projectManifest": "El manifiesto de archivos no coincide o supera los 2 MiB.",
+    "projectActiveFile": "Falta el archivo activo en el paquete.",
+    "projectTestEntry": "Falta el archivo de entrada de las pruebas en el paquete.",
+    "projectSource": "Indica una sola plantilla o un solo paquete de proyecto.",
+    "projectTemplate": "No se ha encontrado la plantilla del proyecto.",
+    "projectOperation": "Esta operación pertenece a otro paquete.",
+    "projectInterrupted": "Se interrumpió la importación o se eliminó la sesión. Inicia una nueva importación.",
+    "projectSelection": "Selecciona explícitamente entre 1 y 50 archivos de código fuente autorizados.",
+    "projectFileChanged": "Se ha modificado un archivo de código fuente. Vuelve a cargarlo.",
+    "projectSize": "El paquete supera los 2 MiB de código fuente.",
+    "projectTaskChanged": "Se ha modificado la tarea. Vuelve a cargarla.",
+    "projectExportChanged": "Se ha modificado un archivo de código fuente durante la exportación.",
+    "profileCorrupt": "El perfil de lenguajes está dañado. Se conserva el archivo original.",
+    "profileDisabled": "El perfil de aprendizaje está desactivado.",
+    "profileEvidence": "Hay pruebas de aprendizaje distintas con el mismo ID.",
+    "profileAssessment": "La autoevaluación no es válida.",
+    "profileTimeZone": "La zona horaria no es válida.",
+    "profileGoal": "El objetivo de aprendizaje es demasiado largo.",
+    "profileIntervals": "Los intervalos no son válidos.",
+    "reviewOutdated": "Este repaso ya no está actualizado.",
+    "reviewAction": "La acción del repaso no es válida.",
+    "messageInvalid": "El mensaje no es válido.",
+    "contextAction": "La acción del contexto no es válida.",
+    "turnBusy": "Ya hay una respuesta en curso para esta sesión.",
+    "retryInvalid": "No se puede continuar esta respuesta.",
+    "answerProcessed": "La respuesta ya se ha procesado.",
+    "messageRequired": "Debes escribir un mensaje.",
+    "toolRequest": "El modelo ha devuelto una llamada a una herramienta ilegible. Continúa con un modelo que admita herramientas.",
+    "responseLimit": "El modelo ha alcanzado el límite de respuesta. La respuesta parcial está guardada; puedes continuarla.",
+    "responseEmpty": "El modelo no ha devuelto una respuesta visible. Vuelve a enviar el mensaje o elige otro modelo.",
+    "stopTurn": "Detén primero la respuesta en curso.",
+    "messageMissing": "No se ha encontrado el mensaje.",
+    "userMessageMissing": "No hay ningún mensaje del usuario.",
+    "reviewUnavailable": "Todavía no hay un ejercicio sin conexión verificado para este lenguaje de programación.",
+    "reviewTask": "La tarea del repaso no coincide.",
+    "reviewTests": "Los resultados de las pruebas ya no están actualizados.",
+    "contextModelChanged": "El modelo o el tamaño del contexto cambió durante la respuesta. Vuelve a enviar el mensaje; se conservan los pasos guardados.",
+    "contextTooLarge": "La solicitud actual, los datos de recuperación necesarios y las herramientas no caben en la ventana de contexto. Carga una ventana más grande en LM Studio o acorta el mensaje actual.",
+    "contextLinks": "No se permiten enlaces de contexto.",
+    "contextSize": "LM Studio ha devuelto un tamaño de contexto no válido. Vuelve a cargar el modelo.",
+    "contextTokens": "No está disponible la medición exacta de tokens. Comprueba el modelo y la plantilla de chat en LM Studio.",
+    "resultOffset": "La posición del resultado no es válida.",
+    "resultMissing": "El resultado de la herramienta no pertenece a esta sesión o se ha eliminado.",
+    "resultEnd": "La posición está más allá del final del resultado.",
+    "resultReferenceSize": "La ventana de contexto es demasiado pequeña para una referencia al resultado.",
+    "resultExcerptSize": "La ventana de contexto es demasiado pequeña para el siguiente fragmento del resultado.",
+    "conceptUnknown": "Concepto desconocido: {{value}}",
+    "contextTokenConnection": "No está disponible la medición exacta de tokens. Comprueba el modelo y la conexión con LM Studio: {{error}}",
+    "contextTemplate": "No se ha podido verificar la plantilla de instrucciones. Vuelve a cargar el modelo en LM Studio: {{error}}",
+    "openAIModel": "Selecciona un ID de modelo de OpenAI.",
+    "lmStudioModel": "Carga y selecciona un modelo en LM Studio."
+  },
+  "context": {
+    "cacheNotSaved": "No se ha podido guardar la caché del contexto. El chat completo está guardado; se volverá a comprimir al reiniciar.",
+    "consolidating": "Combinando los resúmenes anteriores …",
+    "digest": "Se han sustituido los detalles anteriores del contexto por un resumen de tamaño limitado. Los originales se conservan en el chat.",
+    "compacting": "Comprimiendo el contexto … {{chunk}}/{{total}}",
+    "summaryFailed": "Ha fallado el resumen del contexto: {{error}}",
+    "structuralDigest": "Se ha conservado una sección del contexto como resumen estructural; los detalles anteriores están disponibles en el chat completo."
+  },
+  "projectExportLimitations": "Código fuente y tarea visible; no incluye el entorno de ejecución ni una copia de seguridad completa de la aplicación. La captura no es atómica frente a programas externos.",
+  "profileContext": "\n[PERFIL DE APRENDIZAJE COMPARTIDO – PRUEBAS, NO UNA GARANTÍA DE COMPETENCIA]\n{{content}}\nLos grupos entre lenguajes de programación pueden sugerir analogías. Los requisitos previos no se consideran demostrados automáticamente."
+}

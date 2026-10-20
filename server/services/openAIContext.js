@@ -145,7 +145,10 @@ export class OpenAIContext {
     input = [root, ...input.filter((item) => item.role !== "developer")];
     if (force) {
       const compacted = await this.model.compact(input);
-      input = compacted.output;
+      input = [
+        root,
+        ...compacted.output.filter((item) => item.role !== "developer"),
+      ];
       this.emit("context-report", {
         type: "context_compaction",
         modelCall: true,
@@ -163,12 +166,14 @@ export class OpenAIContext {
       });
     }
     this.model.nativeInput = input;
-    let promptTokens, error;
+    let promptTokens, error, errorKey, errorParams;
     try {
       promptTokens = await this.model.countInput(input, definitions);
     } catch (cause) {
       this.signal.throwIfAborted();
       error = cause.message;
+      errorKey = cause.messageKey;
+      errorParams = cause.params;
       promptTokens = estimateTokens(JSON.stringify(input));
     }
     this.usage = {
@@ -186,6 +191,7 @@ export class OpenAIContext {
       lastMode: "openai",
       sampledAt: new Date().toISOString(),
       ...(error ? { error } : {}),
+      ...(errorKey ? { errorKey, errorParams: errorParams || {} } : {}),
     };
     this.emit("context-usage", this.usage);
     return { chat: Chat.from([]), contextUsage: this.usage };

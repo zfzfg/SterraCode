@@ -44,6 +44,9 @@ function decodeCursor(cursor, sessionId, processId, runtime) {
   } catch {
     throw new AppError(
       "Ungültiger Terminal-Cursor für diesen Prozess oder diese Laufzeit.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:terminal.invalidCursor", params: {} },
     );
   }
 }

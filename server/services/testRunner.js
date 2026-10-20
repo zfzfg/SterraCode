@@ -29,15 +29,17 @@ import {
 } from "../../runner/grading/schema.js";
 import { validateTrace } from "../../runner/tracer/adapter.js";
 import { requireSpace } from "./safeFiles.js";
+import { reasonMetadata } from "./processReasons.js";
 
-const fail = (m) => {
-  throw new AppError(m);
+const fail = (m, metadata = {}) => {
+  throw new AppError(m, 400, "INVALID_REQUEST", metadata);
 };
 const conflict = () => {
   throw new AppError(
     "Aufgaben-, Suite- oder Quellstand geändert. Bitte erneut prüfen.",
     409,
     "CONFLICT",
+    { messageKey: "serverFeature:tests.conflict", params: {} },
   );
 };
 const digest = (v) =>
@@ -88,7 +90,10 @@ async function load(s, id) {
     return await readJSON(file(s, id));
   } catch (e) {
     if (e.code === "ENOENT")
-      throw new AppError("Testlauf nicht gefunden.", 404);
+      throw new AppError("Testlauf nicht gefunden.", 404, undefined, {
+        messageKey: "serverFeature:tests.notFound",
+        params: {},
+      });
     throw e;
   }
 }
@@ -98,7 +103,7 @@ async function save(r) {
 }
 function publicRun(r) {
   const { request, snapshot, suite, ...rest } = r;
-  return rest;
+  return { ...rest, ...reasonMetadata(r.reason, r.errorKey, r.errorParams) };
 }
 export function taskAssessment(args, language) {
   if (
@@ -107,11 +112,20 @@ export function taskAssessment(args, language) {
       args.conceptIds.length > 30 ||
       args.conceptIds.some((v) => typeof v !== "string" || v.length > 100))
   )
-    fail("Ungültige Konzept-IDs.");
+    fail("Ungültige Konzept-IDs.", {
+      messageKey: "serverFeature:tests.invalidConcepts",
+      params: {},
+    });
   if (args.assessmentMode === "tests" && !args.testSuite)
-    fail("Testsuite fehlt.");
+    fail("Testsuite fehlt.", {
+      messageKey: "serverFeature:tests.suiteMissing",
+      params: {},
+    });
   if (args.testSuite && args.assessmentMode && args.assessmentMode !== "tests")
-    fail("Testsuite benötigt assessmentMode tests.");
+    fail("Testsuite benötigt assessmentMode tests.", {
+      messageKey: "serverFeature:tests.modeRequired",
+      params: {},
+    });
   return {
     taskVersion: 1,
     ...(args.testSuite?.language || language
@@ -147,7 +161,10 @@ export async function updateTask(s, id, body) {
           ].includes(key),
       )
     )
-      fail("Nicht unterstütztes Aufgabenfeld.");
+      fail("Nicht unterstütztes Aufgabenfeld.", {
+        messageKey: "serverFeature:tests.unsupportedField",
+        params: {},
+      });
     const t = session.currentTask;
     checkTask(t, id, body.taskVersion);
     const next = {
@@ -162,7 +179,10 @@ export async function updateTask(s, id, body) {
       next.title.length > 100000 ||
       next.description.length > 100000
     )
-      fail("Ungültige Aufgabenbeschreibung.");
+      fail("Ungültige Aufgabenbeschreibung.", {
+        messageKey: "serverFeature:tests.invalidDescription",
+        params: {},
+      });
     next.taskVersion = (t.taskVersion || 1) + 1;
     if (next.testSuite)
       next.testSuite.version = (t.testSuite?.version || 0) + 1;
@@ -183,10 +203,14 @@ export async function startTaskTests(s, taskId, body, actor = "user") {
       "KI-Terminalbefehle sind deaktiviert.",
       403,
       "TERMINAL_DISABLED",
+      { messageKey: "serverFeature:process.aiDisabled", params: {} },
     );
   const expected = body.expectedVersions;
   if (!expected || typeof expected !== "object" || Array.isArray(expected))
-    fail("Erwartete Dateiversionen fehlen.");
+    fail("Erwartete Dateiversionen fehlen.", {
+      messageKey: "serverFeature:snapshot.versionsMissing",
+      params: {},
+    });
   const paths = Object.keys(expected).sort();
   if (
     !paths.length ||
@@ -195,7 +219,10 @@ export async function startTaskTests(s, taskId, body, actor = "user") {
       (p) => normalizePath(p) !== p || !/^[a-f0-9]{64}$/.test(expected[p]),
     )
   )
-    fail("Ungültiges Snapshot-Manifest.");
+    fail("Ungültiges Snapshot-Manifest.", {
+      messageKey: "serverFeature:snapshot.invalidManifest",
+      params: {},
+    });
   const request = digest({
     taskId,
     taskVersion: body.taskVersion,
@@ -211,6 +238,10 @@ export async function startTaskTests(s, taskId, body, actor = "user") {
           "operationId mit anderen Daten verwendet.",
           409,
           "IDEMPOTENCY_CONFLICT",
+          {
+            messageKey: "serverFeature:snapshot.operationConflict",
+            params: {},
+          },
         );
       return publicRun(old);
     } catch (e) {
@@ -226,12 +257,18 @@ export async function startTaskTests(s, taskId, body, actor = "user") {
         runtime?.reason || "Python-Laufzeit fehlt. Laufzeitverwaltung öffnen.",
         400,
         "RUNTIME_MISSING",
+        {
+          messageKey:
+            runtime?.reasonKey || "serverFeature:process.pythonMissing",
+          params: runtime?.reasonParams || {},
+        },
       );
     if (!runtime.modes?.includes("test") || runtime.testAdapterVersion !== 1)
       throw new AppError(
         "Runner unterstützt keine Python-Funktionstests.",
         503,
         "TEST_UNAVAILABLE",
+        { messageKey: "serverFeature:tests.runnerUnsupported", params: {} },
       );
     const files = await serial(`workspace:${s}`, async () => {
       const result = [];
@@ -264,6 +301,12 @@ export async function startTaskTests(s, taskId, body, actor = "user") {
       runtime: {
         language: "python",
         version: runtime.version || runtime.label || "siehe Fallausgabe",
+        ...(!runtime.version && !runtime.label
+          ? {
+              versionKey: "serverFeature:tests.runtimeInOutput",
+              versionParams: {},
+            }
+          : {}),
       },
       limits: TEST_LIMITS,
       request,
@@ -298,6 +341,10 @@ export async function startTaskTests(s, taskId, body, actor = "user") {
       run.status = e.code === "RUNNER_UNAVAILABLE" ? "starting" : "interrupted";
       run.reason = e.code || "start_failed";
       run.error = e.message;
+      if (e.messageKey) {
+        run.errorKey = e.messageKey;
+        run.errorParams = e.params || {};
+      }
       await save(run);
       if (active(run)) monitor(s, id);
       else throw e;
@@ -351,6 +398,11 @@ function collect(r, job) {
       message: valid
         ? String(raw.message || "").slice(0, 1000)
         : "Noch kein auswertbares Ergebnis.",
+      ...(valid && raw.messageKey
+        ? { messageKey: raw.messageKey, params: raw.params || {} }
+        : !valid
+          ? { messageKey: "serverFeature:tests.noResult", params: {} }
+          : {}),
       ...(valid &&
       r.sourceFiles.some((f) => f.path === raw.file) &&
       Number.isInteger(raw.line)
@@ -520,7 +572,10 @@ export async function completeTask(s, body, language, actor = "user") {
       body.assistance !== undefined &&
       !["independent", "assisted", "not_recorded"].includes(body.assistance)
     )
-      fail("Ungültige Angabe zur Lösungshilfe.");
+      fail("Ungültige Angabe zur Lösungshilfe.", {
+        messageKey: "serverFeature:tests.invalidSolutionHelp",
+        params: {},
+      });
     if (original.testSuite) {
       const r = await serial(`test:${s}:${body.testRunId}`, async () =>
         refresh(await load(s, body.testRunId)),

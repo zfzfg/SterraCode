@@ -1,3 +1,10 @@
+import {
+  t,
+  getLocale,
+  getFormatLocale,
+  formatPercent,
+  translateMessage,
+} from "./i18n.js";
 import { inspectDiff, showDiffHistory } from "./diffInspector.js";
 import { renderTaskTests } from "./taskTests.js";
 import { renderLearningSupport } from "./learningSupport.js";
@@ -14,28 +21,109 @@ import { randomUUID } from "./uuid.js";
 
 let controller;
 let continuingTask = false;
+const chatDrafts = new Map();
+const questionDrafts = new Map();
+const tutorText = (key, params = {}) =>
+  t(key, { ...params, lng: state.session?.tutorLocale || getLocale() });
+export const chatWorkActive = () => state.busy || continuingTask;
+export function captureChatDrafts() {
+  if (state.session) chatDrafts.set(state.session.id, $("chat-input").value);
+  return { messages: [...chatDrafts], questions: [...questionDrafts] };
+}
+export function restoreChatDrafts(saved) {
+  for (const [name, map] of [
+    ["messages", chatDrafts],
+    ["questions", questionDrafts],
+  ])
+    if (Array.isArray(saved?.[name]))
+      for (const entry of saved[name].slice(-100))
+        if (
+          Array.isArray(entry) &&
+          typeof entry[0] === "string" &&
+          typeof entry[1] === "string" &&
+          entry[1].length <= 100000
+        )
+          map.set(entry[0], entry[1]);
+}
+function applicationQuestion(event) {
+  const template =
+    event.application?.version === 1
+      ? event.application.template
+      : event.onboarding === true
+        ? "onboarding"
+        : null;
+  if (!["onboarding", "plan-completed"].includes(template)) return null;
+  const ids =
+    template === "onboarding"
+      ? ["create_plan", "start_directly"]
+      : ["continue_plan", "finish_today"];
+  return {
+    question: t(`learningContent:questions.${template}.question`),
+    options: ids.map((id, index) => ({
+      id: event.application?.version === 1 ? id : undefined,
+      original: event.options?.[index],
+      label: t(`learningContent:questions.${template}.options.${id}`),
+    })),
+  };
+}
 function consumptionText(usage) {
   const u = usage?.consumption;
   if (!u) return "";
   const number = (n) =>
-    Number.isFinite(n) ? n.toLocaleString("de-DE") : "unbekannt";
+    Number.isFinite(n)
+      ? n.toLocaleString(getFormatLocale())
+      : t("features:shared.unknown");
   const cache = Number.isFinite(u.cacheReadRatio)
-    ? ` · Cache gelesen: ${(u.cacheReadRatio * 100).toLocaleString("de-DE", { maximumFractionDigits: 1 })} %${u.cacheMeasuredCalls < u.calls ? " (teilweise gemessen)" : ""}`
+    ? t("features:chat.cacheUsage", {
+        p1: formatPercent(u.cacheReadRatio, {
+          maximumFractionDigits: 1,
+        }),
+        p2:
+          u.cacheMeasuredCalls < u.calls
+            ? t("features:chat.partialMeasure")
+            : "",
+      })
     : "";
-  return ` · Turnverbrauch: ${number(u.inputTokens)} Eingabe / ${number(u.outputTokens)} Ausgabe${cache}`;
+  return t("features:chat.turnUsage", {
+    p1: number(u.inputTokens),
+    p2: number(u.outputTokens),
+    p3: cache,
+  });
 }
 function usageText(usage) {
-  if (!usage) return "Kontext bereit";
+  if (!usage) return t("features:chat.contextReady");
   const number = (n) =>
-    Number.isFinite(n) ? n.toLocaleString("de-DE") : "unbekannt";
+    Number.isFinite(n)
+      ? n.toLocaleString(getFormatLocale())
+      : t("features:shared.unknown");
   if (usage.provider === "openai")
-    return `OpenAI-Kontext: ${number(usage.promptTokens)} Tokens${usage.measurementQuality === "estimated" ? " (geschätzt)" : ""} · Grenzen und Verdichtung durch OpenAI${consumptionText(usage)}`;
+    return t("features:chat.openAIContext", {
+      p1: number(usage.promptTokens),
+      p2:
+        usage.measurementQuality === "estimated"
+          ? t("features:chat.estimated")
+          : "",
+      p3: consumptionText(usage),
+    });
   const prefix = usage.stale
-    ? "Kontext (letzte Messung)"
+    ? t("features:chat.lastMeasurement")
     : usage.measurementQuality === "exact"
-      ? "Kontext"
-      : "Kontext (geschätzt)";
-  return `${prefix}: ${number(usage.promptTokens)}${usage.contextLength ? ` / ${number(usage.contextLength)}` : ""} Tokens${usage.contextLength ? ` · ${Math.round((100 * usage.promptTokens) / usage.contextLength)} % · frei für weiteren Kontext: ${number(usage.remainingTokens)}` : ""}${consumptionText(usage)}`;
+      ? t("features:chat.context")
+      : t("features:chat.contextEstimated");
+  return t("features:chat.contextUsageText", {
+    p1: prefix,
+    p2: number(usage.promptTokens),
+    p3: usage.contextLength ? ` / ${number(usage.contextLength)}` : "",
+    p4: usage.contextLength
+      ? t("features:chat.contextFree", {
+          p1: formatPercent(usage.promptTokens / usage.contextLength, {
+            maximumFractionDigits: 0,
+          }),
+          p2: number(usage.remainingTokens),
+        })
+      : "",
+    p5: consumptionText(usage),
+  });
 }
 function renderUsage(usage) {
   if (
@@ -52,32 +140,37 @@ function renderUsage(usage) {
   counter.textContent = usageText(usage);
   counter.title =
     state.settings.provider === "openai"
-      ? "OpenAI verwaltet Kontext und Tokenlimits. /compact verdichtet über die OpenAI API; /usage zeigt die Nutzung."
+      ? t("features:chat.openAIUsageHelp")
       : usage
-        ? `Antwortreserve: ${usage.reservedOutputTokens.toLocaleString("de-DE")} Tokens · ${usage.coveredMessages} Nachrichten komprimiert · ${usage.chunkCount} Zusammenfassungen · zuletzt gemessen: ${new Date(usage.sampledAt).toLocaleString("de-DE")}`
-        : "/compact komprimiert ältere Abschnitte, /usage zeigt die Kontextnutzung.";
+        ? t("features:chat.contextDetails", {
+            p1: usage.reservedOutputTokens.toLocaleString(getFormatLocale()),
+            p2: usage.coveredMessages,
+            p3: usage.chunkCount,
+            p4: new Date(usage.sampledAt).toLocaleString(getFormatLocale()),
+          })
+        : t("features:chat.usageHelp");
   counter.title += consumptionText(usage);
 }
-const typeInfo = {
-  trigger_summarize: ["plan", "Kontextzusammenfassung"],
-  context_compaction: ["plan", "Kontext komprimiert"],
-  context_usage: ["plan", "Kontextnutzung"],
-  get_context_usage: ["plan", "Kontextnutzung gelesen"],
-  read_tool_result: ["file", "Werkzeugergebnis nachgelesen"],
-  write_file: ["file", "Datei geändert"],
-  read_file: ["file", "Datei gelesen"],
-  list_files: ["folder", "Dateien gelesen"],
-  create_task: ["plan", "Neue Aufgabe"],
-  mark_task_done: ["check", "Aufgabe abgeschlossen"],
-  add_explanation: ["bulb", "Erklärung"],
-  ask_question: ["question", "Frage"],
-  update_learning_plan: ["plan", "Lernplan aktualisiert"],
-  run_terminal_command: ["terminal", "KI-Terminal"],
-  read_terminal_output: ["terminal", "Terminalausgabe"],
-  tool_error: ["warning", "Werkzeugfehler"],
-  write_editor: ["file", "Frühere Editoränderung"],
-  insert_at_line: ["file", "Frühere Editoränderung"],
-};
+const typeInfo = () => ({
+  trigger_summarize: ["plan", t("features:chat.contextSummary")],
+  context_compaction: ["plan", t("features:chat.contextCompacted")],
+  context_usage: ["plan", t("features:chat.contextUsage")],
+  get_context_usage: ["plan", t("features:chat.contextUsageRead")],
+  read_tool_result: ["file", t("features:chat.toolResultRead")],
+  write_file: ["file", t("features:chat.fileChanged")],
+  read_file: ["file", t("features:chat.fileRead")],
+  list_files: ["folder", t("features:chat.filesRead")],
+  create_task: ["plan", t("features:chat.newTask")],
+  mark_task_done: ["check", t("features:shared.taskDone")],
+  add_explanation: ["bulb", t("features:chat.explanation")],
+  ask_question: ["question", t("features:chat.question")],
+  update_learning_plan: ["plan", t("features:chat.planUpdated")],
+  run_terminal_command: ["terminal", t("features:chat.aiTerminal")],
+  read_terminal_output: ["terminal", t("features:chat.terminalOutput")],
+  tool_error: ["warning", t("features:chat.toolError")],
+  write_editor: ["file", t("features:chat.legacyEditorChange")],
+  insert_at_line: ["file", t("features:chat.legacyEditorChange")],
+});
 function eventOf(message, names) {
   if (message.event) return message.event;
   if (message.role === "tool") {
@@ -110,10 +203,10 @@ async function undo(event, sessionId) {
     await loadFiles();
     renderChat();
   }
-  toast(`Änderung an ${event.path} rückgängig gemacht.`);
+  toast(t("features:chat.undoSuccess", { p1: event.path }));
 }
 function eventCard(event, sessionId) {
-  const info = typeInfo[event.type];
+  const info = typeInfo()[event.type];
   if (!info) return null;
   const card = node(
       "article",
@@ -126,7 +219,7 @@ function eventCard(event, sessionId) {
       "span",
       "",
       event.status === "proposed"
-        ? "Dateiänderung vorgeschlagen"
+        ? t("features:chat.changeProposed")
         : event.title || info[1],
     ),
   );
@@ -139,10 +232,10 @@ function eventCard(event, sessionId) {
         "p",
         "",
         event.status === "completed"
-          ? "Der Modellkontext wurde zusammengefasst. Der vollständige Verlauf bleibt erhalten."
+          ? t("features:chat.summaryDone")
           : event.status === "scheduled"
-            ? "Komprimierung nach dieser Werkzeugrunde angefordert."
-            : "Der Verlauf ist noch zu kurz für eine Zusammenfassung.",
+            ? t("features:chat.summaryScheduled")
+            : t("features:chat.summaryTooShort"),
       ),
     );
   if (
@@ -157,28 +250,50 @@ function eventCard(event, sessionId) {
           "p",
           "",
           event.provider === "openai"
-            ? "Der Kontext wurde durch die OpenAI API verdichtet. Der vollständige Chat bleibt erhalten."
+            ? t("features:chat.openAICompacted")
             : event.changed
-              ? `${event.beforeTokens.toLocaleString("de-DE")} → ${event.afterTokens.toLocaleString("de-DE")} Tokens im Modellkontext. Der vollständige Chat bleibt erhalten.`
-              : "Es konnten keine weiteren Abschnitte sinnvoll komprimiert werden. Der vollständige Chat bleibt erhalten.",
+              ? t("features:chat.compactionResult", {
+                  p1: event.beforeTokens.toLocaleString(getFormatLocale()),
+                  p2: event.afterTokens.toLocaleString(getFormatLocale()),
+                })
+              : t("features:chat.nothingToCompress"),
         ),
       );
     card.append(node("p", "", usageText(usage)));
-    if (usage.error) card.append(node("p", "muted", usage.error));
+    if (usage.error || usage.errorKey)
+      card.append(
+        node(
+          "p",
+          "muted",
+          translateMessage(
+            { messageKey: usage.errorKey, params: usage.errorParams },
+            usage.error,
+          ),
+        ),
+      );
     if (usage.effectiveSettings) {
       const details = node("details");
       details.append(
-        node("summary", "", "Effektive Kontextbudgets"),
+        node("summary", "", t("features:chat.budgets")),
         node(
           "p",
           "",
-          `Antwort: ${usage.reservedOutputTokens.toLocaleString("de-DE")} · Wörtlicher Kontext: ${usage.effectiveSettings.keepRecentTokens.toLocaleString("de-DE")} · Zusammenfassungen: ${usage.effectiveSettings.summaryBudgetTokens.toLocaleString("de-DE")} Tokens`,
+          t("features:chat.budgetDetails", {
+            p1: usage.reservedOutputTokens.toLocaleString(getFormatLocale()),
+            p2: usage.effectiveSettings.keepRecentTokens.toLocaleString(
+              getFormatLocale(),
+            ),
+            p3: usage.effectiveSettings.summaryBudgetTokens.toLocaleString(
+              getFormatLocale(),
+            ),
+          }),
         ),
       );
       card.append(details);
     }
   }
-  if (event.type === "tool_error") card.append(node("p", "", event.error));
+  if (event.type === "tool_error")
+    card.append(node("p", "", translateMessage(event, event.error)));
   if (event.type === "create_task")
     card.append(node("p", "", event.task?.title || ""));
   if (event.type === "add_explanation") card.append(markdown(event.content));
@@ -188,7 +303,7 @@ function eventCard(event, sessionId) {
     card.append(node("p", "", event.feedback));
   if (event.type === "write_file" && (event.changeId || event.proposalId)) {
     card.append(
-      button("Änderung ansehen", "file", () =>
+      button(t("features:shared.inspectChange"), "file", () =>
         inspectDiff(
           sessionId,
           event.proposalId || event.changeId,
@@ -199,7 +314,7 @@ function eventCard(event, sessionId) {
   }
   if (event.type === "write_file" && event.changeId) {
     const b = button(
-      event.undone ? "Rückgängig gemacht" : "Rückgängig",
+      event.undone ? t("features:shared.undone") : t("features:shared.undo"),
       "undo",
       () => undo(event, sessionId),
     );
@@ -215,7 +330,12 @@ function eventCard(event, sessionId) {
       summary = node(
         "summary",
         "",
-        `Ausgabe${event.exited || event.exitCode !== undefined ? " · Exit " + event.exitCode : " · Prozess gestartet"}`,
+        t("features:chat.outputLabel", {
+          p1:
+            event.exited || event.exitCode !== undefined
+              ? t("features:chat.exit", { code: event.exitCode })
+              : t("features:chat.processStarted"),
+        }),
       );
     details.append(
       summary,
@@ -228,22 +348,25 @@ function eventCard(event, sessionId) {
     card.append(details);
   }
   if (event.type === "ask_question") {
-    card.append(node("p", "", event.question));
+    const application = applicationQuestion(event);
+    const question = application?.question || event.question;
+    card.append(node("p", "", question));
     if (event.answer)
-      card.append(node("p", "answered", `Deine Antwort: ${event.answer}`));
-    else if (!event.questionId)
       card.append(
         node(
           "p",
-          "muted",
-          "Frühere Frage. Die damalige Antwort steht im Verlauf.",
+          "answered",
+          t("features:chat.yourAnswer", { p1: event.answer }),
         ),
       );
+    else if (!event.questionId)
+      card.append(node("p", "muted", t("features:chat.earlierQuestion")));
     else {
       const options = node("div", "question-options");
-      for (const option of event.options || []) {
-        const b = button(option, null, () =>
-          answer(event.questionId, option, sessionId),
+      for (const option of application?.options ||
+        (event.options || []).map((label) => ({ label, original: label }))) {
+        const b = button(option.label, null, () =>
+          answer(event.questionId, option.original, sessionId, option.id),
         );
         b.disabled = state.busy;
         options.append(b);
@@ -251,9 +374,15 @@ function eventCard(event, sessionId) {
       card.append(options);
       const form = node("form", "question-form"),
         input = node("input"),
-        send = button("Antworten", null);
-      input.placeholder = "Eigene Antwort …";
-      input.setAttribute("aria-label", `Eigene Antwort auf: ${event.question}`);
+        send = button(t("features:chat.answer"), null);
+      input.placeholder = t("features:chat.customAnswer");
+      input.setAttribute(
+        "aria-label",
+        t("features:chat.answerLabel", { p1: question }),
+      );
+      const draftKey = `${sessionId}:${event.questionId}`;
+      input.value = questionDrafts.get(draftKey) || "";
+      input.oninput = () => questionDrafts.set(draftKey, input.value);
       input.required = true;
       send.type = "submit";
       send.disabled = state.busy;
@@ -305,20 +434,21 @@ export function renderChat(forceBottom = false) {
       if (m.thinking) {
         const thinking = node("details", "thinking");
         thinking.append(
-          node("summary", "", "Denkprozess"),
+          node("summary", "", t("features:chat.thinking")),
           markdown(m.thinking),
         );
         bubble.append(thinking);
       }
       bubble.append(markdown(m.content));
     } else bubble.append(node("div", "", m.content));
-    if (m.edited) bubble.append(node("small", "muted", "Bearbeitet"));
+    if (m.edited)
+      bubble.append(node("small", "muted", t("features:chat.edited")));
     if (m.incomplete)
-      bubble.append(node("small", "muted", "Unvollständige Antwort"));
+      bubble.append(node("small", "muted", t("features:chat.incomplete")));
     const actions = node("div", "message-actions");
     if (m.role === "user") {
       const edit = button(
-        "Nachricht bearbeiten",
+        t("features:chat.editMessage"),
         "edit",
         () => editMessage(m),
         "icon-only",
@@ -327,7 +457,7 @@ export function renderChat(forceBottom = false) {
       actions.append(edit);
       if (m.id === lastUser?.id) {
         const remove = button(
-          "Letzte Nachricht und Antwort löschen",
+          t("features:chat.deleteLast"),
           "trash",
           deleteLast,
           "icon-only",
@@ -338,7 +468,9 @@ export function renderChat(forceBottom = false) {
     } else if (!m.tool_calls) {
       for (const value of [1, -1]) {
         const b = button(
-          value === 1 ? "Hilfreich" : "Nicht hilfreich",
+          value === 1
+            ? t("features:chat.helpful")
+            : t("features:chat.unhelpful"),
           value === 1 ? "thumb-up" : "thumb-down",
           async () => {
             await api("/api/chat/feedback", {
@@ -368,14 +500,16 @@ export function renderChat(forceBottom = false) {
       node(
         "p",
         "",
-        lastTurn.error ||
-          "Die vorherige Antwort wurde unterbrochen. Bereits ausgeführte Schritte sind gespeichert.",
+        translateMessage(
+          { messageKey: lastTurn.errorKey, params: lastTurn.errorParams },
+          lastTurn.error || t("features:chat.turnInterrupted"),
+        ),
       ),
     );
     const retry = button(
       lastTurn.contextAction
-        ? "Kontextaktion wiederholen"
-        : "Antwort fortsetzen",
+        ? t("features:chat.retryContext")
+        : t("features:chat.continueResponse"),
       "refresh",
       () =>
         sendMessage(
@@ -390,7 +524,7 @@ export function renderChat(forceBottom = false) {
     c.append(notice);
   }
   if (!session.messages.length)
-    c.append(node("p", "muted", "Was möchtest du heute lernen?"));
+    c.append(node("p", "muted", t("features:chat.welcome")));
   if (bottom) scroll(true);
   else c.scrollTop = position;
   renderTask();
@@ -406,7 +540,7 @@ function renderTask() {
   panel.replaceChildren(container);
   if (state.session.project?.checklist?.length) {
     const checklist = node("details");
-    checklist.append(node("summary", "", "Projektprüfliste"));
+    checklist.append(node("summary", "", t("features:chat.checklist")));
     const list = node("ul");
     for (const item of state.session.project.checklist)
       list.append(node("li", "", item));
@@ -418,20 +552,17 @@ function renderTask() {
     renderTaskTests(container, task, renderChat);
   } else {
     const done = button(
-      task.done ? "Aufgabe abgeschlossen" : "Aufgabe prüfen lassen",
+      task.done ? t("features:shared.taskDone") : t("features:chat.reviewTask"),
       "check",
-      () =>
-        sendMessage(
-          "Ich habe die Aufgabe abgeschlossen. Bitte prüfe meine Dateien und gib mir Feedback.",
-        ),
+      () => sendMessage(tutorText("features:chat.reviewTaskPrompt")),
     );
     done.disabled = task.done || state.busy || !state.ready;
     container.append(done);
   }
   const actions = node("div", "task-continuation");
   for (const [kind, label] of [
-    ["next", "Abgeschlossen – nächste Aufgabe"],
-    ["same", "Abgeschlossen – andere Aufgabe zum gleichen Thema"],
+    ["next", t("features:chat.nextTask")],
+    ["same", t("features:chat.sameTopic")],
   ]) {
     const next = button(label, null, () => continueTask(task, kind));
     next.disabled = continuingTask || state.busy || !state.ready;
@@ -473,10 +604,7 @@ async function continueTask(task, kind) {
           )
             testRunId = run.testRunId;
         }
-        if (!testRunId)
-          throw new Error(
-            "Bitte zuerst die aktuelle Lösung prüfen und alle erforderlichen Tests bestehen.",
-          );
+        if (!testRunId) throw new Error(t("features:chat.testsRequired"));
       }
       const result = await api(`${base}/complete`, {
         method: "POST",
@@ -492,11 +620,13 @@ async function continueTask(task, kind) {
     }
     if (!current()) return;
     await sendMessage(
-      `Ich habe die Aufgabe „${task.title}“ abgeschlossen. ${
-        kind === "same"
-          ? "Bitte gib mir eine andere Aufgabe zum gleichen Thema, um es weiter zu üben."
-          : "Bitte gib mir die nächste passende Aufgabe in meinem Lernplan."
-      }`,
+      tutorText("features:chat.completedPrompt", {
+        p1: task.title,
+        p2:
+          kind === "same"
+            ? tutorText("features:chat.sameTopicPrompt")
+            : tutorText("features:chat.nextTaskPrompt"),
+      }),
       { taskContinuation: true },
     );
   } catch (error) {
@@ -516,27 +646,30 @@ export function updateChatState() {
   $("stop-chat-btn").hidden = !state.busy;
   $("app").classList.toggle("chat-busy", state.busy);
   $("chat-state").textContent = state.busy
-    ? "Antwort wird erstellt …"
+    ? t("features:chat.responding")
     : !state.ready
-      ? "Dateiarbeit funktioniert auch ohne KI-Verbindung."
-      : "Enter sendet, Umschalt+Enter fügt eine Zeile ein";
+      ? t("features:chat.offline")
+      : t("features:chat.keyboardHelp");
 }
-async function answer(questionId, text, sessionId) {
+async function answer(questionId, text, sessionId, optionId) {
   if (state.busy) return;
   await flush();
   const result = await api("/api/chat/answer", {
     method: "POST",
-    body: { sessionId, questionId, answer: text },
+    body: {
+      sessionId,
+      questionId,
+      answer: text,
+      ...(optionId ? { optionId } : {}),
+    },
   });
+  questionDrafts.delete(`${sessionId}:${questionId}`);
   if (state.session?.id !== sessionId) return;
   state.session = result.session;
   renderChat();
   if (state.ready)
     await sendMessage("", { existingUserMessageId: result.messageId });
-  else
-    toast(
-      "Antwort gespeichert. Dein KI-Tutor kann sie nach dem Verbinden berücksichtigen.",
-    );
+  else toast(t("features:chat.answerSaved"));
 }
 export async function sendMessage(
   text,
@@ -548,7 +681,7 @@ export async function sendMessage(
   } = {},
 ) {
   if (state.busy || (continuingTask && !taskContinuation)) return;
-  if (!state.session) throw new Error("Bitte zuerst eine Session auswählen.");
+  if (!state.session) throw new Error(t("features:shared.selectSession"));
   contextAction ||=
     !existingUserMessageId && !retryOf
       ? /^\/(compress|compact)$/i.test(text.trim())
@@ -558,9 +691,7 @@ export async function sendMessage(
           : undefined
       : undefined;
   if (!state.ready && contextAction !== "usage")
-    throw new Error(
-      "Bitte den KI-Anbieter verbinden und ein Modell auswählen.",
-    );
+    throw new Error(t("features:chat.connectRequired"));
   await flush();
   const sessionId = state.session.id,
     turnId = randomUUID();
@@ -572,8 +703,12 @@ export async function sendMessage(
   if (text && !contextAction) {
     c.append(node("article", "message user", text));
     $("chat-input").value = "";
+    chatDrafts.delete(sessionId);
   }
-  if (contextAction) $("chat-input").value = "";
+  if (contextAction) {
+    $("chat-input").value = "";
+    chatDrafts.delete(sessionId);
+  }
   let content = "",
     thinking = "",
     frame = false;
@@ -588,7 +723,10 @@ export async function sendMessage(
     bubble.replaceChildren();
     if (thinking) {
       const details = node("details", "thinking");
-      details.append(node("summary", "", "Denkprozess"), markdown(thinking));
+      details.append(
+        node("summary", "", t("features:chat.thinking")),
+        markdown(thinking),
+      );
       bubble.append(details);
     }
     bubble.append(markdown(content));
@@ -612,7 +750,7 @@ export async function sendMessage(
     }
     if (event === "tool") {
       $("chat-state").textContent =
-        `${typeInfo[value.tool]?.[1] || "Werkzeug wird ausgeführt"} …`;
+        `${typeInfo()[value.tool]?.[1] || t("features:chat.toolRunning")} …`;
     }
     if (event === "process") attachProcess(value);
     if (event === "message" && value.role === "tool") {
@@ -623,9 +761,9 @@ export async function sendMessage(
       content = "";
       thinking = "";
     }
-    if (event === "notice") toast(value.message);
+    if (event === "notice") toast(translateMessage(value, value.message));
     if (event === "context-progress")
-      $("chat-state").textContent = value.message;
+      $("chat-state").textContent = translateMessage(value, value.message);
     if (event === "context-usage") renderUsage(value);
     if (event === "message" && value.role === "event") {
       const card = eventCard(value.event, sessionId);
@@ -652,11 +790,21 @@ export async function sendMessage(
     if (state.session?.id === sessionId) {
       state.session = result.session;
       renderUsage(result.contextUsage);
-      if (result.turn.status === "error") toast(result.turn.error, "error");
+      if (result.turn.status === "error")
+        toast(
+          translateMessage(
+            {
+              messageKey: result.turn.errorKey,
+              params: result.turn.errorParams,
+            },
+            result.turn.error,
+          ),
+          "error",
+        );
     }
   } catch (error) {
     toast(
-      error.name === "AbortError" ? "Antwort abgebrochen." : error.message,
+      error.name === "AbortError" ? t("features:chat.aborted") : error.message,
       "error",
     );
     if (state.session?.id === sessionId) {
@@ -684,19 +832,18 @@ window.addEventListener("diff-decided", () => renderChat());
 async function editMessage(message) {
   await flush();
   const result = await formDialog({
-    title: "Nachricht bearbeiten",
-    description:
-      "Die folgenden Antworten werden aus dem Verlauf entfernt. Vorhandene Dateiänderungen bleiben über ihre Rückgängig-Aktionen kontrollierbar.",
+    title: t("features:chat.editMessage"),
+    description: t("features:chat.editDescription"),
     fields: [
       {
         name: "newContent",
-        label: "Nachricht",
+        label: t("features:chat.message"),
         type: "textarea",
         value: message.content,
         required: true,
       },
     ],
-    submit: "Änderung speichern",
+    submit: t("features:chat.saveEdit"),
   });
   if (!result) return;
   state.session = await api("/api/chat/edit", {
@@ -713,17 +860,17 @@ async function editMessage(message) {
 async function deleteLast() {
   await flush();
   const result = await formDialog({
-    title: "Letzte Nachricht und Antwort löschen?",
-    description: "Der Modellkontext wird ebenfalls aktualisiert.",
+    title: t("features:chat.deleteQuestion"),
+    description: t("features:chat.deleteDescription"),
     fields: [
       {
         name: "undo",
-        label: "Zugehörige Dateiänderungen ebenfalls rückgängig machen",
+        label: t("features:chat.undoFiles"),
         type: "checkbox",
         value: false,
       },
     ],
-    submit: "Löschen",
+    submit: t("features:shared.delete"),
     danger: true,
   });
   if (!result) return;
@@ -754,7 +901,10 @@ async function deleteLast() {
 export function initChat() {
   $("token-counter").setAttribute("role", "status");
   $("token-counter").setAttribute("aria-live", "polite");
-  $("chat-input").addEventListener("input", updateChatState);
+  $("chat-input").addEventListener("input", () => {
+    if (state.session) chatDrafts.set(state.session.id, $("chat-input").value);
+    updateChatState();
+  });
   $("chat-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const text = $("chat-input").value.trim();
@@ -772,7 +922,10 @@ export function initChat() {
       body: { sessionId: state.session.id },
     }).catch((e) => toast(e.message, "error")),
   );
-  on("session-opened", () => renderChat(true));
+  on("session-opened", () => {
+    $("chat-input").value = chatDrafts.get(state.session?.id) || "";
+    renderChat(true);
+  });
   on("session-data", () => renderChat());
   on("summarize", () =>
     sendMessage("", { contextAction: "compact" }).catch((e) =>
@@ -785,8 +938,6 @@ export function initChat() {
     renderTask();
   });
   on("explain-code", (text) =>
-    sendMessage(
-      `Erkläre mir diesen ausgewählten Code:\n\n\`\`\`\n${text}\n\`\`\``,
-    ),
+    sendMessage(tutorText("features:chat.explainPrompt", { p1: text })),
   );
 }

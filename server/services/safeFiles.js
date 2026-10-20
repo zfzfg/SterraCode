@@ -16,6 +16,7 @@ const denied = () =>
     "Verzeichnisverknüpfungen sind im Workspace nicht erlaubt.",
     403,
     "PATH_DENIED",
+    { messageKey: "serverFeature:files.directoryLinks", params: {} },
   );
 function translate(error) {
   if (["ELOOP", "ENOTDIR"].includes(error.code)) throw denied();
@@ -108,6 +109,7 @@ export async function copySafe(source, target) {
       "Nur reguläre Dateien dürfen übernommen werden.",
       403,
       "PATH_DENIED",
+      { messageKey: "serverFeature:files.regularOnly", params: {} },
     );
   const input = await fs.open(source, readFlags);
   let output;
@@ -138,6 +140,7 @@ export async function copySafe(source, target) {
         "Eine Datei wurde während der Sicherung verändert. Vorgang bitte wiederholen.",
         409,
         "CONFLICT",
+        { messageKey: "serverFeature:files.backupChanged", params: {} },
       );
     await output.sync();
   } finally {
@@ -166,6 +169,7 @@ export async function requireSpace(destination, bytes) {
       "Zu wenig freier Speicher für die Sicherung. Bisherige Daten bleiben erhalten.",
       507,
       "INSUFFICIENT_STORAGE",
+      { messageKey: "serverFeature:files.notEnoughSpace", params: {} },
     );
 }
 

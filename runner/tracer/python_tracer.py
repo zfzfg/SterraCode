@@ -37,6 +37,8 @@ def finish(reason, complete, error=None):
     if error is not None:
         args = BaseException.args.__get__(error)
         record['error'] = {'type': type(error).__name__[:250], 'message': args[0][:250] if len(args) and type(args[0]) is str else '<Fehlerdetails nicht ausgewertet>'}
+        if not (len(args) and type(args[0]) is str):
+            record['error'].update({'messageKey': 'runner:trace.errorDetails', 'params': {}})
     stream.write(json.dumps(record) + '\n')
     stream.flush()
 
@@ -44,18 +46,24 @@ def value(v, objects, depth=0):
     global budget
     budget += 1
     if budget > 200:
-        return {'type': 'truncated', 'value': '<Wertebudget erreicht>', 'truncated': True}
+        return {'type': 'truncated', 'value': '<Wertebudget erreicht>', 'truncated': True, 'valueMessage': {'key': 'runner:trace.valueBudget', 'params': {}}}
     t = type(v)
     if t is type(None) or t is bool:
         return {'type': t.__name__, 'value': v}
     if t is int:
-        return {'type': 'int', 'value': v if v.bit_length() < 53 else '<große Ganzzahl>', 'truncated': v.bit_length() >= 53}
+        result = {'type': 'int', 'value': v if v.bit_length() < 53 else '<große Ganzzahl>', 'truncated': v.bit_length() >= 53}
+        if v.bit_length() >= 53:
+            result['valueMessage'] = {'key': 'runner:trace.bigInteger', 'params': {}}
+        return result
     if t is float:
-        return {'type': 'float', 'value': v if math.isfinite(v) else '<nicht endlich>'}
+        result = {'type': 'float', 'value': v if math.isfinite(v) else '<nicht endlich>'}
+        if not math.isfinite(v):
+            result['valueMessage'] = {'key': 'runner:trace.nonFinite', 'params': {}}
+        return result
     if t is str:
         return {'type': 'str', 'value': v[:250], 'length': len(v), 'truncated': len(v) > 250}
     if t not in (list, tuple, dict, set, frozenset):
-        return {'type': 'unsupported', 'value': '<Objekt nicht ausgewertet>'}
+        return {'type': 'unsupported', 'value': '<Objekt nicht ausgewertet>', 'valueMessage': {'key': 'runner:trace.unsupported', 'params': {}}}
     identity = id(v)
     if identity not in objects_seen:
         objects_seen[identity] = 'object-' + str(len(objects_seen) + 1)
@@ -105,7 +113,7 @@ def trace(frame, event, arg):
     if event == 'return':
         record['returnValue'] = value(arg, objects)
     if event == 'exception':
-        record['exception'] = {'type': type(arg[1]).__name__[:250], 'message': '<Ausnahme aufgetreten; siehe Gesamtergebnis>'}
+        record['exception'] = {'type': type(arg[1]).__name__[:250], 'message': '<Ausnahme aufgetreten; siehe Gesamtergebnis>', 'messageKey': 'runner:trace.exception', 'params': {}}
     send(record)
     if event == 'return':
         del frames[frame]

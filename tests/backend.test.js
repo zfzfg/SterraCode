@@ -391,7 +391,7 @@ describe("Chat und Kontext", () => {
     expect(requests).toHaveLength(3);
   });
   it("erhält unabhängigen manuellen Lernfortschritt beim Löschen einer Chatantwort", async () => {
-    const s = await sessions.createSession();
+    const s = await sessions.createSession({ tutorLocale: "de" });
     await teacher.runTeacher({ sessionId: s.id, userMessage: "Hallo" });
     const plan = {
       goal: "Eigenes Ziel",
@@ -408,7 +408,7 @@ describe("Chat und Kontext", () => {
     ).toBe(true);
   });
   it("stellt nach Lernplanabschluss genau eine Anschlussfrage und übergibt Anwendungsfragen als Kontext", async () => {
-    const s = await sessions.createSession();
+    const s = await sessions.createSession({ tutorLocale: "de" });
     const plan = {
       goal: "Ziel",
       topics: [{ id: "eins", title: "Ein Thema", done: true }],

@@ -20,6 +20,7 @@ import {
 } from "./processes.js";
 import { TRACE_LIMITS, validateTrace } from "../../runner/tracer/adapter.js";
 import { requireSpace } from "./safeFiles.js";
+import { reasonMetadata } from "./processReasons.js";
 
 const live = new Set();
 const RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -77,7 +78,10 @@ async function load(session, id) {
     return run;
   } catch (error) {
     if (error.code === "ENOENT")
-      throw new AppError("Trace nicht gefunden.", 404);
+      throw new AppError("Trace nicht gefunden.", 404, undefined, {
+        messageKey: "serverFeature:trace.notFound",
+        params: {},
+      });
     throw error;
   }
 }
@@ -111,7 +115,11 @@ const save = async (run) => {
 };
 function summary(run) {
   const { events, request, ...result } = run;
-  return { ...result, eventCount: events?.length ?? run.eventCount ?? 0 };
+  return {
+    ...result,
+    ...reasonMetadata(run.reason, run.errorKey, run.errorParams),
+    eventCount: events?.length ?? run.eventCount ?? 0,
+  };
 }
 function validEvent(event, run) {
   const object = (value) =>
@@ -211,6 +219,9 @@ function collect(run, job) {
       run.programError = {
         type: end.error.type.slice(0, 250),
         message: end.error.message.slice(0, 250),
+        ...(end.error.messageKey === "runner:trace.errorDetails"
+          ? { messageKey: "runner:trace.errorDetails", params: {} }
+          : {}),
       };
   } else run.status = "running";
 }
@@ -252,7 +263,12 @@ export async function startTrace(sessionId, body) {
   const entry = normalizePath(body.entry);
   const expected = body.expectedVersions;
   if (!expected || typeof expected !== "object" || Array.isArray(expected))
-    throw new AppError("Erwartete Dateiversionen fehlen.");
+    throw new AppError(
+      "Erwartete Dateiversionen fehlen.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:snapshot.versionsMissing", params: {} },
+    );
   const paths = Object.keys(expected).sort();
   if (
     !paths.includes(entry) ||
@@ -261,7 +277,10 @@ export async function startTrace(sessionId, body) {
       (p) => normalizePath(p) !== p || !/^[a-f0-9]{64}$/.test(expected[p]),
     )
   )
-    throw new AppError("Ungültiges Snapshot-Manifest.");
+    throw new AppError("Ungültiges Snapshot-Manifest.", undefined, undefined, {
+      messageKey: "serverFeature:snapshot.invalidManifest",
+      params: {},
+    });
   const request = JSON.stringify({
     entry,
     files: paths.map((p) => [p, expected[p]]),
@@ -281,6 +300,10 @@ export async function startTrace(sessionId, body) {
             "operationId mit anderen Daten verwendet.",
             409,
             "IDEMPOTENCY_CONFLICT",
+            {
+              messageKey: "serverFeature:snapshot.operationConflict",
+              params: {},
+            },
           );
         return summary(old);
       }
@@ -292,12 +315,18 @@ export async function startTrace(sessionId, body) {
         runtime?.reason || "Python-Laufzeit fehlt.",
         400,
         "RUNTIME_MISSING",
+        {
+          messageKey:
+            runtime?.reasonKey || "serverFeature:process.pythonMissing",
+          params: runtime?.reasonParams || {},
+        },
       );
     if (!runtime.modes?.includes("trace") || runtime.traceAdapterVersion !== 1)
       throw new AppError(
         "Dieser Runner unterstützt noch keine Python-Traces.",
         503,
         "TRACE_UNAVAILABLE",
+        { messageKey: "serverFeature:trace.runnerUnsupported", params: {} },
       );
     const files = await serial(`workspace:${sessionId}`, async () => {
       const result = [];
@@ -308,6 +337,7 @@ export async function startTrace(sessionId, body) {
             "Dateistand geändert. Bitte speichern und erneut starten.",
             409,
             "CONFLICT",
+            { messageKey: "serverFeature:trace.fileChanged", params: {} },
           );
         result.push(file);
       }
@@ -317,13 +347,14 @@ export async function startTrace(sessionId, body) {
             "Datei während der Snapshot-Erfassung geändert.",
             409,
             "CONFLICT",
+            { messageKey: "serverFeature:trace.snapshotChanged", params: {} },
           );
       return result;
     });
     const trace = validateTrace(
       { entry, files, stdin: body.stdin ?? "" },
-      (m) => {
-        throw new AppError(m);
+      (m, metadata = {}) => {
+        throw new AppError(m, 400, "INVALID_REQUEST", metadata);
       },
     );
     await requireSpace(DATA_DIR, 8 * 1024 * 1024);
@@ -344,6 +375,8 @@ export async function startTrace(sessionId, body) {
       createdAt: new Date().toISOString(),
       limitations:
         "Nur Python-Hauptthread und ausgewählte Quellen; native Bibliotheken, Threads und asynchrone Abläufe werden nicht vollständig beobachtet. Rückwärtsschritte spielen gespeicherte Zustände ab und machen keine Seiteneffekte rückgängig.",
+      limitationsKey: "serverFeature:trace.limitations",
+      limitationsParams: {},
     };
     await save(run);
     try {
@@ -363,6 +396,10 @@ export async function startTrace(sessionId, body) {
         run.status = "starting";
         run.reason = "connection_lost";
         run.error = error.message;
+        if (error.messageKey) {
+          run.errorKey = error.messageKey;
+          run.errorParams = error.params || {};
+        }
         await save(run);
         monitor(sessionId, id);
         return summary(run);
@@ -370,6 +407,10 @@ export async function startTrace(sessionId, body) {
       run.status = "interrupted";
       run.reason = error.code || "start_failed";
       run.error = error.message;
+      if (error.messageKey) {
+        run.errorKey = error.messageKey;
+        run.errorParams = error.params || {};
+      }
       await save(run);
       throw error;
     }
@@ -402,7 +443,12 @@ export async function traceEvents(
     limit > 50 ||
     !["full", "summary"].includes(detail)
   )
-    throw new AppError("Ungültige Trace-Seite (höchstens 50 Ereignisse).");
+    throw new AppError(
+      "Ungültige Trace-Seite (höchstens 50 Ereignisse).",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:trace.invalidPage", params: {} },
+    );
   const info = await getTrace(session, id);
   const run = await load(session, id);
   const events = run.events
@@ -423,6 +469,7 @@ export async function traceEvents(
     traceRunId: id,
     status: info.status,
     reason: info.reason,
+    ...reasonMetadata(info.reason, info.errorKey, info.errorParams),
     complete: info.complete,
     events,
     nextStep: fromStep + events.length,

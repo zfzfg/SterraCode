@@ -9,6 +9,13 @@ import {
 } from "./safeFiles.js";
 import { CONTEXT_VERSION } from "./context/settings.js";
 import {
+  normalizeLocale,
+  LOCALES,
+  DEFAULT_LOCALE,
+} from "../../shared/i18n/locale.js";
+import { materializeApplicationQuestion } from "./applicationQuestions.js";
+import { t } from "./i18n.js";
+import {
   DATA_DIR,
   WORKSPACE_DIR,
   assertSessionWritable,
@@ -53,7 +60,9 @@ export function validatePlan(plan) {
     !Array.isArray(plan.topics) ||
     plan.topics.length > 200
   )
-    throw new AppError("Ungültiger Lernplan.");
+    throw new AppError("Ungültiger Lernplan.", 400, "INVALID_REQUEST", {
+      messageKey: "errors:plan.invalid",
+    });
   const ids = new Set();
   for (const topic of plan.topics) {
     if (
@@ -63,7 +72,9 @@ export function validatePlan(plan) {
       typeof topic.title !== "string" ||
       typeof topic.done !== "boolean"
     )
-      throw new AppError("Ungültiges Lernplanthema.");
+      throw new AppError("Ungültiges Lernplanthema.", 400, "INVALID_REQUEST", {
+        messageKey: "errors:plan.topic",
+      });
     ids.add(topic.id);
   }
   return plan;
@@ -81,14 +92,10 @@ export function setLearningPlan(session, plan) {
   session.completedPlanKeys.push(key);
   session.messages.push(
     message("event", "", {
-      event: {
-        type: "ask_question",
-        questionId: randomUUID(),
-        question:
-          "Du hast alle Themen abgeschlossen. Möchtest du mit einem weiterführenden Lernplan fortfahren?",
-        questionType: "multiple-choice",
-        options: ["Ja, fortsetzen", "Für heute abschließen"],
-      },
+      event: materializeApplicationQuestion(
+        "plan-completed",
+        session.tutorLocale,
+      ),
     }),
   );
 }
@@ -114,6 +121,8 @@ async function migrate(session) {
       throw new AppError(
         "Die Session wurde während einer unterbrochenen Migration verändert. Sicherung bitte prüfen.",
         409,
+        "INVALID_REQUEST",
+        { messageKey: "errors:migration.changed" },
       );
     if (
       !(await fs.access(root).then(
@@ -125,7 +134,12 @@ async function migrate(session) {
         typeof pending.staging !== "string" ||
         !pending.staging.startsWith(root + ".migration-")
       )
-        throw new AppError("Ungültiger Migrationsstand.", 409);
+        throw new AppError(
+          "Ungültiger Migrationsstand.",
+          409,
+          "INVALID_REQUEST",
+          { messageKey: "errors:migration.invalid" },
+        );
       await fs.rename(pending.staging, root);
     }
     await writeJSON(sessionFile(session.id), pending.session);
@@ -193,6 +207,8 @@ async function migrate(session) {
       throw new AppError(
         "Ein Workspace mit dieser ID existiert bereits. Migration zur Prüfung angehalten.",
         409,
+        "INVALID_REQUEST",
+        { messageKey: "errors:migration.exists" },
       );
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
@@ -230,6 +246,8 @@ export async function loadSession(id) {
         throw new AppError(
           "Session-ID und gespeicherte Daten passen nicht zusammen.",
           409,
+          "INVALID_REQUEST",
+          { messageKey: "errors:session.idMismatch" },
         );
       // Pending deletion owns the persisted snapshot. GET must not perform a
       // lazy migration after its backup was committed or its workspace removed.
@@ -244,6 +262,13 @@ export async function loadSession(id) {
       )
         return session;
       const current = await migrate(session);
+      if (current.localeSchemaVersion !== 1) {
+        // Independent schema: never re-run the legacy workspace migration.
+        current.localeSchemaVersion = 1;
+        current.tutorLocale = normalizeLocale(current.tutorLocale, null);
+        current.revision = (current.revision || 0) + 1;
+        await writeJSON(sessionFile(id), current);
+      }
       if (current.contextVersion !== CONTEXT_VERSION) {
         await writeJSON(
           path.join(
@@ -261,7 +286,9 @@ export async function loadSession(id) {
       return current;
     } catch (error) {
       if (error.code === "ENOENT")
-        throw new AppError("Session nicht gefunden.", 404, "NOT_FOUND");
+        throw new AppError("Session nicht gefunden.", 404, "NOT_FOUND", {
+          messageKey: "errors:session.notFound",
+        });
       throw error;
     }
   });
@@ -277,10 +304,12 @@ export async function mutateSession(id, change, expectedRevision) {
         "Die Session wurde inzwischen verändert. Bitte neu laden.",
         409,
         "CONFLICT",
+        { messageKey: "errors:session.conflict" },
       );
     const contextKey = (s) =>
       JSON.stringify([
         s.language,
+        s.tutorLocale,
         s.activeFile,
         s.learningPlan,
         s.currentTask,
@@ -306,7 +335,11 @@ export async function mutateSession(id, change, expectedRevision) {
   });
 }
 export async function createSession(
-  { title = "Neue Session", language = "python" } = {},
+  {
+    title = t(DEFAULT_LOCALE, "sessions:new.title"),
+    language = "python",
+    tutorLocale = DEFAULT_LOCALE,
+  } = {},
   seed = {},
 ) {
   if (
@@ -315,22 +348,26 @@ export async function createSession(
     title.length > 200 ||
     !LANGUAGES.includes(language)
   )
-    throw new AppError("Ungültiger Sessionname oder ungültige Sprache.");
+    throw new AppError(
+      "Ungültiger Sessionname oder ungültige Sprache.",
+      400,
+      "INVALID_REQUEST",
+      { messageKey: "errors:session.invalid" },
+    );
+  if (!Object.hasOwn(LOCALES, tutorLocale))
+    throw new AppError("Ungültige Tutorsprache.", 400, "INVALID_REQUEST", {
+      messageKey: "sessions:errors.tutorLocale",
+    });
   const id = seed.id || randomUUID();
   const now = new Date().toISOString();
   const file = seed.activeFile || seed.files?.[0]?.path || entryFile(language);
-  const question = {
-    type: "ask_question",
-    questionId: randomUUID(),
-    question: "Möchtest du einen Lernplan erstellen?",
-    questionType: "multiple-choice",
-    options: ["Ja, bitte", "Direkt anfangen"],
-    onboarding: true,
-  };
+  const question = materializeApplicationQuestion("onboarding", tutorLocale);
   const session = {
     id,
     title: title.trim(),
     language,
+    tutorLocale,
+    localeSchemaVersion: 1,
     schemaVersion: 2,
     revision: 0,
     createdAt: now,
@@ -374,6 +411,7 @@ export async function listSessions() {
       id: s.id,
       title: s.title,
       language: s.language,
+      tutorLocale: normalizeLocale(s.tutorLocale, null),
       updatedAt: s.updatedAt,
       createdAt: s.createdAt,
       deleting: await fs
@@ -404,6 +442,7 @@ export async function removeSession(id) {
         "Kontext-Verknüpfungen sind nicht erlaubt.",
         403,
         "PATH_DENIED",
+        { messageKey: "errors:context.links" },
       );
     if (deletion.phase !== "backed-up") {
       const backup = path.join(

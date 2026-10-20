@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 let root, storage, sessions, workspace, processes, available;
 const examples = {
-  python: 'print("SMOKE_OK")',
+  python: 'print("SMOKE_OK Grüße – mañana 🐍")',
   javascript: 'console.log("SMOKE_OK")',
   bash: 'printf "SMOKE_OK\\n"',
   go: 'package main\nimport "fmt"\nfunc main(){fmt.Println("SMOKE_OK")}',
@@ -55,6 +55,8 @@ for (const language of Object.keys(examples))
       "SMOKE_OK",
     );
     expect(result.exitCode, result.output).toBe(0);
+    if (language === "python")
+      expect(result.output).toContain("SMOKE_OK Grüße – mañana 🐍");
   }, 90000);
 it("weist jede Sprache ohne auffindbare Laufzeit mit einer konkreten Meldung zurück", async () => {
   const previous = process.env.PATH;

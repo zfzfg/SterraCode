@@ -17,14 +17,17 @@ router.get(
         status: models.length ? "ready" : "no-model",
       });
     } catch (error) {
+      const messageKey =
+        settings.provider === "openai"
+          ? "serverFeature:models.openAIOffline"
+          : "serverFeature:models.lmStudioOffline";
       res.json({
         models: [],
         connected: false,
         status: "offline",
-        error:
-          settings.provider === "openai"
-            ? "OpenAI ist nicht erreichbar. API-Schlüssel, Internetzugang und Berechtigung prüfen."
-            : "LM Studio ist nicht erreichbar. Server in LM Studio starten, URL und Secret-Datei prüfen.",
+        error: req.t(messageKey),
+        messageKey,
+        params: {},
       });
     }
   }),

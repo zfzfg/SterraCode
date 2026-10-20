@@ -12,8 +12,9 @@ import {
 import { loadSession, createSession } from "./sessions.js";
 import { normalizePath, listWorkspace, readFile } from "./workspace.js";
 import { taskAssessment } from "./testRunner.js";
-import { PROJECT_TEMPLATES } from "./projectTemplates.js";
+import { materializeProjectTemplates } from "./projectTemplates.js";
 import { requireSpace } from "./safeFiles.js";
+import { contentMetadata, validateContentLocale } from "./contentLocale.js";
 
 export const PACKAGE_LIMITS = {
   files: 50,
@@ -56,8 +57,12 @@ function cleanTask(t, language) {
     (t.hints || []).length > 20 ||
     (t.hints || []).some((h) => typeof h !== "string" || h.length > 2000)
   )
-    throw new AppError("Ungültige Projektaufgabe.");
+    throw new AppError("Ungültige Projektaufgabe.", 400, "INVALID_REQUEST", {
+      messageKey: "learningContent:errors.projectTask",
+      params: {},
+    });
   return {
+    ...contentMetadata(t),
     title: t.title,
     description: t.description,
     difficulty: ["easy", "medium", "hard"].includes(t.difficulty)
@@ -76,7 +81,10 @@ function checklist(items = []) {
     items.length > 30 ||
     items.some((v) => typeof v !== "string" || v.length > 500)
   )
-    throw new AppError("Ungültige Projektprüfliste.");
+    throw new AppError("Ungültige Projektprüfliste.", 400, "INVALID_REQUEST", {
+      messageKey: "learningContent:errors.projectChecklist",
+      params: {},
+    });
   return items;
 }
 export function validateProjectPackage(input) {
@@ -95,6 +103,9 @@ export function validateProjectPackage(input) {
   )
     throw new AppError(
       "Ungültiges Projektpaket (Format 1, höchstens 50 Dateien / 3 MiB JSON).",
+      400,
+      "INVALID_REQUEST",
+      { messageKey: "learningContent:errors.projectPackage", params: {} },
     );
   const seen = new Set();
   let bytes = 0;
@@ -107,6 +118,9 @@ export function validateProjectPackage(input) {
     )
       throw new AppError(
         "Nur freigegebene Quelltextdateien ohne Links sind erlaubt.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "learningContent:errors.projectFileType", params: {} },
       );
     const p = normalizePath(f.path);
     if (
@@ -118,7 +132,12 @@ export function validateProjectPackage(input) {
           p.toLowerCase().startsWith(other + "/"),
       )
     )
-      throw new AppError("Doppelte oder kollidierende Dateipfade im Paket.");
+      throw new AppError(
+        "Doppelte oder kollidierende Dateipfade im Paket.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "learningContent:errors.projectPaths", params: {} },
+      );
     seen.add(p.toLowerCase());
     const size = Buffer.byteLength(f.content);
     bytes += size;
@@ -132,6 +151,9 @@ export function validateProjectPackage(input) {
     )
       throw new AppError(
         "Dateimanifest stimmt nicht oder überschreitet 2 MiB.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "learningContent:errors.projectManifest", params: {} },
       );
     return { path: p, content: f.content, bytes: size, version: f.version };
   });
@@ -140,15 +162,26 @@ export function validateProjectPackage(input) {
     input.activeFile !== undefined &&
     !files.some((f) => f.path === input.activeFile)
   )
-    throw new AppError("Die aktive Datei fehlt im Paket.");
+    throw new AppError(
+      "Die aktive Datei fehlt im Paket.",
+      400,
+      "INVALID_REQUEST",
+      { messageKey: "learningContent:errors.projectActiveFile", params: {} },
+    );
   if (
     task?.testSuite &&
     !files.some((f) => f.path === task.testSuite.entry.path)
   )
-    throw new AppError("Der Testsuite-Einstieg fehlt im Paket.");
+    throw new AppError(
+      "Der Testsuite-Einstieg fehlt im Paket.",
+      400,
+      "INVALID_REQUEST",
+      { messageKey: "learningContent:errors.projectTestEntry", params: {} },
+    );
   return {
     format: input.format,
     schemaVersion: 1,
+    ...contentMetadata(input),
     title: input.title.trim(),
     language: input.language,
     files,
@@ -166,9 +199,9 @@ export function validateProjectPackage(input) {
         : input.language,
   };
 }
-export function listProjectTemplates() {
+export function listProjectTemplates(locale = "de") {
   return structuredClone(
-    PROJECT_TEMPLATES.map(({ files, task, ...metadata }) => ({
+    materializeProjectTemplates(locale).map(({ files, task, ...metadata }) => ({
       ...metadata,
       files: files.map((f) => f.path),
       hasTests: Boolean(task.testSuite),
@@ -181,17 +214,32 @@ export function listProjectTemplates() {
 export async function importProject(body) {
   validateSessionId(body.operationId);
   if ((body.templateId !== undefined) === (body.package !== undefined))
-    throw new AppError("Genau eine Vorlage oder ein Projektpaket angeben.");
+    throw new AppError(
+      "Genau eine Vorlage oder ein Projektpaket angeben.",
+      400,
+      "INVALID_REQUEST",
+      { messageKey: "learningContent:errors.projectSource", params: {} },
+    );
   let source;
   let provenance;
   if (body.templateId !== undefined) {
-    const template = PROJECT_TEMPLATES.find((t) => t.id === body.templateId);
-    if (!template) throw new AppError("Projektvorlage nicht gefunden.", 404);
+    const contentLocale = validateContentLocale(body.contentLocale);
+    const template = materializeProjectTemplates(contentLocale).find(
+      (t) => t.id === body.templateId,
+    );
+    if (!template)
+      throw new AppError(
+        "Projektvorlage nicht gefunden.",
+        404,
+        "INVALID_REQUEST",
+        { messageKey: "learningContent:errors.projectTemplate", params: {} },
+      );
     provenance = {
       templateId: template.id,
       version: template.version,
       origin: template.origin,
       license: template.license,
+      ...contentMetadata(template),
     };
     source = {
       ...template,
@@ -205,7 +253,32 @@ export async function importProject(body) {
     };
   } else source = body.package;
   const pkg = validateProjectPackage(source);
+  const tutorLocale = validateContentLocale(
+    body.tutorLocale,
+    pkg.contentLocale || "de",
+  );
   const digest = hash(JSON.stringify([pkg, provenance || null]));
+  // Receipts from the pre-locale application describe the exact same German
+  // files and task. Recognise that representation without accepting another
+  // materialised language under its operation ID.
+  let legacyDigest;
+  if (body.templateId !== undefined && pkg.contentLocale === "de") {
+    const { contentLocale, contentProvenance, ...legacyPackage } = pkg;
+    const {
+      contentLocale: ignoredLocale,
+      contentProvenance: ignoredProvenance,
+      ...legacyProvenance
+    } = provenance;
+    if (legacyPackage.task) {
+      const {
+        contentLocale: taskLocale,
+        contentProvenance: taskProvenance,
+        ...legacyTask
+      } = legacyPackage.task;
+      legacyPackage.task = legacyTask;
+    }
+    legacyDigest = hash(JSON.stringify([legacyPackage, legacyProvenance]));
+  }
   return serial(`project-import:${body.operationId}`, async () => {
     const receiptPath = path.join(
       DATA_DIR,
@@ -219,11 +292,12 @@ export async function importProject(body) {
       if (e.code !== "ENOENT") throw e;
     }
     if (receipt) {
-      if (receipt.digest !== digest)
+      if (receipt.digest !== digest && receipt.digest !== legacyDigest)
         throw new AppError(
           "Diese Operation gehört zu einem anderen Paket.",
           409,
           "IDEMPOTENCY_CONFLICT",
+          { messageKey: "learningContent:errors.projectOperation", params: {} },
         );
       try {
         return await loadSession(receipt.sessionId);
@@ -233,6 +307,10 @@ export async function importProject(body) {
           "Der Import wurde unterbrochen oder die Session gelöscht. Bitte einen neuen Import starten.",
           409,
           "IMPORT_INTERRUPTED",
+          {
+            messageKey: "learningContent:errors.projectInterrupted",
+            params: {},
+          },
         );
       }
     }
@@ -247,18 +325,22 @@ export async function importProject(body) {
           createdAt: new Date().toISOString(),
         }
       : null;
-    return createSession(pkg, {
-      id: receipt.sessionId,
-      files: pkg.files,
-      activeFile: pkg.activeFile,
-      task,
-      project: {
-        schemaVersion: 1,
-        ...(provenance || { origin: "import" }),
-        runtime: pkg.runtime,
-        checklist: pkg.checklist,
+    return createSession(
+      { ...pkg, tutorLocale },
+      {
+        id: receipt.sessionId,
+        files: pkg.files,
+        activeFile: pkg.activeFile,
+        task,
+        project: {
+          schemaVersion: 1,
+          ...contentMetadata(pkg),
+          ...(provenance || { origin: "import" }),
+          runtime: pkg.runtime,
+          checklist: pkg.checklist,
+        },
       },
-    });
+    );
   });
 }
 
@@ -274,6 +356,9 @@ export async function exportProject(sessionId, body) {
     )
       throw new AppError(
         "Bitte 1–50 freigegebene Quelldateien ausdrücklich auswählen.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "learningContent:errors.projectSelection", params: {} },
       );
     const files = [];
     let bytes = 0;
@@ -284,10 +369,19 @@ export async function exportProject(sessionId, body) {
           "Eine Quelldatei wurde verändert. Bitte neu laden.",
           409,
           "CONFLICT",
+          {
+            messageKey: "learningContent:errors.projectFileChanged",
+            params: {},
+          },
         );
       bytes += Buffer.byteLength(f.content);
       if (bytes > PACKAGE_LIMITS.bytes)
-        throw new AppError("Das Paket überschreitet 2 MiB Quelltext.", 413);
+        throw new AppError(
+          "Das Paket überschreitet 2 MiB Quelltext.",
+          413,
+          "INVALID_REQUEST",
+          { messageKey: "learningContent:errors.projectSize", params: {} },
+        );
       files.push({ ...f, bytes: Buffer.byteLength(f.content) });
     }
     if (
@@ -298,6 +392,7 @@ export async function exportProject(sessionId, body) {
         "Die Aufgabe wurde verändert. Bitte neu laden.",
         409,
         "CONFLICT",
+        { messageKey: "learningContent:errors.projectTaskChanged", params: {} },
       );
     // Recheck against changes made by external processes, outside app locks.
     for (const f of files)
@@ -306,6 +401,10 @@ export async function exportProject(sessionId, body) {
           "Quelldatei während des Exports verändert.",
           409,
           "CONFLICT",
+          {
+            messageKey: "learningContent:errors.projectExportChanged",
+            params: {},
+          },
         );
     return {
       ...validateProjectPackage({
@@ -313,6 +412,7 @@ export async function exportProject(sessionId, body) {
         schemaVersion: 1,
         title: session.title,
         language: session.language,
+        ...contentMetadata(session.project || {}),
         files,
         ...(files.some((f) => f.path === session.activeFile)
           ? { activeFile: session.activeFile }
@@ -324,6 +424,8 @@ export async function exportProject(sessionId, body) {
       exportedAt: new Date().toISOString(),
       limitations:
         "Quelltext und sichtbare Aufgabe; keine Ausführungsumgebung oder vollständige App-Sicherung. Keine atomare Aufnahme gegenüber externen Programmen.",
+      limitationsKey: "learningContent:projectExportLimitations",
+      limitationsParams: {},
     };
   });
 }

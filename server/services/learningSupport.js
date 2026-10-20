@@ -9,6 +9,7 @@ function currentTask(session, id, version) {
       "Die Aufgabe wurde verändert. Bitte neu laden.",
       409,
       "CONFLICT",
+      { messageKey: "serverFeature:learning.taskChanged", params: {} },
     );
   return task;
 }
@@ -23,7 +24,12 @@ export async function revealHint(sessionId, taskId, body) {
       body.index > (task.hints?.length || 0) ||
       body.index > count + 1
     )
-      throw new AppError("Bitte den nächsten Hinweis einzeln öffnen.");
+      throw new AppError(
+        "Bitte den nächsten Hinweis einzeln öffnen.",
+        undefined,
+        undefined,
+        { messageKey: "serverFeature:learning.nextHint", params: {} },
+      );
     if (body.index <= count) return;
     task.hintUsage = {
       count: body.index,
@@ -47,6 +53,9 @@ export async function saveJournal(sessionId, taskId, body) {
   )
     throw new AppError(
       "Ein Journaleintrag benötigt höchstens 2.000 Zeichen und eine Version.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:learning.invalidJournal", params: {} },
     );
   return mutateSession(sessionId, (session) => {
     const entries = (session.learningJournal ||= []);
@@ -59,12 +68,15 @@ export async function saveJournal(sessionId, taskId, body) {
         "Der Journaleintrag wurde inzwischen verändert. Bitte neu laden.",
         409,
         "CONFLICT",
+        { messageKey: "serverFeature:learning.journalChanged", params: {} },
       );
     if (!body.text.trim() && !previous) return;
     if (!previous && entries.length >= 200)
       throw new AppError(
         "Das Journal enthält bereits 200 Aufgabenstände. Bitte für weitere Einträge eine neue Session verwenden.",
         413,
+        undefined,
+        { messageKey: "serverFeature:learning.journalFull", params: {} },
       );
     const completion = session.taskCompletions?.[taskId];
     const testRunId =

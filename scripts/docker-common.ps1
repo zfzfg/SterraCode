@@ -34,7 +34,7 @@ function Invoke-SterraCompose {
     $project = Get-SterraEnv 'COMPOSE_PROJECT_NAME' 'sterracode'
     $oldPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $imageId = & docker image inspect "${project}-runner:1.0.0" --format '{{.Id}}' 2>$null
+    $imageId = & docker image inspect "${project}-runner:1.1.0" --format '{{.Id}}' 2>$null
     $ErrorActionPreference = $oldPreference
     if ($LASTEXITCODE -eq 0 -and $imageId) { $env:STERRACODE_RUNNER_IMAGE_DIGEST = $imageId.Trim() }
     & docker compose @script:SterraCompose @args

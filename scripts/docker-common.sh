@@ -34,7 +34,7 @@ sterra_compose_args() {
 }
 sterra_compose() {
   local image_id
-  image_id=$(docker image inspect "$(sterra_env COMPOSE_PROJECT_NAME sterracode)-runner:1.0.0" --format '{{.Id}}' 2>/dev/null || true)
+  image_id=$(docker image inspect "$(sterra_env COMPOSE_PROJECT_NAME sterracode)-runner:1.1.0" --format '{{.Id}}' 2>/dev/null || true)
   if [[ -n $image_id ]]; then export STERRACODE_RUNNER_IMAGE_DIGEST=$image_id; fi
   docker compose "${STERRA_COMPOSE[@]}" "$@"
 }

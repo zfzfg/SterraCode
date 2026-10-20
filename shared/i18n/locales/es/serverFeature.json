@@ -1,0 +1,239 @@
+{
+  "chat": {
+    "invalidFeedback": "La valoración no es válida.",
+    "messageMissing": "No se ha encontrado el mensaje."
+  },
+  "profile": {
+    "confirmDelete": "Debes confirmar expresamente la eliminación.",
+    "confirmHistory": "Debes confirmar la importación de sesiones anteriores."
+  },
+  "programs": {
+    "localMode": "La gestión de programas está disponible en Docker. El modo local usa los programas instalados en el equipo.",
+    "invalidAction": "El programa o la acción no se reconoce.",
+    "invalidJob": "La tarea no es válida."
+  },
+  "auth": {
+    "passwordLength": "La contraseña debe tener entre 12 y 1024 caracteres.",
+    "rateLimited": "Demasiados intentos de inicio de sesión. Vuelve a intentarlo en 15 minutos.",
+    "setupComplete": "La configuración ya se ha completado.",
+    "invalidSetupKey": "La clave de configuración no es válida o ha caducado.",
+    "setupRequired": "Completa primero la configuración.",
+    "invalidPassword": "La contraseña no es válida.",
+    "invalidCurrentPassword": "La contraseña actual no es correcta.",
+    "protectedSetupRequired": "Completa primero la configuración protegida.",
+    "loginRequired": "Inicia sesión en el servidor."
+  },
+  "learning": {
+    "taskChanged": "El ejercicio ha cambiado. Vuelve a cargarlo.",
+    "nextHint": "Abre las pistas de una en una, en orden.",
+    "invalidJournal": "Una entrada del diario necesita una versión y un máximo de 2000 caracteres.",
+    "journalChanged": "La entrada del diario ha cambiado. Vuelve a cargarla.",
+    "journalFull": "El diario ya contiene 200 versiones de ejercicios. Usa una sesión nueva para añadir más entradas."
+  },
+  "lmStudio": {
+    "contextTimeout": "La comprobación del contexto de LM Studio ha superado el tiempo límite. Comprueba la conexión y el modelo cargado.",
+    "invalidUrl": "La URL de LM Studio no es válida.",
+    "secretUnreadable": "No se puede leer el archivo secreto de LM Studio.",
+    "selectModel": "Carga y selecciona un modelo en LM Studio.",
+    "modelNotLoaded": "El modelo seleccionado no está cargado. Cárgalo en LM Studio y actualiza la lista de modelos.",
+    "containerAddress": "La dirección guardada de LM Studio apunta a la propia aplicación dentro del contenedor. Usa host.docker.internal o la dirección de la red local del servidor de modelos.",
+    "offline": "No se puede acceder a LM Studio mediante el SDK nativo. Comprueba la dirección, el acceso de red y el archivo secreto.",
+    "incompleteToolCall": "La llamada a la herramienta está incompleta.",
+    "responseTimeout": "LM Studio no ha respondido en 120 segundos.",
+    "ambiguousToolCall": "No se ha podido identificar la llamada a la herramienta de forma inequívoca."
+  },
+  "process": {
+    "projectTooDeep": "La estructura del proyecto tiene demasiados niveles.",
+    "tooManySources": "Hay demasiados archivos de código.",
+    "dotnetSdk": "Se necesita .NET SDK versión 6 o posterior.",
+    "dotnetExecutable": "No se ha generado ninguna aplicación ejecutable de .NET.",
+    "idempotencyConflict": "El identificador de la tarea ya se ha usado con otros datos.",
+    "aiDisabled": "Los comandos de terminal de la IA están desactivados.",
+    "alreadyRunningStop": "Ya hay un proceso en ejecución en esta sesión. Detenlo primero.",
+    "commandRequired": "Se necesita un comando válido.",
+    "busy": "La ejecución local está al límite de su capacidad.",
+    "alreadyRunning": "Ya hay un proceso en ejecución en esta sesión.",
+    "notFound": "No se ha encontrado el proceso.",
+    "invalidOffset": "La posición de salida no es válida.",
+    "notAwaitingInput": "El proceso no está esperando ninguna entrada.",
+    "invalidInput": "La entrada no es válida.",
+    "languageDisabled": "Este lenguaje está desactivado en la configuración.",
+    "runtimeMissing": "Falta el entorno de ejecución: instala {{runtime}} y vuelve a comprobar la aplicación.",
+    "startFailed": "No se ha podido iniciar: {{detail}}",
+    "unsupportedLanguage": "El lenguaje no se admite.",
+    "pythonMissing": "Falta el entorno de ejecución de Python. Abre la gestión de entornos."
+  },
+  "openAI": {
+    "invalidJson": "OpenAI ha devuelto una respuesta JSON no válida.",
+    "unavailable": "No se puede acceder a la API de OpenAI o se ha superado el tiempo límite.",
+    "contextLimit": "OpenAI ha indicado que se ha alcanzado el límite de contexto del modelo. Reduce el contexto con /compact o elige otro modelo.",
+    "accessDenied": "OpenAI ha denegado el acceso. Comprueba la clave de API y los permisos del modelo.",
+    "rateLimited": "OpenAI ha limitado la solicitud. Comprueba la cuota de API y el límite de solicitudes.",
+    "requestFailed": "OpenAI ha rechazado la solicitud. Comprueba el identificador del modelo, la compatibilidad con Responses y la configuración.",
+    "invalidTokenCount": "OpenAI ha devuelto un recuento de tokens no válido.",
+    "invalidModels": "OpenAI ha devuelto una lista de modelos no válida.",
+    "cancelledResponse": "OpenAI ha cancelado la respuesta.",
+    "incompleteResponse": "OpenAI ha terminado la respuesta antes de tiempo.",
+    "outputLimit": "El flujo de OpenAI supera el límite de salida.",
+    "interrupted": "La conexión con OpenAI se ha interrumpido antes de terminar. Se conserva la respuesta parcial visible.",
+    "selectModel": "Elige un identificador de modelo de OpenAI en la configuración.",
+    "invalidCompaction": "OpenAI ha devuelto un contexto reducido no válido.",
+    "responseInvalid": "OpenAI no ha devuelto una respuesta completa y válida.",
+    "invalidToolCall": "OpenAI ha devuelto una llamada a una herramienta no válida.",
+    "fullResponseInvalid": "OpenAI no ha devuelto una respuesta íntegra y válida.",
+    "invalidAnswer": "OpenAI no ha devuelto una respuesta válida.",
+    "invalidToolArguments": "OpenAI ha devuelto argumentos de herramienta no válidos.",
+    "unknownTool": "Herramienta desconocida."
+  },
+  "preview": {
+    "invalidResource": "La dirección del recurso no es válida.",
+    "htmlDepth": "El HTML tiene demasiados niveles de anidación (máximo 100).",
+    "htmlNodes": "Hay demasiados nodos HTML (máximo 10 000).",
+    "tooManyScripts": "Hay demasiados scripts (máximo 100).",
+    "classicScripts": "Solo se admiten scripts clásicos de JavaScript; no se admiten módulos ni mapas de importación.",
+    "scriptExtension": "Los scripts locales deben ser archivos .js.",
+    "stylesheetExtension": "Las hojas de estilo deben ser archivos .css.",
+    "selectHtml": "Elige un archivo HTML de entrada.",
+    "expectedVersions": "Se necesitan las versiones esperadas de los archivos (máximo 50).",
+    "invalidVersion": "La versión del archivo no es válida.",
+    "tooLarge": "La vista previa es demasiado grande (50 archivos / 2 MiB).",
+    "filesChanged": "Los archivos han cambiado al crear la instantánea.",
+    "preparedTooLarge": "La vista previa preparada es demasiado grande.",
+    "notFound": "La vista previa no existe o ya se ha eliminado.",
+    "expired": "La vista previa ha caducado. Vuelve a cargarla.",
+    "relativeResources": "Solo se permiten recursos relativos sin recorrido de directorios: {{reference}}",
+    "cssInvalid": "No se ha podido preparar el CSS: {{file}}",
+    "cssImport": "No se admite @import de CSS: {{file}}. Enlaza varias hojas de estilo locales.",
+    "cssUrl": "url() de CSS necesita una URL de datos de imagen o un identificador SVG local: {{file}}",
+    "removedElement": "Se elimina {{tag}} de la vista previa.",
+    "stylesheetLinks": "Solo se admiten enlaces a hojas de estilo.",
+    "unsupportedAttribute": "No se admite el atributo {{name}}; vincula los eventos DOM con addEventListener.",
+    "removedResource": "Se ha eliminado el recurso o la navegación: {{reference}}. Se admiten URL de datos de imagen e identificadores SVG.",
+    "versionMissing": "Falta la versión del archivo: {{file}}. Guarda y vuelve a cargar.",
+    "fileChanged": "La versión del archivo ha cambiado: {{file}}",
+    "suppressed": "Se han agrupado los demás mensajes",
+    "unserializable": "[No se puede mostrar]",
+    "resourceFailed": "No se ha podido cargar el recurso",
+    "policyBlocked": "La política de la vista previa ha bloqueado: {{directive}}",
+    "navigationUnsupported": "No se admite la navegación en la vista previa."
+  },
+  "proposal": {
+    "invalidHunks": "Selecciona cambios parciales válidos y sin duplicados.",
+    "dependencies": "Selecciona juntos los cambios parciales que dependan entre sí.",
+    "notFound": "No se ha encontrado la propuesta.",
+    "invalid": "La propuesta no es válida o es demasiado grande.",
+    "invalidOperation": "El identificador de la operación no es válido.",
+    "operationConflict": "El identificador de la operación ya se ha usado para otros datos.",
+    "baseChanged": "La base de la propuesta ha cambiado.",
+    "alreadyDecided": "La propuesta ya se ha resuelto.",
+    "alreadyApplied": "La propuesta ya se ha aplicado o hay otra operación pendiente.",
+    "stale": "La propuesta está desactualizada. Crea otra a partir de la versión actual del archivo.",
+    "wholeFile": "Archivo completo (límite de comparación)",
+    "hunkSummary": "Línea {{line}}: líneas eliminadas: {{removed}}, añadidas: {{added}}"
+  },
+  "credentials": {
+    "secretUnreadable": "El archivo secreto de OpenAI no existe, está vacío o no se puede leer.",
+    "keyRequired": "Añade una clave de API de OpenAI en la configuración.",
+    "providerUnsupported": "Aquí solo se pueden cambiar las credenciales de OpenAI.",
+    "externalSecret": "Las credenciales de OpenAI proceden de un archivo secreto de solo lectura.",
+    "invalidKey": "Introduce una clave de API de OpenAI válida."
+  },
+  "runner": {
+    "notConfigured": "El ejecutor de Docker no está configurado.",
+    "invalidEndpoint": "El punto de acceso del ejecutor no es válido.",
+    "secretUnreadable": "No se puede leer la clave de servicio del ejecutor.",
+    "protocolMismatch": "La aplicación y el ejecutor tienen versiones de protocolo incompatibles. Actualiza ambos.",
+    "unavailable": "No se puede acceder al ejecutor. No se ha iniciado ningún proceso local.",
+    "requestFailed": "La solicitud al ejecutor ha fallado."
+  },
+  "files": {
+    "directoryLinks": "No se permiten enlaces a directorios en el espacio de trabajo.",
+    "regularOnly": "Solo se pueden incluir archivos normales.",
+    "backupChanged": "Un archivo ha cambiado durante la copia de seguridad. Repite la operación.",
+    "notEnoughSpace": "No hay espacio suficiente para la copia de seguridad. Se conservan los datos existentes."
+  },
+  "terminal": {
+    "invalidCursor": "El cursor de terminal no es válido para este proceso o entorno de ejecución."
+  },
+  "tests": {
+    "conflict": "El ejercicio, la batería de pruebas o el código han cambiado. Vuelve a comprobarlos.",
+    "notFound": "No se ha encontrado la ejecución de pruebas.",
+    "invalidConcepts": "Los identificadores de conceptos no son válidos.",
+    "suiteMissing": "Falta la batería de pruebas.",
+    "modeRequired": "La batería de pruebas necesita assessmentMode tests.",
+    "unsupportedField": "El campo del ejercicio no se admite.",
+    "invalidDescription": "La descripción del ejercicio no es válida.",
+    "runnerUnsupported": "El ejecutor no admite pruebas de funciones de Python.",
+    "invalidSolutionHelp": "La indicación sobre la ayuda para la solución no es válida.",
+    "noResult": "Todavía no hay ningún resultado que se pueda evaluar.",
+    "runtimeInOutput": "consulta la salida del caso de prueba"
+  },
+  "snapshot": {
+    "versionsMissing": "Faltan las versiones esperadas de los archivos.",
+    "invalidManifest": "El manifiesto de la instantánea no es válido.",
+    "operationConflict": "operationId se ha usado con otros datos."
+  },
+  "tools": {
+    "aborted": "Cancelado.",
+    "invalidQuestionOptions": "Las opciones de la pregunta no son válidas.",
+    "planChanged": "El plan de aprendizaje ha cambiado. Vuelve a leerlo.",
+    "profileDisabled": "El perfil de aprendizaje está desactivado.",
+    "invalidField": "El campo de la herramienta no es válido: {{name}}",
+    "unknownTool": "Herramienta desconocida: {{name}}"
+  },
+  "trace": {
+    "notFound": "No se ha encontrado la traza.",
+    "runnerUnsupported": "Este ejecutor todavía no admite trazas de Python.",
+    "fileChanged": "La versión del archivo ha cambiado. Guarda y vuelve a iniciar.",
+    "snapshotChanged": "Un archivo ha cambiado al crear la instantánea.",
+    "invalidPage": "La página de la traza no es válida (máximo 50 eventos).",
+    "limitations": "Solo se observa el hilo principal de Python y el código seleccionado; no se registran por completo las bibliotecas nativas, los hilos ni los flujos asíncronos. Retroceder reproduce estados guardados y no deshace efectos secundarios."
+  },
+  "workspace": {
+    "invalidRelativePath": "La ruta relativa del archivo no es válida.",
+    "invalidPath": "El nombre del archivo o la ruta no es válido.",
+    "notAFile": "La ruta no corresponde a un archivo.",
+    "fileTooLarge": "El archivo supera los 2 MiB.",
+    "changedWhileReading": "El archivo ha cambiado durante la lectura. Vuelve a cargarlo.",
+    "utf8Required": "El editor solo permite editar archivos de texto UTF-8.",
+    "linkDenied": "No se permiten enlaces.",
+    "invalidLineRange": "El intervalo de líneas no es válido.",
+    "notFound": "No se ha encontrado el archivo.",
+    "rangeAfterEnd": "El intervalo de líneas queda después del final del archivo.",
+    "invalidContent": "El contenido del archivo no es válido o es demasiado grande.",
+    "versionConflict": "El archivo ha cambiado. Compáralo o vuelve a cargarlo; tus cambios permanecen en el editor.",
+    "changeNotFound": "No se ha encontrado el cambio.",
+    "undoConflict": "El archivo ha cambiado desde entonces. Deshacer sobrescribiría cambios posteriores.",
+    "directoryTooDeep": "La estructura de directorios tiene demasiados niveles.",
+    "tooManyEntries": "El espacio de trabajo contiene más de 5000 elementos.",
+    "nameExists": "Este nombre ya existe.",
+    "moveIntoSelf": "No se puede mover una carpeta dentro de sí misma.",
+    "targetExists": "El nombre de destino ya existe."
+  },
+  "diagnostics": {
+    "volumeReadOnly": "No se puede escribir en el volumen.",
+    "runnerUnavailable": "No se puede acceder al ejecutor. Puedes seguir trabajando con archivos y sesiones.",
+    "externalSource": ".env / entorno del proceso (requiere reinicio)",
+    "localSource": "Entorno del proceso / valores locales predeterminados"
+  },
+  "reason": {
+    "timeout": "Se ha superado el tiempo límite.",
+    "outputLimit": "Se ha alcanzado el límite de salida.",
+    "stopped": "Detenido por el usuario.",
+    "runnerRestarted": "Interrumpido por el reinicio del ejecutor.",
+    "resourceLimit": "Se ha alcanzado el límite de recursos o se ha terminado el proceso.",
+    "processUnavailable": "El proceso ya no está disponible.",
+    "connectionLost": "Se ha interrumpido la conexión con el ejecutor.",
+    "startFailed": "No se ha podido iniciar.",
+    "invalidTrace": "Los datos de la traza no son válidos.",
+    "incompleteTrace": "La traza está incompleta.",
+    "eventLimit": "Se ha alcanzado el límite de eventos.",
+    "traceSizeLimit": "Se ha alcanzado el límite de tamaño de la traza.",
+    "completed": "Registro completo.",
+    "programError": "El programa ha terminado con un error."
+  },
+  "models": {
+    "openAIOffline": "No se puede acceder a OpenAI. Comprueba la clave de API, el acceso a Internet y los permisos.",
+    "lmStudioOffline": "No se puede acceder a LM Studio. Inicia su servidor y comprueba la URL y el archivo secreto."
+  }
+}

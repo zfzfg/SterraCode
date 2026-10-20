@@ -12,27 +12,33 @@ out = open(result_path, "w", encoding="utf-8")
 dumps = json.dumps
 args = json.load(open(args_path, encoding="utf-8"))
 
+class ResultValueError(ValueError):
+    def __init__(self, message, key, params=None):
+        super().__init__(message)
+        self.message_key = key
+        self.params = params or {}
+
 def checked(value, seen=None, depth=0):
     if depth > 20:
-        raise ValueError("Rückgabe zu tief verschachtelt (maximal 20).")
+        raise ResultValueError("Rückgabe zu tief verschachtelt (maximal 20).", "runner:tests.valueDepth")
     t = type(value)
     if value is None or t in (str, bool):
         return value
     if t in (int, float):
         if abs(value) > 9007199254740991 or (t is float and not math.isfinite(value)):
-            raise ValueError("Nicht endliche Zahl oder Zahl außerhalb des sicheren JSON-Bereichs.")
+            raise ResultValueError("Nicht endliche Zahl oder Zahl außerhalb des sicheren JSON-Bereichs.", "runner:tests.valueNumber")
         return value
     if t not in (list, dict):
-        raise ValueError("Nicht unterstützter Rückgabetyp: " + t.__name__)
+        raise ResultValueError("Nicht unterstützter Rückgabetyp: " + t.__name__, "runner:tests.valueType", {"type": t.__name__})
     seen = set() if seen is None else seen
     if id(value) in seen:
-        raise ValueError("Zyklische Rückgabe wird nicht unterstützt.")
+        raise ResultValueError("Zyklische Rückgabe wird nicht unterstützt.", "runner:tests.valueCycle")
     seen.add(id(value))
     try:
         if t is list:
             return [checked(v, seen, depth + 1) for v in value]
         if any(type(k) is not str for k in value):
-            raise ValueError("Objektschlüssel müssen Strings sein.")
+            raise ResultValueError("Objektschlüssel müssen Strings sein.", "runner:tests.valueKeys")
         return {k: checked(v, seen, depth + 1) for k, v in value.items()}
     finally:
         seen.remove(id(value))
@@ -46,8 +52,8 @@ try:
     result = getattr(module, function)(*args)
     try:
         payload = {"kind": "return", "actual": checked(result), "runtime": sys.version.split()[0]}
-    except ValueError as error:
-        payload = {"kind": "serialization_error", "message": str(error)[:500]}
+    except ResultValueError as error:
+        payload = {"kind": "serialization_error", "message": str(error)[:500], "messageKey": error.message_key, "params": error.params}
 except BaseException as error:
     frames = traceback.extract_tb(error.__traceback__)
     location = next((f for f in reversed(frames) if os.path.abspath(f.filename).startswith(source + os.sep)), None)
@@ -58,7 +64,7 @@ except BaseException as error:
         payload.update({"file": os.path.relpath(location.filename, source).replace(os.sep, "/"), "line": location.lineno})
 encoded = dumps(payload, ensure_ascii=True, allow_nan=False)
 if len(encoded) > 65536:
-    encoded = dumps({"kind": "serialization_error", "message": "Rückgabe überschreitet 64 KiB."})
+    encoded = dumps({"kind": "serialization_error", "message": "Rückgabe überschreitet 64 KiB.", "messageKey": "runner:tests.valueSize", "params": {}})
 out.write(encoded)
 out.flush()
 out.close()

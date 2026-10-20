@@ -36,6 +36,8 @@ test("Java 25 und sichtbarer Installationsfortschritt bis zum Abschluss", async 
     await route.fulfill({ status: 202, json: { job: activeJob } });
   });
   await page.goto("/");
+  // Direct feature imports must wait for the asynchronous catalog/bootstrap path.
+  await expect(page.locator("#new-session-btn")).toBeEnabled();
   await page.evaluate(async () => {
     const { openPrograms } = await import("/js/programs.js");
     void openPrograms();

@@ -1,34 +1,51 @@
+import { t, getLocale, translateMessage } from "./i18n.js";
 export class APIError extends Error {
-  constructor(message, status, code) {
+  constructor(message, status, code, metadata = {}) {
     super(message);
     this.status = status;
     this.code = code;
+    this.messageKey = metadata.messageKey;
+    this.params = metadata.params || {};
   }
 }
+let pendingMutations = 0;
+export const getPendingMutationCount = () => pendingMutations;
 export async function api(
   url,
   { method = "GET", body, signal, keepalive = false } = {},
 ) {
+  const mutation = method.toUpperCase() !== "GET";
+  if (mutation) pendingMutations++;
+  try {
+    return await request(url, { method, body, signal, keepalive });
+  } finally {
+    if (mutation) pendingMutations--;
+  }
+}
+async function request(url, { method, body, signal, keepalive }) {
   let response;
   try {
     response = await fetch(url, {
       method,
-      headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+      headers: {
+        "Accept-Language": getLocale(),
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal,
       keepalive,
     });
   } catch (error) {
     if (error.name === "AbortError") throw error;
-    throw new APIError(
-      "Der SterraCode-Server ist nicht erreichbar. Bitte Serveradresse und Verbindung prüfen.",
-      0,
-      "NETWORK",
-    );
+    throw new APIError(t("common:network.unavailable"), 0, "NETWORK");
   }
-  const data = await response
-    .json()
-    .catch(() => ({ error: "Ungültige Serverantwort." }));
+  const data = await response.json().catch(() => {
+    throw new APIError(
+      t("common:network.invalid"),
+      response.status,
+      "INVALID_RESPONSE",
+    );
+  });
   if (!response.ok) {
     if (
       (response.status === 401 || data.code === "SETUP_REQUIRED") &&
@@ -36,9 +53,10 @@ export async function api(
     )
       window.dispatchEvent(new CustomEvent("auth-required"));
     throw new APIError(
-      data.error || response.statusText,
+      translateMessage(data, data.error || response.statusText),
       response.status,
       data.code,
+      data,
     );
   }
   return data;
@@ -46,16 +64,41 @@ export async function api(
 export const sessionURL = (id) => `/api/sessions/${encodeURIComponent(id)}`;
 export const workspaceURL = (id) => `/api/workspaces/${encodeURIComponent(id)}`;
 export async function streamChat(body, onEvent, signal) {
-  const response = await fetch("/api/chat/stream", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new APIError(error.error, response.status, error.code);
+  let response;
+  try {
+    response = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept-Language": getLocale(),
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
+    throw new APIError(t("common:network.unavailable"), 0, "NETWORK");
   }
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: t("common:network.invalid"),
+      code: "INVALID_RESPONSE",
+    }));
+    if (response.status === 401 || error.code === "SETUP_REQUIRED")
+      window.dispatchEvent(new CustomEvent("auth-required"));
+    throw new APIError(
+      translateMessage(error, error.error),
+      response.status,
+      error.code,
+      error,
+    );
+  }
+  if (!response.body)
+    throw new APIError(
+      t("common:network.invalid"),
+      response.status,
+      "INVALID_RESPONSE",
+    );
   const reader = response.body.getReader(),
     decoder = new TextDecoder();
   let buffer = "",
@@ -69,8 +112,23 @@ export async function streamChat(body, onEvent, signal) {
       if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
     }
     if (!data.length) return;
-    const value = JSON.parse(data.join("\n"));
-    if (event === "error") throw new Error(value.message);
+    let value;
+    try {
+      value = JSON.parse(data.join("\n"));
+    } catch {
+      throw new APIError(
+        t("common:network.invalid"),
+        response.status,
+        "INVALID_RESPONSE",
+      );
+    }
+    if (event === "error")
+      throw new APIError(
+        translateMessage(value, value.message),
+        value.status,
+        value.code,
+        value,
+      );
     if (event === "done") {
       completed = true;
       result = value;
@@ -89,11 +147,15 @@ export async function streamChat(body, onEvent, signal) {
         break;
       }
     }
-    if (!completed)
-      throw new Error(
-        "Die Verbindung wurde unterbrochen. Bereits ausgeführte Schritte bleiben gespeichert.",
-      );
+    if (!completed) throw new Error(t("common:network.interrupted"));
     return result;
+  } catch (error) {
+    if (error.name === "AbortError" || error instanceof APIError) throw error;
+    throw new APIError(
+      t("common:network.interrupted"),
+      0,
+      "STREAM_INTERRUPTED",
+    );
   } finally {
     reader.releaseLock();
   }

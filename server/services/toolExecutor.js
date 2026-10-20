@@ -19,13 +19,25 @@ import {
 } from "./terminalPages.js";
 const text = (v, name) => {
   if (typeof v !== "string" || !v.trim() || v.length > 100000)
-    throw new AppError(`Ungültiges Tool-Feld: ${name}`);
+    throw new AppError(
+      `Ungültiges Tool-Feld: ${name}`,
+      400,
+      "INVALID_REQUEST",
+      {
+        messageKey: "serverFeature:tools.invalidField",
+        params: { name },
+      },
+    );
   return v;
 };
 export async function executeTool(name, args, context) {
   const { sessionId, turnId, signal } = context;
   try {
-    if (signal?.aborted) throw new AppError("Abgebrochen.");
+    if (signal?.aborted)
+      throw new AppError("Abgebrochen.", undefined, undefined, {
+        messageKey: "serverFeature:tools.aborted",
+        params: {},
+      });
     switch (name) {
       case "inspect_execution_trace": {
         const info = await getTrace(sessionId, args.traceRunId);
@@ -42,6 +54,12 @@ export async function executeTool(name, args, context) {
               version,
             })),
             limitations: info.limitations,
+            ...(info.limitationsKey
+              ? {
+                  limitationsKey: info.limitationsKey,
+                  limitationsParams: info.limitationsParams || {},
+                }
+              : {}),
           };
         return {
           type: name,
@@ -134,7 +152,10 @@ export async function executeTool(name, args, context) {
               args.options.length > 5 ||
               args.options.some((v) => typeof v !== "string")))
         )
-          throw new AppError("Ungültige Frageoptionen.");
+          throw new AppError("Ungültige Frageoptionen.", undefined, undefined, {
+            messageKey: "serverFeature:tools.invalidQuestionOptions",
+            params: {},
+          });
         return {
           type: name,
           question,
@@ -153,6 +174,8 @@ export async function executeTool(name, args, context) {
             throw new AppError(
               "Der Lernplan wurde inzwischen verändert. Bitte erneut lesen.",
               409,
+              undefined,
+              { messageKey: "serverFeature:tools.planChanged", params: {} },
             );
           setLearningPlan(s, plan);
         });
@@ -199,7 +222,12 @@ export async function executeTool(name, args, context) {
         };
       case "get_language_profile": {
         if (!(await getSettings()).crossChatProfileEnabled)
-          throw new AppError("Sprachprofil ist deaktiviert.");
+          throw new AppError(
+            "Sprachprofil ist deaktiviert.",
+            undefined,
+            undefined,
+            { messageKey: "serverFeature:tools.profileDisabled", params: {} },
+          );
         return {
           type: name,
           profile: profileToPromptText(await getProfile()),
@@ -214,7 +242,15 @@ export async function executeTool(name, args, context) {
       case "read_tool_result":
         return await context.readToolResult(args.messageId, args.offset ?? 0);
       default:
-        throw new AppError(`Unbekanntes Tool: ${name}`);
+        throw new AppError(
+          `Unbekanntes Tool: ${name}`,
+          400,
+          "INVALID_REQUEST",
+          {
+            messageKey: "serverFeature:tools.unknownTool",
+            params: { name },
+          },
+        );
     }
   } catch (error) {
     return {
@@ -222,6 +258,9 @@ export async function executeTool(name, args, context) {
       tool: name,
       error: error.message,
       code: error.code || "TOOL_ERROR",
+      ...(error.messageKey
+        ? { messageKey: error.messageKey, params: error.params || {} }
+        : {}),
     };
   }
 }

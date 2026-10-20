@@ -310,7 +310,7 @@ try {
     "/data:size=1m,mode=0700,uid=10001,gid=10001",
     "-v",
     `${path.join(root, "tests/docker/disk-full-live.mjs")}:/probe.mjs:ro`,
-    `${project}-app:1.0.0`,
+    `${project}-app:1.1.0`,
     "node",
     "/probe.mjs",
   ]);
@@ -494,7 +494,7 @@ try {
     "2g",
     "--volumes-from",
     stoppedRunner,
-    `${project}-runner:1.0.0`,
+    `${project}-runner:1.1.0`,
     "node",
     "--input-type=module",
     "-e",
@@ -549,8 +549,8 @@ try {
   assert.equal(manifest.format, 1);
   restoreProject = `${project}-restore`;
   // Reuse the tested immutable local image IDs, with separate target volume names.
-  docker(["tag", `${project}-app:1.0.0`, `${restoreProject}-app:1.0.0`]);
-  docker(["tag", `${project}-runner:1.0.0`, `${restoreProject}-runner:1.0.0`]);
+  docker(["tag", `${project}-app:1.1.0`, `${restoreProject}-app:1.1.0`]);
+  docker(["tag", `${project}-runner:1.1.0`, `${restoreProject}-runner:1.1.0`]);
   const restoreEnv = { COMPOSE_PROJECT_NAME: restoreProject };
   compose(
     [
@@ -602,8 +602,8 @@ try {
   compose(["stop"], false, restoreEnv);
   importProject = `${project}-import`;
   const importEnv = { COMPOSE_PROJECT_NAME: importProject };
-  docker(["tag", `${project}-app:1.0.0`, `${importProject}-app:1.0.0`]);
-  docker(["tag", `${project}-runner:1.0.0`, `${importProject}-runner:1.0.0`]);
+  docker(["tag", `${project}-app:1.1.0`, `${importProject}-app:1.1.0`]);
+  docker(["tag", `${project}-runner:1.1.0`, `${importProject}-runner:1.1.0`]);
   importDir = await fs.mkdtemp(path.join(os.tmpdir(), "sterra-legacy-"));
   const legacyId = randomUUID(),
     now = new Date().toISOString();

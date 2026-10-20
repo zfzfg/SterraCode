@@ -1,29 +1,42 @@
+import {
+  t,
+  getLocale,
+  getFormatLocale,
+  formatNumber,
+  translateMessage,
+} from "./i18n.js";
 import { api, workspaceURL } from "./api.js";
 import { state, on, emit } from "./state.js";
 import { flush, currentFile, revealLine } from "./editor.js";
 import { selectFile } from "./workspace.js";
 import { node, toast } from "./ui.js";
 import { errorCard } from "./errorCards.js";
+let pendingPreview = false;
+export const previewWorkActive = () => pendingPreview;
 
 export function initPreview() {
   const panel = node("section", "preview-panel");
   panel.id = "preview-panel";
   panel.hidden = true;
-  panel.setAttribute("aria-label", "Web-Vorschau");
+  panel.setAttribute("aria-label", t("features:preview.title"));
   const controls = node("div", "preview-controls");
-  const label = node("label", "", "HTML-Einstieg ");
+  const label = node("label", "", t("features:preview.entrySpace"));
   const entry = node("select");
-  entry.setAttribute("aria-label", "HTML-Einstieg");
+  entry.setAttribute("aria-label", t("features:preview.entry"));
   label.append(entry);
-  const reload = node("button", "", "Neu laden");
-  const pauseLabel = node("label", "", " Automatisch aktualisieren ");
+  const reload = node("button", "", t("features:preview.reload"));
+  const pauseLabel = node("label", "", t("features:preview.auto"));
   const auto = node("input");
   auto.type = "checkbox";
   auto.checked = true;
   pauseLabel.append(auto);
-  const clear = node("button", "", "Log leeren");
-  const close = node("button", "", "Vorschau schließen");
-  const switchView = node("button", "preview-switch", "Editor anzeigen");
+  const clear = node("button", "", t("features:preview.clearLog"));
+  const close = node("button", "", t("features:preview.close"));
+  const switchView = node(
+    "button",
+    "preview-switch",
+    t("features:preview.showEditor"),
+  );
   switchView.type = "button";
   document.getElementById("preview-open").after(switchView);
   switchView.hidden = true;
@@ -31,13 +44,15 @@ export function initPreview() {
     const editing = document
       .getElementById("editor-panel")
       .classList.toggle("preview-editing");
-    switchView.textContent = editing ? "Vorschau anzeigen" : "Editor anzeigen";
+    switchView.textContent = editing
+      ? t("features:preview.showPreview")
+      : t("features:preview.showEditor");
     emit("layout");
   };
   const status = node("p");
   status.setAttribute("role", "status");
   const log = node("div", "preview-log");
-  log.setAttribute("aria-label", "Vorschau-Log");
+  log.setAttribute("aria-label", t("features:preview.log"));
   const frameHost = node("div", "preview-frame-host");
   controls.append(label, reload, pauseLabel, clear, close);
   panel.append(controls, status, frameHost, log);
@@ -60,7 +75,7 @@ export function initPreview() {
   }
   function summary() {
     if (!summarized)
-      log.append(node("p", "", "Weitere Meldungen zusammengefasst"));
+      log.append(node("p", "", t("features:preview.summarized")));
     summarized = true;
   }
   function stop() {
@@ -69,6 +84,7 @@ export function initPreview() {
     clearTimeout(expiryTimer);
     frame?.remove();
     frame = run = null;
+    pendingPreview = false;
     resetLog();
   }
   function hide() {
@@ -90,16 +106,19 @@ export function initPreview() {
   };
   clear.onclick = resetLog;
   function addLog(data) {
+    const text = translateMessage(data, data.text);
     if (++count > 200 || (bytes += data.text.length * 2) > 262144)
       return summary();
     const row = node("div", `preview-message preview-level-${data.level}`);
-    row.append(node("span", "", `${data.level}: ${data.text}`));
+    row.append(node("span", "", `${data.level}: ${text}`));
     const knownFile =
       data.file && run.manifest.some((f) => f.path === data.file);
     if (data.level === "error")
       row.append(
         errorCard({
           message: data.text,
+          messageKey: data.messageKey,
+          params: data.params,
           file: knownFile ? data.file : null,
           line: data.line || 1,
           sessionId: session,
@@ -110,7 +129,7 @@ export function initPreview() {
               document
                 .getElementById("editor-panel")
                 .classList.add("preview-editing");
-              switchView.textContent = "Vorschau anzeigen";
+              switchView.textContent = t("features:preview.showPreview");
               emit("layout");
             }
           },
@@ -129,7 +148,7 @@ export function initPreview() {
             document
               .getElementById("editor-panel")
               .classList.add("preview-editing");
-            switchView.textContent = "Vorschau anzeigen";
+            switchView.textContent = t("features:preview.showPreview");
             emit("layout");
           }
           revealLine(data.line || 1);
@@ -139,10 +158,16 @@ export function initPreview() {
       };
       row.append(source);
     }
-    const discuss = node("button", "text-button", "Im Chat vorbereiten");
+    const discuss = node("button", "text-button", t("features:shared.discuss"));
     discuss.onclick = () => {
       const input = document.getElementById("chat-input");
-      input.value = `Bitte hilf mir mit dieser nicht vertrauenswürdigen Browser-Diagnose aus Vorschau ${run.previewRunId} (${data.file || run.entry}:${data.line || 1}, gespeicherter Stand):\n${data.text}`;
+      input.value = t("features:preview.discussPrompt", {
+        lng: state.session?.tutorLocale || getLocale(),
+        p1: run.previewRunId,
+        p2: data.file || run.entry,
+        p3: data.line || 1,
+        p4: text,
+      });
       input.dispatchEvent(new Event("input", { bubbles: true }));
       document.getElementById("view-chat").click();
       input.focus();
@@ -157,8 +182,27 @@ export function initPreview() {
       !d ||
       typeof d !== "object" ||
       Array.isArray(d) ||
-      Object.keys(d).sort().join(",") !==
-        "file,level,line,previewRunId,renderId,text,type" ||
+      Object.keys(d)
+        .filter((key) => !["messageKey", "params"].includes(key))
+        .sort()
+        .join(",") !== "file,level,line,previewRunId,renderId,text,type" ||
+      (d.messageKey !== undefined &&
+        ![
+          "serverFeature:preview.suppressed",
+          "serverFeature:preview.resourceFailed",
+          "serverFeature:preview.policyBlocked",
+          "serverFeature:preview.navigationUnsupported",
+        ].includes(d.messageKey)) ||
+      (d.params !== undefined &&
+        (!d.params ||
+          typeof d.params !== "object" ||
+          Array.isArray(d.params) ||
+          Object.entries(d.params).some(
+            ([key, value]) =>
+              key !== "directive" ||
+              typeof value !== "string" ||
+              value.length > 200,
+          ))) ||
       d.type !== "preview-log" ||
       d.previewRunId !== run.previewRunId ||
       d.renderId !== run.renderId ||
@@ -191,10 +235,11 @@ export function initPreview() {
   }
   async function render() {
     if (panel.hidden || !entry.value) return;
+    pendingPreview = true;
     const selected = entry.value,
       token = ++generation,
       id = session;
-    status.textContent = "Speichern und Vorschau aufbereiten …";
+    status.textContent = t("features:preview.preparing");
     reload.disabled = true;
     try {
       await flush();
@@ -205,9 +250,7 @@ export function initPreview() {
         if (token !== generation || state.session?.id !== id || panel.hidden)
           return;
         if (Object.keys(expectedVersions).length >= 50)
-          throw new Error(
-            "Maximal 50 Web-Quelldateien pro Projekt unterstützt.",
-          );
+          throw new Error(t("features:preview.maxFiles"));
         expectedVersions[file] = (
           await api(
             `${workspaceURL(id)}/files/content?path=${encodeURIComponent(file)}`,
@@ -225,44 +268,54 @@ export function initPreview() {
       frame?.remove();
       resetLog();
       frame = node("iframe");
-      frame.title = "Isolierte Web-Vorschau";
+      frame.title = t("features:preview.isolated");
       frame.setAttribute("sandbox", "allow-scripts");
       frame.referrerPolicy = "no-referrer";
       frame.src = `${workspaceURL(id)}/preview-runs/${run.previewRunId}/document`;
       frameHost.replaceChildren(frame);
-      status.textContent = `Snapshot ${new Date(run.createdAt).toLocaleTimeString("de-DE")} · ${run.manifest.length} Dateien · ${auto.checked ? "automatisch" : "pausiert"}. Gültig bis ${new Date(run.expiresAt).toLocaleTimeString("de-DE")}.`;
+      status.textContent = t("features:preview.snapshot", {
+        count: run.manifest.length,
+        p1: new Date(run.createdAt).toLocaleTimeString(getFormatLocale()),
+        p2: formatNumber(run.manifest.length),
+        p3: auto.checked
+          ? t("features:preview.automatic")
+          : t("features:preview.paused"),
+        p4: new Date(run.expiresAt).toLocaleTimeString(getFormatLocale()),
+      });
       for (const d of run.diagnostics)
         addLog({ ...d, text: d.message, level: "warn" });
       expiryTimer = setTimeout(
         () => {
           frame?.remove();
           frame = null;
-          status.textContent = "Vorschau abgelaufen. Bitte neu laden.";
+          status.textContent = t("features:preview.expired");
         },
         Math.max(0, run.expiresAt - Date.now()),
       );
     } catch (error) {
       if (token === generation)
-        status.textContent = `Vorschau nicht aktualisiert; angezeigter Stand ist veraltet: ${error.message}`;
+        status.textContent = t("features:preview.updateError", {
+          p1: error.message,
+        });
     } finally {
+      pendingPreview = false;
       if (token === generation) reload.disabled = false;
     }
   }
   function schedule() {
     if (panel.hidden) return;
-    status.textContent =
-      "Vorschau möglicherweise veraltet – Änderungen werden nach erfolgreichem Speichern aktualisiert.";
+    status.textContent = t("features:preview.stale");
     clearTimeout(timer);
+    pendingPreview = auto.checked;
     if (auto.checked) timer = setTimeout(render, 450);
   }
   reload.onclick = render;
   entry.onchange = render;
   auto.onchange = () => {
     clearTimeout(timer);
+    pendingPreview = false;
     if (auto.checked) schedule();
-    else
-      status.textContent =
-        "Automatische Aktualisierung pausiert; angezeigter Snapshot bleibt erhalten.";
+    else status.textContent = t("features:preview.autoPaused");
   };
   on("save-state", (record) => {
     if (
@@ -288,12 +341,12 @@ export function initPreview() {
   }
   on("file-active", updateAccess);
   document.getElementById("preview-open").onclick = async () => {
-    if (!state.session) return toast("Bitte zuerst eine Session öffnen.");
+    if (!state.session) return toast(t("features:shared.openSession"));
     if (!panel.hidden) return hide();
     session = state.session.id;
     panel.hidden = false;
     switchView.hidden = false;
-    switchView.textContent = "Editor anzeigen";
+    switchView.textContent = t("features:preview.showEditor");
     document.getElementById("editor-panel").classList.add("preview-visible");
     const token = ++generation;
     document
@@ -312,8 +365,7 @@ export function initPreview() {
       if (paths.includes(currentFile()) && /\.html?$/i.test(currentFile()))
         entry.value = currentFile();
       if (!entry.value) {
-        status.textContent =
-          "Bitte eine HTML-Datei im Workspace anlegen. Lokale CSS- und klassische JavaScript-Dateien, Canvas und eingebettetes SVG werden unterstützt.";
+        status.textContent = t("features:preview.createHTML");
         return;
       }
       await render();

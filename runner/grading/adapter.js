@@ -81,6 +81,8 @@ export async function runTests(
           kind: "invalid_result",
           message:
             "Kein gültiges Harness-Ergebnis; stdout zählt nicht als Testnachweis.",
+          messageKey: "runner:tests.invalidResult",
+          params: {},
         };
       }
       if (job.reason)
@@ -90,6 +92,11 @@ export async function runTests(
             job.reason === "timeout"
               ? "Zeitlimit des Testfalls erreicht. Schleifen und Eingaben prüfen."
               : "Ausführung abgebrochen.",
+          messageKey:
+            job.reason === "timeout"
+              ? "runner:tests.timeout"
+              : "runner:tests.cancelled",
+          params: {},
         };
     } finally {
       await handle.close();
@@ -109,6 +116,8 @@ export async function runTests(
       id: c.id,
       kind: "not_run",
       message: "Nach Abbruch oder Zeitlimit nicht ausgeführt.",
+      messageKey: "runner:tests.notRun",
+      params: {},
     });
   return job.reason || job.stopping ? 1 : 0;
 }

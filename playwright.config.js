@@ -11,6 +11,16 @@ export default defineConfig({
   },
   use: {
     baseURL: "http://127.0.0.1:3107",
+    locale: "de-DE",
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: "http://127.0.0.1:3107",
+          localStorage: [{ name: "sterracode.uiLocale", value: "de" }],
+        },
+      ],
+    },
     viewport: { width: 1366, height: 768 },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

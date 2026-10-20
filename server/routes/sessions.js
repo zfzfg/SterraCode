@@ -21,6 +21,7 @@ import {
   readJSON,
 } from "../services/storage.js";
 import { normalizePath } from "../services/workspace.js";
+import { LOCALES } from "../../shared/i18n/locale.js";
 const router = express.Router();
 router.get(
   "/",
@@ -29,7 +30,17 @@ router.get(
 router.post(
   "/",
   route(async (req, res) =>
-    res.status(201).json(await createSession(req.body)),
+    res.status(201).json(
+      await createSession({
+        ...req.body,
+        ...(!Object.hasOwn(req.body, "title")
+          ? { title: req.t("sessions:new.title") }
+          : {}),
+        ...(!Object.hasOwn(req.body, "tutorLocale")
+          ? { tutorLocale: req.uiLocale }
+          : {}),
+      }),
+    ),
   ),
 );
 router.get(
@@ -49,33 +60,61 @@ router.patch(
               ![
                 "title",
                 "language",
+                "tutorLocale",
                 "activeFile",
                 "openFiles",
                 "learningPlan",
                 "expectedRevision",
               ].includes(key)
             )
-              throw new AppError(`Nicht unterstütztes Sessionfeld: ${key}`);
+              throw new AppError(
+                `Nicht unterstütztes Sessionfeld: ${key}`,
+                400,
+                "INVALID_REQUEST",
+                { messageKey: "errors:session.field", params: { name: key } },
+              );
           if (b.title !== undefined) {
             if (
               typeof b.title !== "string" ||
               !b.title.trim() ||
               b.title.length > 200
             )
-              throw new AppError("Ungültiger Sessionname.");
+              throw new AppError(
+                "Ungültiger Sessionname.",
+                400,
+                "INVALID_REQUEST",
+                { messageKey: "errors:session.name" },
+              );
             s.title = b.title.trim();
           }
           if (b.language !== undefined) {
             if (!LANGUAGES.includes(b.language))
-              throw new AppError("Ungültige Sprache.");
+              throw new AppError("Ungültige Sprache.", 400, "INVALID_REQUEST", {
+                messageKey: "errors:session.language",
+              });
             s.language = b.language;
+          }
+          if (b.tutorLocale !== undefined) {
+            if (!Object.hasOwn(LOCALES, b.tutorLocale))
+              throw new AppError(
+                "Ungültige Tutorsprache.",
+                400,
+                "INVALID_REQUEST",
+                { messageKey: "sessions:errors.tutorLocale" },
+              );
+            s.tutorLocale = b.tutorLocale;
           }
           if (b.activeFile !== undefined)
             s.activeFile =
               b.activeFile === null ? null : normalizePath(b.activeFile);
           if (b.openFiles !== undefined) {
             if (!Array.isArray(b.openFiles) || b.openFiles.length > 50)
-              throw new AppError("Ungültige Dateireiter.");
+              throw new AppError(
+                "Ungültige Dateireiter.",
+                400,
+                "INVALID_REQUEST",
+                { messageKey: "errors:session.tabs" },
+              );
             s.openFiles = [...new Set(b.openFiles.map(normalizePath))];
           }
           if (b.learningPlan !== undefined) {
@@ -105,7 +144,12 @@ router.delete(
       let previous = {};
       await serial(`lifecycle:${id}`, async () => {
         if (isActive(id))
-          throw new AppError("Bitte die laufende Antwort zuerst stoppen.", 409);
+          throw new AppError(
+            "Bitte die laufende Antwort zuerst stoppen.",
+            409,
+            "INVALID_REQUEST",
+            { messageKey: "errors:session.stop" },
+          );
         await loadSession(id);
         await serial(`session:${id}`, async () => {
           try {
@@ -140,6 +184,7 @@ router.delete(
             "Löschen wartet auf den Runner. Die Session bleibt gesperrt; den Vorgang nach Wiederherstellung erneut ausführen.",
             503,
             "DELETION_PENDING",
+            { messageKey: "errors:session.deletionRunner" },
           );
         }
       } else await stopSessionProcesses(id);

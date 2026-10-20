@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { CONTEXT_DEFAULTS, CONTEXT_VERSION } from "./context/settings.js";
+import { getDefaultSystemPrompt } from "../prompts/tutor.js";
 
 export const DATA_DIR = path.resolve(
   process.env.STERRACODE_DATA_DIR ||
@@ -18,10 +19,14 @@ export const WORKSPACE_DIR = path.resolve(
 );
 const queues = new Map();
 export class AppError extends Error {
-  constructor(message, status = 400, code = "INVALID_REQUEST") {
+  constructor(message, status = 400, code = "INVALID_REQUEST", metadata = {}) {
     super(message);
     this.status = status;
     this.code = code;
+    if (metadata.messageKey || metadata.key) {
+      this.messageKey = metadata.messageKey || metadata.key;
+      this.params = metadata.params || {};
+    }
   }
 }
 export function validateSessionId(id) {
@@ -31,7 +36,9 @@ export function validateSessionId(id) {
       id,
     )
   )
-    throw new AppError("Ungültige Session-ID.");
+    throw new AppError("Ungültige Session-ID.", 400, "INVALID_REQUEST", {
+      messageKey: "errors:session.invalidId",
+    });
   return id;
 }
 export async function serial(key, operation) {
@@ -114,7 +121,7 @@ export function defaultSettings() {
     activeModel: null,
     temperature: 0.4,
     maxTokensResponse: 2048,
-    systemPrompt: DEFAULT_SYSTEM_PROMPT,
+    systemPrompt: getDefaultSystemPrompt(),
     ...CONTEXT_DEFAULTS,
     maxToolCallsPerTurn: 10,
     crossChatProfileEnabled: false,
@@ -214,7 +221,12 @@ export async function updateSettings(updates) {
     const defaults = defaultSettings();
     for (const key of Object.keys(updates)) {
       if (!Object.hasOwn(defaults, key))
-        throw new AppError(`Unbekannte Einstellung: ${key}`);
+        throw new AppError(
+          `Unbekannte Einstellung: ${key}`,
+          400,
+          "INVALID_REQUEST",
+          { messageKey: "errors:settings.unknown", params: { name: key } },
+        );
       const value = updates[key];
       if (
         key === "activeModel" &&
@@ -225,16 +237,28 @@ export async function updateSettings(updates) {
         typeof value !== typeof defaults[key] ||
         (typeof value === "number" && !Number.isFinite(value))
       )
-        throw new AppError(`Ungültige Einstellung: ${key}`);
+        throw new AppError(
+          `Ungültige Einstellung: ${key}`,
+          400,
+          "INVALID_REQUEST",
+          { messageKey: "errors:settings.invalid", params: { name: key } },
+        );
     }
     const next = { ...current, ...updates };
     if (
       !["lmstudio", "openai"].includes(next.provider) ||
       !/^[A-Za-z0-9._:-]{0,200}$/.test(next.openAIModel)
     )
-      throw new AppError("Ungültiger KI-Anbieter oder ungültige Modell-ID.");
+      throw new AppError(
+        "Ungültiger KI-Anbieter oder ungültige Modell-ID.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "errors:settings.provider" },
+      );
     if (!["dark", "light", "high-contrast", "solarized"].includes(next.theme))
-      throw new AppError("Ungültiges Theme.");
+      throw new AppError("Ungültiges Theme.", 400, "INVALID_REQUEST", {
+        messageKey: "errors:settings.theme",
+      });
     for (const [key, min, max] of [
       ["temperature", 0, 1],
       ["fontSize", 10, 24],
@@ -259,7 +283,12 @@ export async function updateSettings(updates) {
         next[key] > max ||
         (Object.hasOwn(CONTEXT_DEFAULTS, key) && !Number.isInteger(next[key]))
       )
-        throw new AppError(`Ungültiger Wertebereich: ${key}`);
+        throw new AppError(
+          `Ungültiger Wertebereich: ${key}`,
+          400,
+          "INVALID_REQUEST",
+          { messageKey: "errors:settings.range", params: { name: key } },
+        );
     }
     if (
       next.contextSettingsVersion !== CONTEXT_VERSION ||
@@ -269,24 +298,33 @@ export async function updateSettings(updates) {
     )
       throw new AppError(
         "Ungültige Kontexteinstellungen: Ziel muss unter der Auslöseschwelle und das Gesamtlimit über dem Einzelresultat liegen.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "errors:settings.context" },
       );
     if (
       !Array.isArray(next.allowedLanguages) ||
       next.allowedLanguages.some((l) => !LANGUAGES.includes(l))
     )
-      throw new AppError("Ungültige Sprachauswahl.");
+      throw new AppError("Ungültige Sprachauswahl.", 400, "INVALID_REQUEST", {
+        messageKey: "errors:settings.languages",
+      });
     let url;
     try {
       url = new URL(next.lmStudioUrl);
     } catch {
-      throw new AppError("Ungültige LM-Studio-URL.");
+      throw new AppError("Ungültige LM-Studio-URL.", 400, "INVALID_REQUEST", {
+        messageKey: "errors:settings.lmUrl",
+      });
     }
     if (
       !["http:", "https:"].includes(url.protocol) ||
       url.username ||
       url.password
     )
-      throw new AppError("Ungültige LM-Studio-URL.");
+      throw new AppError("Ungültige LM-Studio-URL.", 400, "INVALID_REQUEST", {
+        messageKey: "errors:settings.lmUrl",
+      });
     next.lmStudioUrl = url.href.replace(/\/$/, "");
     const file = path.join(DATA_DIR, "settings.json");
     const original = await readJSON(file);
@@ -326,6 +364,7 @@ export async function getWorkspacePath(id) {
         "Workspace-Verknüpfungen sind nicht erlaubt.",
         403,
         "PATH_DENIED",
+        { messageKey: "errors:workspace.links" },
       );
   return root;
 }
@@ -342,5 +381,6 @@ export async function assertSessionWritable(id) {
     "Session wird gelöscht. Bei unterbrochener Verbindung das Löschen erneut ausführen.",
     409,
     "SESSION_DELETING",
+    { messageKey: "errors:session.deleting" },
   );
 }

@@ -1,4 +1,11 @@
 import {
+  localizeFields,
+  localizePreview,
+  localizeProposal,
+  localizeTracePage,
+  localizeRun,
+} from "../services/messageOutput.js";
+import {
   listProposals,
   getProposal,
   decideProposal,
@@ -51,7 +58,13 @@ router.get(
 router.post(
   "/:sessionId/project-export",
   route(async (req, res) =>
-    res.json(await exportProject(req.params.sessionId, req.body)),
+    res.json(
+      localizeFields(
+        await exportProject(req.params.sessionId, req.body),
+        req.uiLocale,
+        ["limitations"],
+      ),
+    ),
   ),
 );
 router.get(
@@ -83,7 +96,12 @@ router.get(
 router.get(
   "/:sessionId/proposals/:proposalId",
   route(async (req, res) =>
-    res.json(await getProposal(req.params.sessionId, req.params.proposalId)),
+    res.json(
+      localizeProposal(
+        await getProposal(req.params.sessionId, req.params.proposalId),
+        req.uiLocale,
+      ),
+    ),
   ),
 );
 router.post(
@@ -120,13 +138,25 @@ router.get(
 router.post(
   "/:sessionId/preview-runs",
   route(async (req, res) =>
-    res.status(201).json(await startPreview(req.params.sessionId, req.body)),
+    res
+      .status(201)
+      .json(
+        localizePreview(
+          await startPreview(req.params.sessionId, req.body),
+          req.uiLocale,
+        ),
+      ),
   ),
 );
 router.get(
   "/:sessionId/preview-runs/:previewRunId",
   route(async (req, res) =>
-    res.json(await getPreview(req.params.sessionId, req.params.previewRunId)),
+    res.json(
+      localizePreview(
+        await getPreview(req.params.sessionId, req.params.previewRunId),
+        req.uiLocale,
+      ),
+    ),
   ),
 );
 router.get(
@@ -136,6 +166,7 @@ router.get(
       req.params.sessionId,
       req.params.previewRunId,
       res.locals.appOrigin,
+      req.uiLocale,
     );
     res.set(previewHeaders(res.locals.appOrigin)).type("html").send(html);
   }),
@@ -146,7 +177,14 @@ router.post(
     res
       .status(202)
       .json(
-        await startTaskTests(req.params.sessionId, req.params.taskId, req.body),
+        localizeRun(
+          await startTaskTests(
+            req.params.sessionId,
+            req.params.taskId,
+            req.body,
+          ),
+          req.uiLocale,
+        ),
       ),
   ),
 );
@@ -179,20 +217,35 @@ router.get(
   "/:sessionId/test-runs/:testRunId",
   route(async (req, res) =>
     res.json(
-      await getTaskTestResults(req.params.sessionId, req.params.testRunId),
+      localizeRun(
+        await getTaskTestResults(req.params.sessionId, req.params.testRunId),
+        req.uiLocale,
+      ),
     ),
   ),
 );
 router.post(
   "/:sessionId/test-runs/:testRunId/cancel",
   route(async (req, res) =>
-    res.json(await cancelTaskTests(req.params.sessionId, req.params.testRunId)),
+    res.json(
+      localizeRun(
+        await cancelTaskTests(req.params.sessionId, req.params.testRunId),
+        req.uiLocale,
+      ),
+    ),
   ),
 );
 router.post(
   "/:sessionId/traces",
   route(async (req, res) =>
-    res.status(202).json(await startTrace(req.params.sessionId, req.body)),
+    res
+      .status(202)
+      .json(
+        localizeRun(
+          await startTrace(req.params.sessionId, req.body),
+          req.uiLocale,
+        ),
+      ),
   ),
 );
 router.get(
@@ -202,19 +255,27 @@ router.get(
 router.get(
   "/:sessionId/traces/:traceRunId",
   route(async (req, res) =>
-    res.json(await getTrace(req.params.sessionId, req.params.traceRunId)),
+    res.json(
+      localizeRun(
+        await getTrace(req.params.sessionId, req.params.traceRunId),
+        req.uiLocale,
+      ),
+    ),
   ),
 );
 router.get(
   "/:sessionId/traces/:traceRunId/events",
   route(async (req, res) =>
     res.json(
-      await traceEvents(
-        req.params.sessionId,
-        req.params.traceRunId,
-        Number(req.query.fromStep ?? 1),
-        Number(req.query.limit ?? 50),
-        req.query.detail ?? "full",
+      localizeTracePage(
+        await traceEvents(
+          req.params.sessionId,
+          req.params.traceRunId,
+          Number(req.query.fromStep ?? 1),
+          Number(req.query.limit ?? 50),
+          req.query.detail ?? "full",
+        ),
+        req.uiLocale,
       ),
     ),
   ),
@@ -222,7 +283,12 @@ router.get(
 router.post(
   "/:sessionId/traces/:traceRunId/cancel",
   route(async (req, res) =>
-    res.json(await cancelTrace(req.params.sessionId, req.params.traceRunId)),
+    res.json(
+      localizeRun(
+        await cancelTrace(req.params.sessionId, req.params.traceRunId),
+        req.uiLocale,
+      ),
+    ),
   ),
 );
 router.get(

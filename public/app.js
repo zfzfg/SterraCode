@@ -1,3 +1,4 @@
+import { t, formatNumber } from "./js/i18n.js";
 import { openAIModelOptions } from "./js/providerModels.js";
 import { api } from "./js/api.js";
 import { state, emit, on } from "./js/state.js";
@@ -9,7 +10,13 @@ import {
   layoutEditor,
   updateEditorTheme,
 } from "./js/editor.js";
-import { createSession, loadSessions, languageOptions } from "./js/sessions.js";
+import {
+  createSession,
+  loadSessions,
+  languageOptions,
+  openSession,
+} from "./js/sessions.js";
+import { initLocaleSwitch, restoreLocaleSwitch } from "./js/localeSwitch.js";
 import { initWorkspace } from "./js/workspace.js";
 import { initChat, updateChatState, showChanges } from "./js/chat.js";
 import { initTerminal, updateRunState, showTerminal } from "./js/terminal.js";
@@ -59,7 +66,10 @@ async function refreshModels() {
         "option",
         "",
         model.contextLength
-          ? `${model.name} · ${model.contextLength.toLocaleString("de-DE")} Kontext-Tokens`
+          ? t("app:model.context", {
+              name: model.name,
+              tokens: formatNumber(model.contextLength),
+            })
           : model.name,
       );
       option.value = model.id;
@@ -73,7 +83,7 @@ async function refreshModels() {
       const configured = node(
         "option",
         "",
-        `${state.settings[modelKey]} (eigene Modell-ID)`,
+        t("app:model.custom", { name: state.settings[modelKey] }),
       );
       configured.value = state.settings[modelKey];
       select.append(configured);
@@ -88,7 +98,7 @@ async function refreshModels() {
           body: { activeModel: data.models[0].id },
         });
       if (modelKey === "openAIModel" && !state.settings[modelKey]) {
-        const placeholder = node("option", "", "OpenAI-Modell auswählen");
+        const placeholder = node("option", "", t("app:model.choose"));
         placeholder.value = "";
         select.prepend(placeholder);
       }
@@ -97,7 +107,9 @@ async function refreshModels() {
       const option = node(
         "option",
         "",
-        data.connected ? "Kein Modell verfügbar" : `${providerName} offline`,
+        data.connected
+          ? t("app:model.none")
+          : t("app:model.offline", { provider: providerName }),
       );
       option.value = "";
       select.append(option);
@@ -109,27 +121,28 @@ async function refreshModels() {
         ? Boolean(state.settings[modelKey])
         : data.models.some((m) => m.id === state.settings[modelKey]));
     const text = state.ready
-      ? `${providerName} verbunden`
+      ? t("app:model.connected", { provider: providerName })
       : data.connected
         ? modelKey === "openAIModel"
-          ? "Bitte ein OpenAI-Modell in den Einstellungen oder in einer Session auswählen."
-          : "Bitte in LM Studio ein Modell laden."
-        : data.error || `${providerName}-Adresse und Zugangsdaten prüfen.`;
+          ? t("app:model.chooseHelp")
+          : t("app:model.loadHelp")
+        : data.error ||
+          t("app:model.credentialsHelp", { provider: providerName });
     $("connection-badge").className =
       `status-dot ${state.ready ? "ready" : "offline"}`;
     $("connection-badge").setAttribute("aria-label", text);
     $("connection-badge").title = text;
     $("connection-text").textContent = state.ready
-      ? `${providerName} verbunden`
+      ? t("app:model.connected", { provider: providerName })
       : data.connected
         ? modelKey === "openAIModel"
-          ? "Kein Modell ausgewählt"
-          : "Kein Modell geladen"
-        : `${providerName} offline`;
+          ? t("app:model.notSelected")
+          : t("app:model.notLoaded")
+        : t("app:model.offline", { provider: providerName });
     $("connection-help").textContent = state.ready ? "" : text;
     $("welcome-status").textContent = state.ready
-      ? "Dein KI-Tutor ist bereit."
-      : `${text} Du kannst Sessions und Dateien bereits offline bearbeiten.`;
+      ? t("app:model.ready")
+      : t("app:model.offlineHelp", { status: text });
   } finally {
     modelsLoading = false;
     $("refresh-models").disabled = false;
@@ -366,65 +379,65 @@ async function openSettings() {
   const fields = [
     {
       name: "provider",
-      label: "KI-Anbieter",
+      label: t("auth:model.provider"),
       type: "select",
       value: s.provider || "lmstudio",
       options: [
         {
           value: "lmstudio",
-          label: "LM Studio (Host, LAN oder externe Adresse)",
+          label: t("app:settings.lmstudio"),
         },
         { value: "openai", label: "OpenAI API" },
       ],
     },
     {
       name: "openAIApiKey",
-      label: "OpenAI-API-Schlüssel",
+      label: t("app:settings.apiKey"),
       type: "password",
       value: "",
       maxLength: 2048,
       autocomplete: "off",
       disabled: externalOpenAIKey,
       help: externalOpenAIKey
-        ? "Der Schlüssel wird durch eine Secret-Datei auf dem Server vorgegeben."
+        ? t("app:settings.secret")
         : credentials.openai?.configured
-          ? "Ein Schlüssel ist gespeichert. Leer lassen behält ihn; eine neue Eingabe ersetzt ihn."
-          : "Hier den API-Schlüssel einfügen und die Einstellungen speichern. Danach stehen die OpenAI-Modelle zur Auswahl bereit.",
+          ? t("app:settings.keyExists")
+          : t("app:settings.keyHelp"),
     },
     {
       name: "lmStudioUrl",
-      label: "LM-Studio-URL",
+      label: t("auth:model.lmUrl"),
       value: s.lmStudioUrl,
       required: true,
     },
     {
       name: "activeModel",
-      label: "LM-Studio-Modell-ID",
+      label: t("app:settings.lmModelId"),
       value: s.activeModel || "",
     },
     {
       name: "openAIModel",
-      label: "OpenAI-Modell",
+      label: t("auth:model.openai"),
       type: "select",
       options: await openAIModelOptions(s.openAIModel),
       value: s.openAIModel || "",
-      help: "Nach dem Speichern des API-Schlüssels ein verfügbares Textmodell mit Funktionsaufrufen auswählen.",
+      help: t("app:settings.modelHelp"),
     },
     {
       name: "theme",
-      label: "Darstellung",
+      label: t("app:settings.theme"),
       type: "select",
       value: s.theme,
       options: [
-        { value: "dark", label: "Dunkel" },
-        { value: "light", label: "Hell" },
-        { value: "high-contrast", label: "Hoher Kontrast" },
+        { value: "dark", label: t("app:settings.dark") },
+        { value: "light", label: t("app:settings.light") },
+        { value: "high-contrast", label: t("app:settings.contrast") },
         { value: "solarized", label: "Solarized" },
       ],
     },
     {
       name: "fontSize",
-      label: "Editor-Schriftgröße",
+      label: t("app:settings.font"),
       type: "number",
       value: s.fontSize,
       min: 10,
@@ -432,39 +445,39 @@ async function openSettings() {
     },
     {
       name: "executionTimeout",
-      label: "Ausführungszeit (Millisekunden)",
+      label: t("app:settings.timeout"),
       type: "number",
       value: s.executionTimeout,
       min: 0,
       max: 600000,
-      help: "0 bedeutet kein Zeitlimit. Prozesse lassen sich jederzeit stoppen.",
+      help: t("app:settings.timeoutHelp"),
     },
     {
       name: "allowAITerminalCommands",
-      label: "KI darf Terminalbefehle ausführen",
+      label: t("app:settings.aiCommands"),
       type: "checkbox",
       value: s.allowAITerminalCommands,
     },
     {
       name: "reviewAIChanges",
-      label: "KI-Dateiänderungen",
+      label: t("app:static.changes"),
       type: "select",
       value: String(Boolean(s.reviewAIChanges)),
       options: [
-        { value: "false", label: "Auto Accept – direkt einfügen" },
-        { value: "true", label: "Review – vor Übernahme prüfen" },
+        { value: "false", label: t("app:settings.accept") },
+        { value: "true", label: t("app:settings.review") },
       ],
-      help: "Auto Accept ist der Standard. Diff und Rücknahme bleiben in beiden Modi verfügbar.",
+      help: t("app:settings.reviewHelp"),
     },
     {
       name: "streaming",
-      label: "Antworten während der Erstellung anzeigen",
+      label: t("app:settings.streaming"),
       type: "checkbox",
       value: s.streaming,
     },
     {
       name: "temperature",
-      label: "Temperatur",
+      label: t("app:settings.temperature"),
       type: "number",
       value: s.temperature,
       min: 0,
@@ -474,8 +487,8 @@ async function openSettings() {
     },
     {
       name: "maxTokensResponse",
-      label: "LM Studio: Maximale Antwort-Tokens",
-      help: "Das Kontextfenster wird automatisch vom geladenen Modell erkannt. Dieses Feld begrenzt nur die Antwort bei LM Studio. OpenAI verwaltet seine Tokenlimits selbst.",
+      label: t("app:settings.maxResponse"),
+      help: t("app:settings.maxResponseHelp"),
       type: "number",
       value: s.maxTokensResponse,
       min: 256,
@@ -484,38 +497,23 @@ async function openSettings() {
     },
     {
       name: "autoCompact",
-      label: "LM Studio: Kontext automatisch komprimieren",
-      help: "Alle lokalen Kontext- und Zusammenfassungsbudgets gelten ausschließlich für LM Studio.",
+      label: t("app:settings.autoCompact"),
+      help: t("app:settings.compactHelp"),
       type: "checkbox",
       value: s.autoCompact,
       advanced: true,
     },
     ...[
-      ["thresholdPercent", "Kontext komprimieren ab (%)", 10, 95],
-      ["compactFloorPercent", "Kontext verkleinern auf (%)", 5, 90],
-      ["keepRecentTokens", "Neuester wörtlicher Kontext (Tokens)", 0, 50000],
-      ["chunkTokens", "Abschnittsgröße (Tokens)", 1000, 64000],
-      [
-        "summarizerMaxTokens",
-        "Zusammenfassung je Abschnitt (Tokens)",
-        200,
-        8000,
-      ],
-      [
-        "summaryBudgetTokens",
-        "Gesamtbudget für Zusammenfassungen (Tokens)",
-        200,
-        64000,
-      ],
-      [
-        "maxToolResultTokens",
-        "Modellbudget je Werkzeugergebnis (Tokens)",
-        256,
-        64000,
-      ],
+      ["thresholdPercent", t("app:settings.threshold"), 10, 95],
+      ["compactFloorPercent", t("app:settings.floor"), 5, 90],
+      ["keepRecentTokens", t("app:settings.recent"), 0, 50000],
+      ["chunkTokens", t("app:settings.chunk"), 1000, 64000],
+      ["summarizerMaxTokens", t("app:settings.summary"), 200, 8000],
+      ["summaryBudgetTokens", t("app:settings.summaryBudget"), 200, 64000],
+      ["maxToolResultTokens", t("app:settings.resultBudget"), 256, 64000],
       [
         "maxTotalToolResultTokens",
-        "Modellbudget für Werkzeugausgaben je Runde (Tokens)",
+        t("app:settings.totalResultBudget"),
         256,
         128000,
       ],
@@ -530,19 +528,19 @@ async function openSettings() {
     })),
     {
       name: "summarizerPromptMode",
-      label: "Zusammenfassungsprompt",
+      label: t("app:settings.summaryPrompt"),
       type: "select",
       value: s.summarizerPromptMode,
       options: [
-        { value: "auto", label: "Automatisch" },
-        { value: "full", label: "Vollständig" },
-        { value: "compact", label: "Kompakt" },
+        { value: "auto", label: t("app:settings.auto") },
+        { value: "full", label: t("app:settings.full") },
+        { value: "compact", label: t("app:settings.compact") },
       ],
       advanced: true,
     },
     {
       name: "maxToolCallsPerTurn",
-      label: "Maximale Tool-Aufrufe je Antwort",
+      label: t("app:settings.toolCalls"),
       type: "number",
       value: s.maxToolCallsPerTurn,
       min: 1,
@@ -551,7 +549,7 @@ async function openSettings() {
     },
     {
       name: "compilationTimeout",
-      label: "Kompilierungszeit (Millisekunden)",
+      label: t("app:settings.compile"),
       type: "number",
       value: s.compilationTimeout,
       min: 1000,
@@ -560,28 +558,28 @@ async function openSettings() {
     },
     {
       name: "crossChatProfileEnabled",
-      label: "Sprachprofil über Sessions hinweg verwenden",
+      label: t("app:settings.crossProfile"),
       type: "checkbox",
       value: s.crossChatProfileEnabled,
       advanced: true,
     },
     {
       name: "autoUpdateProfileOnTaskDone",
-      label: "Sprachprofil nach Aufgaben aktualisieren",
+      label: t("app:settings.updateProfile"),
       type: "checkbox",
       value: s.autoUpdateProfileOnTaskDone,
       advanced: true,
     },
     ...languageOptions.map((l) => ({
       name: `enabled-${l.value}`,
-      label: `Ausführen erlauben: ${l.label}`,
+      label: t("app:settings.allowRun", { language: l.label }),
       type: "checkbox",
       value: s.allowedLanguages.includes(l.value),
       advanced: true,
     })),
     {
       name: "systemPrompt",
-      label: "Systemanweisung",
+      label: t("app:settings.systemPrompt"),
       type: "textarea",
       rows: 8,
       value: s.systemPrompt,
@@ -589,17 +587,17 @@ async function openSettings() {
     },
     {
       name: "resetPrompt",
-      label: "Systemanweisung auf Standard zurücksetzen",
+      label: t("app:settings.resetPrompt"),
       type: "checkbox",
       value: false,
       advanced: true,
     },
   ];
   const result = await formDialog({
-    title: "Einstellungen",
+    title: t("app:static.settings"),
     actions: [
       {
-        label: "KI-Zugangsdaten",
+        label: t("auth:credentials.title"),
         onClick: () => {
           nextAction = async () => {
             await openCredentials();
@@ -610,25 +608,25 @@ async function openSettings() {
       ...(state.server.mode === "docker" || state.server.authRequired
         ? [
             {
-              label: "Programme",
+              label: t("app:settings.programs"),
               onClick: () => {
                 nextAction = () => openPrograms();
               },
             },
             {
-              label: "Server",
+              label: t("app:settings.server"),
               onClick: () => {
                 nextAction = showServer;
               },
             },
             {
-              label: "Passwort ändern",
+              label: t("app:settings.password"),
               onClick: () => {
                 nextAction = changePassword;
               },
             },
             {
-              label: "Abmelden",
+              label: t("app:settings.logout"),
               onClick: () => {
                 nextAction = async () => {
                   await flush();
@@ -671,7 +669,7 @@ async function openSettings() {
     applyTheme(state.settings.theme);
     updateEditorTheme();
     await Promise.all([refreshModels(), refreshRuntimes()]);
-    toast("Einstellungen gespeichert.");
+    toast(t("app:settings.saved"));
   }
   if (nextAction) await nextAction();
 }
@@ -684,25 +682,24 @@ async function showServer() {
     diagnosis = { error: error.message };
   }
   await formDialog({
-    title: "Server",
-    description:
-      "Netzwerkwerte werden in der Serverkonfiguration geändert. Anschließend den Stack mit den Docker-Startskripten neu erstellen.",
+    title: t("app:settings.server"),
+    description: t("app:server.description"),
     fields: [
       {
         name: "address",
-        label: "Öffentliche Adresse",
+        label: t("app:server.address"),
         value: server.publicUrl || location.origin,
         readOnly: true,
       },
       {
         name: "source",
-        label: "Konfigurationsquelle",
+        label: t("app:server.source"),
         value: server.source || ".env / Compose",
         readOnly: true,
       },
       {
         name: "diagnostics",
-        label: "Diagnose",
+        label: t("app:server.diagnostics"),
         type: "textarea",
         rows: 12,
         value: JSON.stringify(diagnosis, null, 2),
@@ -715,8 +712,9 @@ async function init() {
   const access = await ensureAccess();
   state.server = await api("/api/server");
   if (state.server.mode === "docker" || access.authRequired)
-    $("workspace-status").textContent =
-      `Serverbetrieb · ${state.server.publicUrl || location.origin}`;
+    $("workspace-status").textContent = t("app:server.mode", {
+      address: state.server.publicUrl || location.origin,
+    });
   state.settings = await api("/api/chat/settings");
   applyTheme(state.settings.theme);
   for (const l of languageOptions) {
@@ -731,6 +729,7 @@ async function init() {
   initTerminal();
   initTracer();
   initPreview();
+  initLocaleSwitch({ openSession });
   $("changes-btn").addEventListener("click", () =>
     showChanges().catch((e) => toast(e.message, "error")),
   );
@@ -792,6 +791,7 @@ async function init() {
     if (result.status === "rejected") toast(result.reason.message, "error");
   updateChatState();
   updateRunState();
+  await restoreLocaleSwitch();
   setInterval(
     () => refreshModels().catch((e) => toast(e.message, "error")),
     30000,
@@ -818,8 +818,5 @@ window.addEventListener("auth-required", () => {
   ensureAccess().catch((error) => toast(error.message, "error"));
 });
 init().catch((error) =>
-  toast(
-    `SterraCode konnte nicht vollständig starten: ${error.message}`,
-    "error",
-  ),
+  toast(t("app:startup.failed", { message: error.message }), "error"),
 );

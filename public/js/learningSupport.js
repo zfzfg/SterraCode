@@ -1,9 +1,24 @@
+import { t } from "./i18n.js";
 import { api, workspaceURL } from "./api.js";
 import { state } from "./state.js";
 import { node, toast } from "./ui.js";
 import { taskSection } from "./taskSections.js";
 
 const drafts = new Map();
+
+export const captureJournalDrafts = () => [...drafts];
+export function restoreJournalDrafts(saved) {
+  if (!Array.isArray(saved)) return;
+  for (const entry of saved.slice(-100)) {
+    if (
+      Array.isArray(entry) &&
+      typeof entry[0] === "string" &&
+      typeof entry[1] === "string" &&
+      entry[1].length <= 2000
+    )
+      drafts.set(entry[0], entry[1]);
+  }
+}
 
 export function renderLearningSupport(container, task, rerender) {
   const sessionId = state.session.id;
@@ -20,7 +35,11 @@ export function renderLearningSupport(container, task, rerender) {
   const hints = taskSection(
     task,
     "hint-ladder",
-    `Hinweise: ${opened}/${task.hints?.length || 0} geöffnet`,
+    t("features:learningSupport.hintsOpened", {
+      count: task.hints?.length || 0,
+      p1: opened,
+      p2: task.hints?.length || 0,
+    }),
   );
   hints.hidden = !task.hints?.length;
   if (task.hints?.length) {
@@ -28,7 +47,11 @@ export function renderLearningSupport(container, task, rerender) {
       const detail = node("details");
       detail.open = index === opened - 1;
       detail.append(
-        node("summary", "", `Hinweis ${index + 1}`),
+        node(
+          "summary",
+          "",
+          t("features:learningSupport.hint", { p1: index + 1 }),
+        ),
         node("p", "", hint),
       );
       hints.append(detail);
@@ -37,10 +60,10 @@ export function renderLearningSupport(container, task, rerender) {
       "button",
       "",
       opened >= task.hints.length
-        ? "Alle Hinweise geöffnet"
+        ? t("features:learningSupport.allHints", { count: task.hints.length })
         : opened === 3
-          ? "Lösungshinweis freiwillig öffnen"
-          : "Nächsten Hinweis öffnen",
+          ? t("features:learningSupport.solutionHint")
+          : t("features:learningSupport.nextHint"),
     );
     next.disabled = opened >= task.hints.length;
     next.onclick = async () => {
@@ -67,21 +90,13 @@ export function renderLearningSupport(container, task, rerender) {
     };
     hints.append(
       next,
-      node(
-        "p",
-        "muted",
-        "Hinweise ändern keine Datei. Verwendete Hilfe wird ohne Punktabzug erfasst.",
-      ),
+      node("p", "muted", t("features:learningSupport.hintHelp")),
     );
   }
   const entry = state.session.learningJournal?.find(
     (e) => e.taskId === task.id && e.taskVersion === version,
   );
-  const label = node(
-    "label",
-    "",
-    "Freiwilliges Lernjournal: Was hast du verstanden, was war schwierig?",
-  );
+  const label = node("label", "", t("features:learningSupport.reflection"));
   const text = node("textarea");
   text.id = "task-journal-text";
   label.htmlFor = text.id;
@@ -93,7 +108,7 @@ export function renderLearningSupport(container, task, rerender) {
       drafts.delete(drafts.keys().next().value);
     drafts.set(draftKey, text.value);
   };
-  const save = node("button", "", "Journaleintrag speichern");
+  const save = node("button", "", t("features:learningSupport.save"));
   let expectedVersion = entry?.version || 0;
   save.onclick = async () => {
     save.disabled = true;
@@ -114,7 +129,7 @@ export function renderLearningSupport(container, task, rerender) {
         )?.version || 0;
       if (result.revision >= state.session.revision) state.session = result;
       if (text.value === submitted) drafts.delete(draftKey);
-      toast("Journaleintrag gespeichert.");
+      toast(t("features:learningSupport.saved"));
     } catch (e) {
       if (current()) toast(e.message, "error");
     } finally {
@@ -123,14 +138,14 @@ export function renderLearningSupport(container, task, rerender) {
   };
   const reflection = node("details", "task-reflection");
   reflection.append(
-    node("summary", "", "Freiwilliges Lernjournal"),
+    node("summary", "", t("features:learningSupport.journal")),
     label,
     text,
     save,
   );
   section.append(hints, reflection);
   if (!task.testSuite && !task.done) {
-    const finish = node("button", "", "Nach eigener Prüfung abschließen");
+    const finish = node("button", "", t("features:learningSupport.finish"));
     finish.onclick = async () => {
       finish.disabled = true;
       try {
@@ -154,7 +169,7 @@ export function renderLearningSupport(container, task, rerender) {
     };
     section.append(
       finish,
-      node("small", "muted", "Eigener Abschluss ohne Testnachweis."),
+      node("small", "muted", t("features:learningSupport.selfCompleted")),
     );
   }
   container.append(section);

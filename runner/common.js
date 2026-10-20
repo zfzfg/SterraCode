@@ -4,17 +4,22 @@ import { constants } from "node:fs";
 import { randomUUID } from "node:crypto";
 
 export class RunnerError extends Error {
-  constructor(message, status = 400, code = "INVALID_REQUEST") {
+  constructor(message, status = 400, code = "INVALID_REQUEST", metadata = {}) {
     super(message);
     this.status = status;
     this.code = code;
+    this.messageKey = metadata.messageKey || metadata.key;
+    this.params = metadata.params || {};
   }
 }
 export const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 export function sessionId(value) {
   if (typeof value !== "string" || !UUID.test(value))
-    throw new RunnerError("Ungültige Session-ID.");
+    throw new RunnerError("Ungültige Session-ID.", 400, "INVALID_REQUEST", {
+      messageKey: "runner:session.invalid",
+      params: {},
+    });
   return value;
 }
 export function relativePath(value) {
@@ -31,6 +36,7 @@ export function relativePath(value) {
       "Ungültiger relativer Dateipfad.",
       400,
       "INVALID_PATH",
+      { messageKey: "runner:path.invalid", params: {} },
     );
   return value;
 }
@@ -74,6 +80,7 @@ export async function freeSpace(root, required) {
       "Zu wenig freier Speicher am Ziel. Speicher freigeben und erneut versuchen.",
       507,
       "INSUFFICIENT_STORAGE",
+      { messageKey: "runner:storage.free", params: {} },
     );
   return available;
 }
@@ -122,6 +129,10 @@ export async function safeOpen(root, relative = "", directory = false) {
       `Workspace-Zugriff abgewiesen: ${error.code || error.message}`,
       400,
       "INVALID_PATH",
+      {
+        messageKey: "runner:path.denied",
+        params: { reason: error.code || error.message },
+      },
     );
   }
 }
@@ -130,12 +141,17 @@ export async function safeRead(root, relative) {
   try {
     const limit = 2 * 1024 * 1024,
       stat = await handle.stat();
-    if (!stat.isFile()) throw new RunnerError("Keine reguläre Datei.");
+    if (!stat.isFile())
+      throw new RunnerError("Keine reguläre Datei.", 400, "INVALID_REQUEST", {
+        messageKey: "runner:file.regular",
+        params: {},
+      });
     if (stat.size > limit)
       throw new RunnerError(
         "Quelldatei überschreitet 2 MiB.",
         413,
         "FILE_TOO_LARGE",
+        { messageKey: "runner:file.large", params: {} },
       );
     const chunks = [];
     let bytes = 0;
@@ -149,6 +165,7 @@ export async function safeRead(root, relative) {
           "Quelldatei überschreitet 2 MiB.",
           413,
           "FILE_TOO_LARGE",
+          { messageKey: "runner:file.large", params: {} },
         );
       chunks.push(data.subarray(0, count));
     }
@@ -157,7 +174,12 @@ export async function safeRead(root, relative) {
         Buffer.concat(chunks),
       );
     } catch {
-      throw new RunnerError("Quelldatei enthält kein gültiges UTF-8.");
+      throw new RunnerError(
+        "Quelldatei enthält kein gültiges UTF-8.",
+        400,
+        "INVALID_REQUEST",
+        { messageKey: "runner:file.encoding", params: {} },
+      );
     }
   } finally {
     await handle.close();
@@ -177,6 +199,7 @@ export async function removeTree(root, relative) {
         "Temporärer Verzeichnisbaum ist zu tief.",
         503,
         "TEMP_CLEANUP_FAILED",
+        { messageKey: "runner:storage.depth", params: {} },
       );
     const entry = path.join(directory, name);
     let stat;
@@ -224,7 +247,13 @@ export async function sources(
   depth = 0,
   result = [],
 ) {
-  if (depth > 20) throw new RunnerError("Projektstruktur ist zu tief.");
+  if (depth > 20)
+    throw new RunnerError(
+      "Projektstruktur ist zu tief.",
+      400,
+      "INVALID_REQUEST",
+      { messageKey: "runner:project.depth", params: {} },
+    );
   const dir = await safeOpen(root, relative, true);
   try {
     const location =
@@ -242,7 +271,13 @@ export async function sources(
         await sources(root, extension, name, depth + 1, result);
       else if (entry.isFile() && entry.name.endsWith(extension))
         result.push(name);
-      if (result.length > 1000) throw new RunnerError("Zu viele Quelldateien.");
+      if (result.length > 1000)
+        throw new RunnerError(
+          "Zu viele Quelldateien.",
+          400,
+          "INVALID_REQUEST",
+          { messageKey: "runner:project.files", params: {} },
+        );
     }
     return result;
   } finally {

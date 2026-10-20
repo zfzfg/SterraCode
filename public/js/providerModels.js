@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { api } from "./api.js";
 
 export async function openAIModelOptions(selected = "") {
@@ -6,15 +7,15 @@ export async function openAIModelOptions(selected = "") {
     {
       value: "",
       label: connected
-        ? "OpenAI-Modell auswählen"
-        : "OpenAI verbinden, dann Modelle aktualisieren",
+        ? t("features:providerModels.choose")
+        : t("features:providerModels.connect"),
     },
     ...models.map((model) => ({ value: model.id, label: model.name })),
   ];
   if (selected && !models.some((model) => model.id === selected))
     options.push({
       value: selected,
-      label: `${selected} (gespeichert, derzeit nicht verfügbar)`,
+      label: t("features:providerModels.unavailable", { p1: selected }),
     });
   return options;
 }

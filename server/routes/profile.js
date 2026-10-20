@@ -7,21 +7,24 @@ import {
   selfAssess,
   resetProfile,
   importHistoricalSessions,
-  profileToPromptText,
+  displayProfileContext,
+  deriveProfile,
 } from "../services/profileManager.js";
 import { startReview, reviewResult } from "../services/learningReviews.js";
 
 const router = express.Router();
+const displayProfileView = (profile, locale) =>
+  deriveProfile(profile, undefined, locale);
 router.get(
   "/",
   route(async (req, res) => {
     if (!(await getSettings()).crossChatProfileEnabled)
       return res.json({ enabled: false });
-    const profile = await getProfile();
+    const profile = await getProfile(req.uiLocale);
     res.json({
       enabled: true,
       ...profile,
-      tutorContext: profileToPromptText(profile),
+      tutorContext: displayProfileContext(profile, req.uiLocale),
     });
   }),
 );
@@ -30,7 +33,7 @@ router.get(
   route(async (req, res) =>
     res.json(
       (await getSettings()).crossChatProfileEnabled
-        ? (await getProfile()).reviews
+        ? (await getProfile(req.uiLocale)).reviews
         : [],
     ),
   ),
@@ -49,38 +52,70 @@ router.get(
 );
 router.patch(
   "/",
-  route(async (req, res) => res.json(await configureProfile(req.body))),
+  route(async (req, res) =>
+    res.json(
+      displayProfileView(await configureProfile(req.body), req.uiLocale),
+    ),
+  ),
 );
 router.delete(
   "/",
   route(async (req, res) => {
     if (req.body.confirm !== true)
-      throw new AppError("Löschen muss ausdrücklich bestätigt werden.");
-    res.json(await resetProfile());
+      throw new AppError(
+        "Löschen muss ausdrücklich bestätigt werden.",
+        undefined,
+        undefined,
+        { messageKey: "serverFeature:profile.confirmDelete", params: {} },
+      );
+    res.json(displayProfileView(await resetProfile(), req.uiLocale));
   }),
 );
 router.post(
   "/import-history",
   route(async (req, res) => {
     if (req.body.confirm !== true)
-      throw new AppError("Historische Übernahme muss bestätigt werden.");
-    res.json(await importHistoricalSessions());
+      throw new AppError(
+        "Historische Übernahme muss bestätigt werden.",
+        undefined,
+        undefined,
+        { messageKey: "serverFeature:profile.confirmHistory", params: {} },
+      );
+    res.json(
+      displayProfileView(await importHistoricalSessions(), req.uiLocale),
+    );
   }),
 );
 router.post(
   "/concepts/:conceptId/self-assessments",
   route(async (req, res) =>
-    res.json(await selfAssess(req.params.conceptId, req.body)),
+    res.json(
+      displayProfileView(
+        await selfAssess(req.params.conceptId, req.body),
+        req.uiLocale,
+      ),
+    ),
   ),
 );
 router.post(
   "/reviews/:reviewId/start",
-  route(async (req, res) => res.json(await startReview(req.params.reviewId))),
+  route(async (req, res) =>
+    res.json(
+      await startReview(req.params.reviewId, {
+        tutorLocale: req.body.tutorLocale ?? req.uiLocale,
+      }),
+    ),
+  ),
 );
 router.post(
   "/reviews/:reviewId/results",
   route(async (req, res) =>
-    res.json(await reviewResult(req.params.reviewId, req.body)),
+    res.json(
+      displayProfileView(
+        await reviewResult(req.params.reviewId, req.body),
+        req.uiLocale,
+      ),
+    ),
   ),
 );
 export default router;

@@ -63,11 +63,11 @@ async function allEvents(run) {
 }
 it("zeichnet Zeilen VOR Ausführung, Rekursion, Aliasing und Zyklen ohne repr auf", async () => {
   const run = await start(
-    'class Bad:\n    def __repr__(self):\n        raise RuntimeError("repr must not run")\na = []\nb = a\na.append(a)\nbad = Bad()\ndef f(n):\n    if n == 0:\n        return n\n    return f(n-1) + n\ntotal = f(3)\nprint("stdout stays separate")\n',
+    'class Bad:\n    def __repr__(self):\n        raise RuntimeError("repr must not run")\na = []\nb = a\na.append(a)\nbad = Bad()\ndef f(n):\n    if n == 0:\n        return n\n    return f(n-1) + n\ntotal = f(3)\nprint("stdout stays separate: Grüße – mañana 🐍")\n',
   );
   const result = await finish(run);
   expect(result).toMatchObject({ reason: "completed", complete: true });
-  expect(result.output).toContain("stdout stays separate");
+  expect(result.output).toContain("stdout stays separate: Grüße – mañana 🐍");
   const events = await allEvents(run);
   const beforeAppend = events.find((e) => e.event === "line" && e.line === 6);
   expect(beforeAppend.phase).toBe("before");

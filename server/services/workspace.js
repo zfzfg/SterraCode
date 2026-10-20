@@ -32,7 +32,12 @@ export function normalizePath(input) {
     path.win32.isAbsolute(input) ||
     path.posix.isAbsolute(input)
   )
-    throw new AppError("Ungültiger relativer Dateipfad.");
+    throw new AppError(
+      "Ungültiger relativer Dateipfad.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:workspace.invalidRelativePath", params: {} },
+    );
   const parts = input.replace(/\\/g, "/").split("/");
   if (
     parts.some(
@@ -44,7 +49,12 @@ export function normalizePath(input) {
         /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(p),
     )
   )
-    throw new AppError("Ungültiger Dateiname oder Pfad.");
+    throw new AppError(
+      "Ungültiger Dateiname oder Pfad.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:workspace.invalidPath", params: {} },
+    );
   return parts.join("/");
 }
 export async function resolvePath(root, input) {
@@ -59,6 +69,7 @@ export async function resolvePath(root, input) {
           "Verzeichnisverknüpfungen sind im Workspace nicht erlaubt.",
           403,
           "PATH_DENIED",
+          { messageKey: "serverFeature:files.directoryLinks", params: {} },
         );
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
@@ -71,9 +82,16 @@ async function existing(full) {
   try {
     handle = await fs.open(full, readFlags);
     const stat = await handle.stat();
-    if (!stat.isFile()) throw new AppError("Der Pfad ist keine Datei.");
+    if (!stat.isFile())
+      throw new AppError("Der Pfad ist keine Datei.", undefined, undefined, {
+        messageKey: "serverFeature:workspace.notAFile",
+        params: {},
+      });
     if (stat.size > 2 * 1024 * 1024)
-      throw new AppError("Die Datei ist größer als 2 MiB.", 413);
+      throw new AppError("Die Datei ist größer als 2 MiB.", 413, undefined, {
+        messageKey: "serverFeature:workspace.fileTooLarge",
+        params: {},
+      });
     const limit = 2 * 1024 * 1024;
     const buffer = Buffer.alloc(Math.min(stat.size + 1, limit + 1));
     let length = 0;
@@ -92,6 +110,10 @@ async function existing(full) {
         "Die Datei wurde während des Lesens verändert. Bitte erneut laden.",
         409,
         "CONFLICT",
+        {
+          messageKey: "serverFeature:workspace.changedWhileReading",
+          params: {},
+        },
       );
     const bytes = buffer.subarray(0, length);
     let content;
@@ -106,6 +128,7 @@ async function existing(full) {
         "Nur UTF-8-Textdateien können im Editor bearbeitet werden.",
         415,
         "TEXT_REQUIRED",
+        { messageKey: "serverFeature:workspace.utf8Required", params: {} },
       );
     }
     return { exists: true, content, version: hash(content) };
@@ -113,7 +136,10 @@ async function existing(full) {
     if (error.code === "ENOENT")
       return { exists: false, content: null, version: null };
     if (error.code === "ELOOP")
-      throw new AppError("Verknüpfung nicht erlaubt.", 403, "PATH_DENIED");
+      throw new AppError("Verknüpfung nicht erlaubt.", 403, "PATH_DENIED", {
+        messageKey: "serverFeature:workspace.linkDenied",
+        params: {},
+      });
     throw error;
   } finally {
     await handle?.close();
@@ -129,19 +155,30 @@ export async function readFile(sessionId, input, { startLine, endLine } = {}) {
         (!Number.isSafeInteger(endLine) || endLine < 1)) ||
       (endLine !== undefined && endLine < (startLine ?? 1)))
   )
-    throw new AppError("Ungültiger Zeilenbereich.");
+    throw new AppError("Ungültiger Zeilenbereich.", undefined, undefined, {
+      messageKey: "serverFeature:workspace.invalidLineRange",
+      params: {},
+    });
   const root = await getWorkspacePath(sessionId);
   const relative = normalizePath(input);
   const file = await withSafeEntry(root, relative, existing);
   if (!file.exists)
-    throw new AppError("Datei nicht gefunden.", 404, "NOT_FOUND");
+    throw new AppError("Datei nicht gefunden.", 404, "NOT_FOUND", {
+      messageKey: "serverFeature:workspace.notFound",
+      params: {},
+    });
   if (!ranged)
     return { path: relative, content: file.content, version: file.version };
   const lines = file.content.match(/[^\n]*\n|[^\n]+$/g) || [""];
   const start = startLine ?? 1,
     end = Math.min(endLine ?? lines.length, lines.length);
   if (start > lines.length)
-    throw new AppError("Der Zeilenbereich liegt hinter der Datei.");
+    throw new AppError(
+      "Der Zeilenbereich liegt hinter der Datei.",
+      undefined,
+      undefined,
+      { messageKey: "serverFeature:workspace.rangeAfterEnd", params: {} },
+    );
   return {
     path: relative,
     content: lines.slice(start - 1, end).join(""),
@@ -189,7 +226,12 @@ export async function writeFileUnlocked(
     typeof content !== "string" ||
     Buffer.byteLength(content) > 2 * 1024 * 1024
   )
-    throw new AppError("Ungültiger oder zu großer Dateiinhalt.", 413);
+    throw new AppError(
+      "Ungültiger oder zu großer Dateiinhalt.",
+      413,
+      undefined,
+      { messageKey: "serverFeature:workspace.invalidContent", params: {} },
+    );
   const {
     actor = "user",
     reason = "",
@@ -210,6 +252,7 @@ export async function writeFileUnlocked(
           "Datei inzwischen verändert. Bitte vergleichen oder neu laden; deine Änderungen bleiben im Editor.",
           409,
           "CONFLICT",
+          { messageKey: "serverFeature:workspace.versionConflict", params: {} },
         );
       const version = hash(content);
       let change = null;
@@ -273,7 +316,10 @@ export async function undoChange(sessionId, changeId) {
       change = await readJSON(record);
     } catch (error) {
       if (error.code === "ENOENT")
-        throw new AppError("Änderung nicht gefunden.", 404);
+        throw new AppError("Änderung nicht gefunden.", 404, undefined, {
+          messageKey: "serverFeature:workspace.changeNotFound",
+          params: {},
+        });
       throw error;
     }
     if (change.status === "undone")
@@ -285,6 +331,7 @@ export async function undoChange(sessionId, changeId) {
           "Diese Datei wurde danach verändert. Rückgängig würde neuere Änderungen überschreiben.",
           409,
           "CONFLICT",
+          { messageKey: "serverFeature:workspace.undoConflict", params: {} },
         );
       if (change.before.exists) await atomicText(full, change.before.content);
       else await fs.unlink(full);
@@ -363,12 +410,26 @@ export async function listWorkspace(sessionId) {
   const root = await getWorkspacePath(sessionId);
   let count = 0;
   async function walk(dir, prefix = "", depth = 0) {
-    if (depth > 32) throw new AppError("Die Verzeichnisstruktur ist zu tief.");
+    if (depth > 32)
+      throw new AppError(
+        "Die Verzeichnisstruktur ist zu tief.",
+        undefined,
+        undefined,
+        { messageKey: "serverFeature:workspace.directoryTooDeep", params: {} },
+      );
     const items = [];
     return withSafeDirectory(dir, async (pinned) => {
       for (const entry of await fs.readdir(pinned, { withFileTypes: true })) {
         if (++count > 5000)
-          throw new AppError("Der Workspace enthält mehr als 5000 Einträge.");
+          throw new AppError(
+            "Der Workspace enthält mehr als 5000 Einträge.",
+            undefined,
+            undefined,
+            {
+              messageKey: "serverFeature:workspace.tooManyEntries",
+              params: {},
+            },
+          );
         if (entry.isSymbolicLink()) continue;
         const relative = prefix + entry.name;
         if (entry.isDirectory())
@@ -405,7 +466,10 @@ export async function createFolder(sessionId, input) {
         await fs.mkdir(full, { recursive: false });
       } catch (e) {
         if (e.code === "EEXIST")
-          throw new AppError("Dieser Name existiert bereits.", 409);
+          throw new AppError("Dieser Name existiert bereits.", 409, undefined, {
+            messageKey: "serverFeature:workspace.nameExists",
+            params: {},
+          });
         throw e;
       }
       return { ok: true };
@@ -429,6 +493,9 @@ export async function renamePath(sessionId, oldPath, newPath) {
         )
           throw new AppError(
             "Ein Ordner kann nicht in sich selbst verschoben werden.",
+            undefined,
+            undefined,
+            { messageKey: "serverFeature:workspace.moveIntoSelf", params: {} },
           );
         if (from.relative === to.relative) return { ok: true };
         if (
@@ -437,7 +504,12 @@ export async function renamePath(sessionId, oldPath, newPath) {
             () => false,
           )
         )
-          throw new AppError("Der Zielname existiert bereits.", 409);
+          throw new AppError(
+            "Der Zielname existiert bereits.",
+            409,
+            undefined,
+            { messageKey: "serverFeature:workspace.targetExists", params: {} },
+          );
         await fs.rename(from.full, to.full);
         const replace = (p) =>
           p === from.relative || p.startsWith(from.relative + "/")

@@ -1,98 +1,133 @@
+import {
+  t,
+  getLocale,
+  getFormatLocale,
+  formatNumber,
+  translateMessage,
+} from "./i18n.js";
 import { api, workspaceURL } from "./api.js";
 import { state, on, emit } from "./state.js";
 import { flush, currentFile } from "./editor.js";
 import { node, toast } from "./ui.js";
 import { randomUUID } from "./uuid.js";
 
+const observedTraceSessions = new Set();
+export async function tracesWorkActive() {
+  for (const id of observedTraceSessions) {
+    let rows;
+    try {
+      rows = await api(`${workspaceURL(id)}/traces`);
+    } catch (error) {
+      if (error.status === 404) {
+        observedTraceSessions.delete(id);
+        continue;
+      }
+      throw error;
+    }
+    if (rows.some((run) => ["starting", "running"].includes(run.status)))
+      return true;
+  }
+  return false;
+}
+// Marker metadata originates in the tracer encoder, never by matching user text.
+function traceValue(value) {
+  if (Array.isArray(value)) return value.map(traceValue);
+  if (!value || typeof value !== "object") return value;
+  const result = Object.fromEntries(
+    Object.entries(value)
+      .filter(
+        ([key]) =>
+          !["valueMessage", "displayValue", "displayMessage"].includes(key),
+      )
+      .map(([key, item]) => [key, traceValue(item)]),
+  );
+  if (value.valueMessage)
+    result.value = translateMessage(value.valueMessage, value.value);
+  return result;
+}
+const traceEventLabel = (event) =>
+  ({
+    call: t("features:tracer.call"),
+    return: t("features:tracer.returnValue"),
+    exception: t("features:tracer.exceptionEvent"),
+    line: t("features:tracer.nextLine"),
+  })[event] || event;
+
 export function initTracer() {
   const dialog = node("dialog", "trace-dialog");
   dialog.setAttribute("aria-labelledby", "trace-title");
-  const title = node("h2", "", "Python Schritt für Schritt");
+  const title = node("h2", "", t("features:tracer.title"));
   title.id = "trace-title";
-  const close = node("button", "", "Schließen");
+  const close = node("button", "", t("features:shared.close"));
   close.type = "button";
   const status = node("p");
   status.setAttribute("role", "status");
-  const help = node(
-    "p",
-    "",
-    "Sieh, welche Codezeile als Nächstes ausgeführt wird und wie sich Variablen verändern. Dafür wird deine Python-Datei einmal ausgeführt und der Lauf aufgezeichnet. Danach kannst du ihn in deinem Tempo durchgehen – auch rückwärts.",
-  );
+  const help = node("p", "", t("features:tracer.help"));
   const limitations = node("details");
   limitations.append(
-    node("summary", "", "Was wird aufgezeichnet?"),
-    node(
-      "p",
-      "",
-      "Die Ansicht zeigt den aufgezeichneten Python-Hauptthread. Rückwärts zeigt frühere Zustände, macht aber keine Dateiänderungen rückgängig. Native Bibliotheken, Threads und asynchrone Abläufe werden nicht vollständig beobachtet.",
-    ),
+    node("summary", "", t("features:tracer.whatRecorded")),
+    node("p", "", t("features:tracer.limitations")),
   );
   const setup = node("fieldset");
-  setup.append(node("legend", "", "Python-Datei aufzeichnen"));
+  setup.append(node("legend", "", t("features:tracer.record")));
   const entryLabel = node("p");
   const advanced = node("details");
-  advanced.append(node("summary", "", "Zusätzliche Dateien und Eingaben"));
+  advanced.append(node("summary", "", t("features:tracer.additional")));
   const files = node("div", "trace-files");
-  const stdinLabel = node(
-    "label",
-    "",
-    "Programmeingabe (falls dein Code input() verwendet)",
-  );
+  const stdinLabel = node("label", "", t("features:tracer.stdin"));
   const stdin = node("textarea");
   stdin.rows = 2;
   stdin.maxLength = 65536;
   stdinLabel.append(stdin);
-  const start = node("button", "", "Python-Datei aufzeichnen");
+  const start = node("button", "", t("features:tracer.record"));
   start.type = "button";
   advanced.append(files, stdinLabel);
   setup.append(entryLabel, advanced, start);
-  const historyLabel = node("label", "", "Gespeicherte Läufe");
+  const historyLabel = node("label", "", t("features:tracer.history"));
   const history = node("select");
   historyLabel.append(history);
-  const stop = node("button", "", "Lauf stoppen");
-  const discuss = node("button", "", "Trace im Chat vorbereiten");
+  const stop = node("button", "", t("features:tracer.stop"));
+  const discuss = node("button", "", t("features:tracer.discuss"));
   discuss.type = "button";
   stop.type = "button";
   stop.disabled = true;
   const controls = node("div", "trace-controls");
-  const previous = node("button", "", "Schritt zurück"),
-    play = node("button", "", "Wiedergabe"),
-    next = node("button", "", "Schritt vor"),
-    errorButton = node("button", "", "Zum Fehler");
+  const previous = node("button", "", t("features:tracer.previous")),
+    play = node("button", "", t("features:tracer.play")),
+    next = node("button", "", t("features:tracer.next")),
+    errorButton = node("button", "", t("features:tracer.toError"));
   const timeline = node("input");
   timeline.type = "range";
   timeline.min = "1";
   timeline.max = "1";
   timeline.value = "1";
-  timeline.setAttribute("aria-label", "Trace-Schritt");
+  timeline.setAttribute("aria-label", t("features:tracer.step"));
   controls.append(previous, play, next, errorButton, timeline);
   const caption = node("p", "trace-caption");
   caption.setAttribute("aria-live", "polite");
   const prediction = node("fieldset");
-  prediction.append(
-    node("legend", "", "Freiwillige Vorhersage für den nächsten Schritt"),
-  );
+  prediction.append(node("legend", "", t("features:tracer.prediction")));
   const variable = node("input");
-  variable.placeholder = "Variablenname";
-  variable.setAttribute("aria-label", "Variable vorhersagen");
+  variable.placeholder = t("features:tracer.variableName");
+  variable.setAttribute("aria-label", t("features:tracer.predictVariable"));
   const guess = node("input");
-  guess.placeholder = "Erwarteter Wert (JSON)";
-  guess.setAttribute("aria-label", "Erwarteter Wert");
+  guess.placeholder = t("features:tracer.expectedJSON");
+  guess.setAttribute("aria-label", t("features:tracer.expected"));
   const result = node("p");
   prediction.append(variable, guess, result);
   const columns = node("div", "trace-columns");
   const playback = node("section");
   playback.hidden = true;
   const output = node("pre", "trace-output");
-  output.setAttribute("aria-label", "Programmausgabe");
+  output.setAttribute("aria-label", t("features:shared.output"));
   const source = node("div", "trace-source");
-  source.setAttribute("aria-label", "Unveränderlicher Quellstand");
+  source.setAttribute("aria-label", t("features:tracer.source"));
   const data = node("div", "trace-data");
   columns.append(source, data);
   playback.append(controls, caption, prediction, columns);
   const programOutput = node("section");
   programOutput.hidden = true;
-  programOutput.append(node("h3", "", "Programmausgabe"), output);
+  programOutput.append(node("h3", "", t("features:shared.output")), output);
   dialog.append(
     title,
     close,
@@ -120,22 +155,22 @@ export function initTracer() {
     generation = 0,
     intent;
   const reasons = {
-    completed: "Vollständig beendet",
-    program_error: "Unbehandelter Programmfehler",
-    event_limit: "Ereignislimit erreicht",
-    trace_size_limit: "Datengrenze erreicht",
-    timeout: "Zeitlimit erreicht",
-    stopped: "Gestoppt",
-    incomplete_trace: "Aufzeichnung unvollständig",
-    invalid_trace: "Ungültige oder teilweise geschriebene Aufzeichnung",
-    process_unavailable: "Prozess nach Neustart nicht verfügbar",
-    runner_restarted: "Runner neu gestartet",
+    completed: t("features:tracer.completed"),
+    program_error: t("features:tracer.programError"),
+    event_limit: t("features:tracer.eventLimit"),
+    trace_size_limit: t("features:tracer.sizeLimit"),
+    timeout: t("features:shared.timeout"),
+    stopped: t("features:tracer.stopped"),
+    incomplete_trace: t("features:tracer.incomplete"),
+    invalid_trace: t("features:tracer.invalid"),
+    process_unavailable: t("features:tracer.unavailable"),
+    runner_restarted: t("features:tracer.runnerRestart"),
   };
   const active = () => run && ["starting", "running"].includes(run.status);
   function pause() {
     clearInterval(playTimer);
     playTimer = null;
-    play.textContent = "Wiedergabe";
+    play.textContent = t("features:tracer.play");
   }
   function dispose() {
     clearTimeout(pollTimer);
@@ -184,11 +219,19 @@ export function initTracer() {
     timeline.max = String(Math.max(1, events.length));
     timeline.value = String(index + 1);
     if (!event) {
-      caption.textContent = "Noch keine Ereignisse aufgezeichnet.";
+      caption.textContent = t("features:tracer.noEvents");
       data.replaceChildren();
       return;
     }
-    caption.textContent = `Schritt ${event.step}/${events.length} · ${event.event === "line" ? "Als Nächstes" : event.event} · ${event.file}: Zeile ${event.line}${event.event === "exception" ? " · Ausnahme aufgetreten; sie kann abgefangen werden." : ""}`;
+    caption.textContent = t("features:tracer.stepCaption", {
+      p1: formatNumber(event.step),
+      p2: formatNumber(events.length),
+      p3: traceEventLabel(event.event),
+      p4: event.file,
+      p5: formatNumber(event.line),
+      p6:
+        event.event === "exception" ? t("features:tracer.exceptionCaught") : "",
+    });
     const file = run.snapshot.files.find((f) => f.path === event.file);
     if (file && viewer) {
       if (model?.getValue() !== file.content) {
@@ -215,7 +258,7 @@ export function initTracer() {
       );
       viewer.revealLineInCenter(Math.max(1, event.line));
     }
-    data.replaceChildren(node("h3", "", "Aufrufstack"));
+    data.replaceChildren(node("h3", "", t("features:tracer.stack")));
     const stack = node("ol");
     for (const frame of event.stack || [])
       stack.append(
@@ -227,12 +270,16 @@ export function initTracer() {
       );
     data.append(stack);
     if (event.stackTruncated)
-      data.append(node("p", "", "Stack gekürzt (maximal 30 Frames)."));
+      data.append(node("p", "", t("features:tracer.stackTruncated")));
     for (const frame of event.stack || []) {
       data.append(node("h3", "", `${frame.function} · ${frame.frameId}`));
       const table = node("table");
       const head = node("tr");
-      for (const s of ["Variable", "Wert", "Änderung"])
+      for (const s of [
+        t("features:tracer.variable"),
+        t("features:tracer.value"),
+        t("features:tracer.change"),
+      ])
         head.append(node("th", "", s));
       table.append(head);
       const before =
@@ -245,42 +292,50 @@ export function initTracer() {
         const value = frame.locals[name];
         const change =
           value === undefined
-            ? "entfernt"
+            ? t("features:tracer.removed")
             : !(name in before)
-              ? "neu"
+              ? t("features:tracer.new")
               : JSON.stringify(value) !== JSON.stringify(before[name]) ||
                   (value?.ref &&
                     JSON.stringify(event.objects?.[value.ref]) !==
                       JSON.stringify(events[index - 1]?.objects?.[value.ref]))
-                ? "geändert"
+                ? t("features:tracer.changed")
                 : "";
         const row = node("tr");
         row.append(
           node("td", "", name),
-          node("td", "", value === undefined ? "—" : JSON.stringify(value)),
+          node(
+            "td",
+            "",
+            value === undefined ? "—" : JSON.stringify(traceValue(value)),
+          ),
           node("td", "", change),
         );
         table.append(row);
       }
       data.append(table);
       if (frame.truncated)
-        data.append(node("p", "", "Variablenansicht gekürzt."));
+        data.append(node("p", "", t("features:tracer.variablesTruncated")));
     }
     data.append(
-      node(
-        "h3",
-        "",
-        "Gemeinsame Objekte (gleiche Objekt-ID = gleiche Referenz)",
-      ),
-      node("pre", "", JSON.stringify(event.objects, null, 2)),
+      node("h3", "", t("features:tracer.sharedObjects")),
+      node("pre", "", JSON.stringify(traceValue(event.objects), null, 2)),
     );
     if (event.returnValue)
       data.append(
-        node("h3", "", "Rückgabewert"),
-        node("pre", "", JSON.stringify(event.returnValue)),
+        node("h3", "", t("features:tracer.returnValue")),
+        node("pre", "", JSON.stringify(traceValue(event.returnValue))),
       );
     if (event.exception)
-      data.append(node("p", "", `Ausnahme: ${event.exception.type}`));
+      data.append(
+        node(
+          "p",
+          "",
+          t("features:tracer.exception", { p1: event.exception.type }) +
+            " · " +
+            translateMessage(event.exception, event.exception.message || ""),
+        ),
+      );
   }
   function step(to, evaluate = false) {
     if (evaluate && variable.value && guess.value && events[to]) {
@@ -292,8 +347,19 @@ export function initTracer() {
         expected = guess.value;
       }
       result.textContent = actual
-        ? `${JSON.stringify(actual.value) === JSON.stringify(expected) ? "Richtig" : "Vergleiche"}: ${variable.value} = ${JSON.stringify(actual)}. Das ist der gespeicherte Zustand ${events[to].event === "line" ? "vor dieser Zeile" : "an diesem Ereignis"}.`
-        : "Diese Variable ist im nächsten aktuellen Frame nicht sichtbar.";
+        ? t("features:tracer.predictionResult", {
+            p1:
+              JSON.stringify(actual.value) === JSON.stringify(expected)
+                ? t("features:tracer.correct")
+                : t("features:tracer.compare"),
+            p2: variable.value,
+            p3: JSON.stringify(actual),
+            p4:
+              events[to].event === "line"
+                ? t("features:tracer.beforeLine")
+                : t("features:tracer.atEvent"),
+          })
+        : t("features:tracer.variableMissing");
     }
     index = Math.max(0, Math.min(events.length - 1, to));
     show();
@@ -319,7 +385,7 @@ export function initTracer() {
   };
   play.onclick = () => {
     if (playTimer) return pause();
-    play.textContent = "Pause";
+    play.textContent = t("features:tracer.pause");
     playTimer = setInterval(() => {
       if (index >= events.length - 1) return pause();
       step(index + 1);
@@ -334,7 +400,9 @@ export function initTracer() {
       run = info;
       output.textContent = run.output || "";
       if (run.programError)
-        output.textContent += `\n${run.programError.type}: ${run.programError.message}`;
+        output.textContent += `\n${run.programError.type}: ${translateMessage(run.programError, run.programError.message)}`;
+      if (run.error || run.errorKey)
+        output.textContent += `\n${translateMessage({ messageKey: run.errorKey, params: run.errorParams }, run.error)}`;
       while (events.length < run.eventCount) {
         const page = await api(
           `${base}/traces/${id}/events?fromStep=${events.length + 1}&limit=50`,
@@ -345,13 +413,23 @@ export function initTracer() {
       }
       status.textContent =
         run.status === "expired"
-          ? "Trace-Artefakt abgelaufen. Der Vorgangsbeleg und das Dateimanifest bleiben erhalten; dieser Lauf wird nicht erneut ausgeführt."
-          : `${active() ? "Aufzeichnung läuft" : reasons[run.reason] || run.reason || run.status} · ${events.length} Schritte${run.complete ? "" : " · unvollständig"}. Original-Snapshot vom ${new Date(run.createdAt).toLocaleString("de-DE")}; der aktuelle Editor kann abweichen. Maximal 1.000 Ereignisse / 2 MiB / 10 Sekunden.`;
+          ? t("features:tracer.expired")
+          : t("features:tracer.runDetails", {
+              count: events.length,
+              p1: active()
+                ? t("features:tracer.recording")
+                : reasons[run.reason] || run.reason || run.status,
+              p2: formatNumber(events.length),
+              p3: run.complete ? "" : t("features:tracer.incompleteSuffix"),
+              p4: new Date(run.createdAt).toLocaleString(getFormatLocale()),
+            });
       stop.disabled = !active();
       show();
     } catch (e) {
       if (token === generation)
-        status.textContent = `Verbindung unterbrochen: ${e.message} Gespeicherter Lauf wird erneut gelesen.`;
+        status.textContent = t("features:tracer.reconnecting", {
+          p1: e.message,
+        });
     }
     if (token === generation && active())
       pollTimer = setTimeout(() => refresh(token), 500);
@@ -371,7 +449,10 @@ export function initTracer() {
   discuss.onclick = () => {
     if (!run?.traceRunId) return;
     const input = document.getElementById("chat-input");
-    input.value = `Bitte erkläre mir den gespeicherten Python-Trace ${run.traceRunId}. Lies zuerst die Zusammenfassung mit inspect_execution_trace und anschließend bei Bedarf wenige Ereignisse. Der Trace gehört zum ursprünglichen Snapshot.`;
+    input.value = t("features:tracer.discussPrompt", {
+      lng: state.session?.tutorLocale || getLocale(),
+      p1: run.traceRunId,
+    });
     input.dispatchEvent(new Event("input", { bubbles: true }));
     dialog.close();
     input.focus();
@@ -394,7 +475,7 @@ export function initTracer() {
       await flush();
       const entry = currentFile();
       if (!entry?.endsWith(".py"))
-        throw new Error("Bitte eine Python-Einstiegsdatei im Editor öffnen.");
+        throw new Error(t("features:tracer.openPython"));
       const expectedVersions = {};
       const selected = [...files.querySelectorAll("input:checked")].map(
         (i) => i.value,
@@ -416,7 +497,7 @@ export function initTracer() {
       const option = node(
         "option",
         "",
-        `${created.snapshot.entry} · ${new Date(created.createdAt).toLocaleTimeString("de-DE")}`,
+        `${created.snapshot.entry} · ${new Date(created.createdAt).toLocaleTimeString(getFormatLocale())}`,
       );
       option.value = created.traceRunId;
       historyLabel.hidden = false;
@@ -433,9 +514,10 @@ export function initTracer() {
     }
   };
   document.getElementById("trace-open").onclick = async () => {
-    if (!state.session) return toast("Bitte zuerst eine Session öffnen.");
+    if (!state.session) return toast(t("features:shared.openSession"));
     if (!currentFile()?.endsWith(".py")) return;
     session = state.session.id;
+    observedTraceSessions.add(session);
     base = workspaceURL(session);
     run = null;
     events = [];
@@ -443,14 +525,14 @@ export function initTracer() {
     intent = null;
     output.textContent = "";
     result.textContent = "";
-    entryLabel.textContent = `Datei: ${currentFile()}`;
+    entryLabel.textContent = t("features:tracer.file", { p1: currentFile() });
     advanced.open = false;
     limitations.open = false;
     historyLabel.hidden = true;
     show();
     dialog.showModal();
     const token = ++generation;
-    status.textContent = "Quelldateien und gespeicherte Läufe laden …";
+    status.textContent = t("features:tracer.loading");
     viewer = monaco.editor.create(source, {
       readOnly: true,
       automaticLayout: true,
@@ -465,7 +547,9 @@ export function initTracer() {
       ]);
       if (token !== generation) return;
       files.replaceChildren();
-      history.replaceChildren(node("option", "", "Lauf auswählen"));
+      history.replaceChildren(
+        node("option", "", t("features:tracer.selectRun")),
+      );
       const walk = (items) => {
         for (const item of items) {
           if (item.children) walk(item.children);
@@ -485,7 +569,7 @@ export function initTracer() {
         const option = node(
           "option",
           "",
-          `${r.entry} · ${new Date(r.createdAt).toLocaleString("de-DE")}`,
+          `${r.entry} · ${new Date(r.createdAt).toLocaleString(getFormatLocale())}`,
         );
         option.value = r.traceRunId;
         history.append(option);
@@ -495,8 +579,7 @@ export function initTracer() {
         history.value = runs[0].traceRunId;
         await select(runs[0].traceRunId);
       } else {
-        status.textContent =
-          "Bereit. Einstieg ist die aktuelle Python-Datei. Weitere lokale Python-Dateien ausdrücklich auswählen.";
+        status.textContent = t("features:tracer.ready");
         show();
       }
     } catch (e) {

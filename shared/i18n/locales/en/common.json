@@ -1,0 +1,17 @@
+{
+  "actions.close": "Close",
+  "actions.save": "Save",
+  "actions.cancel": "Cancel",
+  "actions.confirm": "Confirm",
+  "dialog.open": "Please close the open dialog first.",
+  "dialog.advanced": "Advanced settings",
+  "locale.label": "Interface language",
+  "errors.generic": "Something went wrong. Please try again.",
+  "validation.required": "Please fill in this field.",
+  "validation.minimum": "Please enter at least {{count}} characters.",
+  "network.unavailable": "The SterraCode server is unreachable. Check the server address and connection.",
+  "network.invalid": "Invalid server response.",
+  "network.interrupted": "The connection was interrupted. Completed steps remain saved.",
+  "validation.invalid": "Please enter a valid value.",
+  "locale.loadFailed": "The language files could not be loaded. Please try again."
+}

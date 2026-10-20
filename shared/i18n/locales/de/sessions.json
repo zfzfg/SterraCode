@@ -1,0 +1,22 @@
+{
+  "tutor.label": "Tutorsprache",
+  "tutor.help": "Gilt für zukünftige Antworten. Bisherige Nachrichten und Dateien bleiben unverändert.",
+  "tutor.legacy": "Sprache des Nutzers (bisheriges Verhalten)",
+  "errors.tutorLocale": "Ungültige Tutorsprache.",
+  "deletion.pending": "Löschen ausstehend · zum Fortsetzen verwalten",
+  "manage.title": "Session verwalten",
+  "empty": "Noch keine Sessions. Starte mit einem eigenen Lernziel.",
+  "recent": "Zuletzt bearbeitet",
+  "new.title": "Neue Session",
+  "new.server": "Dateien und Lernfortschritt werden auf dem SterraCode-Server gespeichert.",
+  "new.local": "Dateien und Lernfortschritt werden lokal auf deinem Rechner gespeichert.",
+  "name": "Name",
+  "new.defaultTitle": "Meine neue Session",
+  "new.create": "Session erstellen",
+  "action": "Aktion",
+  "rename": "Umbenennen",
+  "delete.action": "Session löschen (mit Sicherung)",
+  "delete.stop": "Bitte die laufende KI-Antwort zuerst stoppen.",
+  "delete.confirm": "Session löschen?",
+  "delete.description": "„{{title}}“ wird aus der Liste entfernt. Eine Sicherung bleibt lokal erhalten."
+}

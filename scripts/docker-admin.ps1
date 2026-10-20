@@ -15,7 +15,7 @@ switch ($Operation) {
         Invoke-SterraCompose @options
         if ($Offline) {
             $project = Get-SterraEnv 'COMPOSE_PROJECT_NAME' 'sterracode'
-            & docker image save "${project}-app:1.0.0" "${project}-runner:1.0.0" -o (Join-Path $target 'images.tar')
+            & docker image save "${project}-app:1.1.0" "${project}-runner:1.1.0" -o (Join-Path $target 'images.tar')
             if ($LASTEXITCODE) { throw 'Imagearchiv fehlgeschlagen. Stack bleibt gestoppt.' }
         }
         Invoke-SterraCompose up -d --remove-orphans
