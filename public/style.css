@@ -184,6 +184,10 @@ a {
   stroke-linejoin: round;
   vertical-align: middle;
 }
+.sterra-icon {
+  fill: currentColor;
+  stroke: none;
+}
 .muted {
   color: var(--muted);
 }
