@@ -1,4 +1,4 @@
-import { systemPrompt } from "./prompt.js";
+import { systemPrompt, stateText } from "./prompt.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -24,8 +24,9 @@ import { isSystemRoleRejection } from "./core/viewBuilder.js";
 import { estimateTokens } from "./core/estimate.js";
 import { modelHistory, makeView, plainChat } from "./history.js";
 import { workflowState, fitWorkflow } from "./workflow.js";
-import { ResultLimiter, readToolResult } from "./results.js";
+import { ResultLimiter, projectHistory, readToolResult } from "./results.js";
 import { CONTEXT_DEFAULTS } from "./settings.js";
+import { lmStudioUsage } from "../modelUsage.js";
 
 const changeError = () =>
   new AppError(
@@ -94,7 +95,17 @@ export class ContextManager {
     this.tokenMemo = tokenMemo(
       `${contextProviderIdentity(settings)}:${connection.identity}`,
     );
-    this.ctl = { abortSignal: signal, onAborted: () => {} };
+    this.ctl = {
+      abortSignal: signal,
+      onAborted: () => {},
+      onUsage: (result) =>
+        this.emit("context-report", {
+          type: "model_usage",
+          modelCall: true,
+          purpose: "context",
+          usage: lmStudioUsage(result.stats),
+        }),
+    };
     this.state = {
       coveredCount: 0,
       chunkSummaries: [],
@@ -205,21 +216,7 @@ export class ContextManager {
     return value;
   }
   async capHistory(source) {
-    let limiter = this.newLimiter();
-    const result = [];
-    for (const m of source) {
-      if (m.role === "assistant") limiter = this.newLimiter();
-      if (m.role !== "tool") {
-        result.push(m);
-        continue;
-      }
-      const capped = await limiter.cap(m.toolResults[0].content, m.id);
-      result.push({
-        ...m,
-        toolResults: [{ ...m.toolResults[0], content: JSON.stringify(capped) }],
-      });
-    }
-    return result;
+    return projectHistory(source, () => this.newLimiter());
   }
   newLimiter() {
     return new ResultLimiter(
@@ -362,9 +359,11 @@ export class ContextManager {
       threshold,
     );
     this.model.setProviderHistory?.(session.messages);
-    const source = modelHistory(session);
+    const source = modelHistory(session, {
+      includeProfile: this.settings.crossChatProfileEnabled,
+    });
     const namespace = hashNamespace({
-      schema: 2,
+      schema: 3,
       sessionId: this.sessionId,
       model: this.connection.info.path,
       identifier: this.model.identifier,
@@ -394,10 +393,18 @@ export class ContextManager {
       Math.max(256, Math.floor(this.contextLength * 0.15)),
       (text) => this.count(text),
     );
+    const snapshotMemory = () => {
+      if (!source.some((m) => m.contextSnapshot))
+        return `\n${stateText(session, profile, retry)}`;
+      const covered = source
+        .slice(0, this.state.coveredCount)
+        .findLast((m) => m.contextSnapshot);
+      return covered ? `\n${covered.text}` : "";
+    };
     const currentInstruction = source[currentTurnStart(source)];
     const minimumTokens = await this.measure(
       makeView(
-        `${base}\n${workflow}`,
+        `${base}\n${source.findLast((m) => m.contextSnapshot)?.text || stateText(session, profile, retry)}\n${workflow}`,
         currentInstruction?.role === "user" ? [currentInstruction] : [],
         0,
         this.strategy,
@@ -447,7 +454,7 @@ export class ContextManager {
         : "";
     const build = () =>
       makeView(
-        `${base}\n${workflow}${pinnedRoot()}${this.summaryText()}`,
+        `${base}${pinnedRoot()}${this.summaryText()}${snapshotMemory()}\n${workflow}`,
         tail,
         this.state.coveredCount,
         this.strategy,

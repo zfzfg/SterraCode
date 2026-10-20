@@ -286,7 +286,9 @@ export async function mutateSession(id, change, expectedRevision) {
         s.currentTask,
         s.messages.filter(
           (m) =>
-            !["context_usage", "context_compaction"].includes(m.event?.type),
+            !["context_usage", "context_compaction", "model_usage"].includes(
+              m.event?.type,
+            ),
         ),
       ]);
     const previousContext = contextKey(session),

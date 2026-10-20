@@ -22,6 +22,82 @@ const { createApp } = await import("../../server/app.js");
 
 const { stopAllProcesses } = await import("../../server/services/processes.js");
 
+// Offline Responses API fixture; never sends credentials or prompts externally.
+const { setOpenAITransportForTests } =
+  await import("../../server/services/openAI.js");
+let responseNumber = 0;
+setOpenAITransportForTests(async (url, options) => {
+  const body = options.body ? JSON.parse(options.body) : {};
+  const json = (value) =>
+    new Response(JSON.stringify(value), {
+      headers: { "Content-Type": "application/json" },
+    });
+  if (url.endsWith("/models"))
+    return json({ data: [{ id: "e2e-efficiency" }] });
+  if (url.endsWith("/responses/input_tokens"))
+    return json({ input_tokens: Math.ceil(JSON.stringify(body).length / 4) });
+  if (body.model !== "e2e-efficiency" || !url.endsWith("/responses"))
+    throw new Error("Unexpected offline OpenAI request");
+  const result = body.input.findLast(
+    (item) => item.type === "function_call_output",
+  );
+  const value = result ? JSON.parse(result.output) : null;
+  const output = !value
+    ? [
+        {
+          type: "function_call",
+          call_id: "efficiency-read",
+          name: "read_file",
+          arguments: JSON.stringify({ path: "main.py" }),
+        },
+      ]
+    : value.type === "read_file" && value.recovery
+      ? [
+          {
+            type: "function_call",
+            call_id: "efficiency-recovery",
+            name: "read_tool_result",
+            arguments: JSON.stringify({
+              messageId: value.recovery.messageId,
+              offset: 0,
+            }),
+          },
+        ]
+      : [
+          {
+            type: "message",
+            role: "assistant",
+            content: [
+              {
+                type: "output_text",
+                text: `Nachgeladen: ${value.content?.slice(0, 160) || "Datei gelesen"}`,
+              },
+            ],
+          },
+        ];
+  const response = {
+    id: `efficiency-response-${++responseNumber}`,
+    status: "completed",
+    output,
+    usage: {
+      input_tokens: 1000,
+      output_tokens: 100,
+      input_tokens_details: { cached_tokens: 500, cache_write_tokens: 500 },
+      output_tokens_details: { reasoning_tokens: 40 },
+    },
+  };
+  if (!body.stream) return json(response);
+  const text = output[0].content?.[0]?.text;
+  const events = [
+    ...(text ? [{ type: "response.output_text.delta", delta: text }] : []),
+    { type: "response.completed", response },
+  ];
+  return new Response(
+    events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
+    { headers: { "Content-Type": "text/event-stream" } },
+  );
+});
+
 const mock = http.createServer(async (req, res) => {
   if (req.url === "/v1/models") {
     res.setHeader("Content-Type", "application/json");
@@ -35,8 +111,13 @@ const mock = http.createServer(async (req, res) => {
 
   const body = JSON.parse(raw);
 
-  const last = body.messages.at(-1),
-    user = body.messages.findLast((m) => m.role === "user")?.content || "";
+  const last = body.messages.findLast(
+      (m) => !(m.role === "user" && m.content.startsWith("[ZUSTANDS-SNAPSHOT")),
+    ),
+    user =
+      body.messages.findLast(
+        (m) => m.role === "user" && !m.content.startsWith("[ZUSTANDS-SNAPSHOT"),
+      )?.content || "";
 
   if (!body.tools?.length && user.includes("COMPRESS_SLOW")) {
     const timer = setTimeout(() => {

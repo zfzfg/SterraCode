@@ -175,7 +175,7 @@ test("OpenAI-Zugangsdaten bleiben verborgen und die Modellwahl ist ausdrücklich
   await page
     .getByRole("combobox", { name: "KI-Anbieter", exact: true })
     .selectOption("openai");
-  await page.getByLabel("OpenAI-Modell-ID", { exact: true }).fill("");
+  await page.getByLabel("OpenAI-Modell", { exact: true }).selectOption("");
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Speichern", exact: true })
@@ -249,14 +249,14 @@ test("OpenAI-Zugangsdaten bleiben verborgen und die Modellwahl ist ausdrücklich
     .getByRole("button", { name: "Einstellungen", exact: true })
     .click();
   await page
-    .getByLabel("OpenAI-Modell-ID", { exact: true })
-    .fill("fixture-manual-alias");
+    .getByLabel("OpenAI-Modell", { exact: true })
+    .selectOption("fixture-other-model");
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Speichern", exact: true })
     .click();
   await expect(page.locator("#model-select")).toHaveValue(
-    "fixture-manual-alias",
+    "fixture-other-model",
   );
   await expect(page.locator("#connection-text")).toHaveText("OpenAI verbunden");
   await expect(page.locator("#token-counter")).toHaveText("Kontext bereit");

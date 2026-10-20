@@ -30,16 +30,47 @@ const retainedKeys = [
   "messageId",
   "offset",
   "nextOffset",
+  "nextCursor",
+  "totalLines",
+  "startLine",
+  "endLine",
 ];
 
+// Keep the durable/UI result intact; only project what the model needs.
+export function projectToolResult(content) {
+  let result;
+  try {
+    result = JSON.parse(content);
+  } catch {
+    return content;
+  }
+  if (
+    ["run_terminal_command", "read_terminal_output"].includes(result?.type) &&
+    result.modelPage
+  ) {
+    const { modelPage, ...original } = result;
+    return JSON.stringify({ ...original, ...modelPage });
+  }
+  if (result?.type !== "write_file") return content;
+  return JSON.stringify(
+    Object.fromEntries(
+      retainedKeys
+        .filter((key) => result[key] !== undefined)
+        .map((key) => [key, result[key]]),
+    ),
+  );
+}
+
 export class ResultLimiter {
-  constructor(count, perResult, total) {
+  constructor(count, perResult, total, project = projectToolResult) {
     this.count = count;
     this.perResult = perResult;
     this.total = total;
     this.used = 0;
+    this.project = project;
   }
   async cap(content, messageId) {
+    content = this.project(content);
     const tokens = await this.count(content);
     const budget = Math.max(
       1,
@@ -100,6 +131,26 @@ export class ResultLimiter {
     this.used += await this.count(JSON.stringify(result));
     return result;
   }
+}
+
+export async function projectHistory(source, newLimiter) {
+  let limiter = newLimiter();
+  const result = [];
+  for (const m of source) {
+    if (m.role === "assistant") limiter = newLimiter();
+    if (m.role !== "tool") {
+      result.push(m);
+      continue;
+    }
+    const projected = await limiter.cap(m.toolResults[0].content, m.id);
+    result.push({
+      ...m,
+      toolResults: [
+        { ...m.toolResults[0], content: JSON.stringify(projected) },
+      ],
+    });
+  }
+  return result;
 }
 
 export async function readToolResult(

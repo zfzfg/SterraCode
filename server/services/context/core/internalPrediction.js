@@ -125,11 +125,13 @@ export async function predictInternal(model, input, opts, ctl) {
   const mirror = () => controller.abort(ctl.abortSignal.reason);
   ctl.abortSignal.addEventListener("abort", mirror, { once: true });
   try {
-    return await model.respond(fitted.chat, {
+    const result = await model.respond(fitted.chat, {
       ...opts,
       maxTokens: fitted.maxTokens,
       signal: controller.signal,
     });
+    ctl.onUsage?.(result);
+    return result;
   } finally {
     ctl.abortSignal.removeEventListener("abort", mirror);
   }

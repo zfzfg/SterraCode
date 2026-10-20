@@ -167,7 +167,10 @@ export function fixtureModel({
       content: response.content || "",
       nonReasoningContent: response.content || "",
       reasoningContent: response.reasoning_content || "",
-      stats: { stopReason: response.stopReason || "eosFound" },
+      stats: {
+        ...response.stats,
+        stopReason: response.stopReason || "eosFound",
+      },
       tool_calls: response.tool_calls,
     };
     if (!response.fragmentsEmitted && result.content)

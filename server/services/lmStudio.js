@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import { AppError } from "./storage.js";
 import { createPassCap } from "./context/core/passCap.js";
 import { stripReasoningMarkers } from "./context/core/reasoning.js";
+import { lmStudioUsage } from "./modelUsage.js";
 import {
   connectOpenAIModel,
   listOpenAIModels,
@@ -412,6 +413,7 @@ export async function runModelPass({
               : stripReasoningMarkers(m.getText());
           persistence = persistence.then(() =>
             onAssistant({
+              usage: lmStudioUsage(prediction?.stats),
               content,
               tool_calls: calls,
               thinking: prediction?.reasoningContent || "",

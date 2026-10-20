@@ -119,13 +119,37 @@ async function existing(full) {
     await handle?.close();
   }
 }
-export async function readFile(sessionId, input) {
+export async function readFile(sessionId, input, { startLine, endLine } = {}) {
+  const ranged = startLine !== undefined || endLine !== undefined;
+  if (
+    ranged &&
+    ((startLine !== undefined &&
+      (!Number.isSafeInteger(startLine) || startLine < 1)) ||
+      (endLine !== undefined &&
+        (!Number.isSafeInteger(endLine) || endLine < 1)) ||
+      (endLine !== undefined && endLine < (startLine ?? 1)))
+  )
+    throw new AppError("Ungültiger Zeilenbereich.");
   const root = await getWorkspacePath(sessionId);
   const relative = normalizePath(input);
   const file = await withSafeEntry(root, relative, existing);
   if (!file.exists)
     throw new AppError("Datei nicht gefunden.", 404, "NOT_FOUND");
-  return { path: relative, content: file.content, version: file.version };
+  if (!ranged)
+    return { path: relative, content: file.content, version: file.version };
+  const lines = file.content.match(/[^\n]*\n|[^\n]+$/g) || [""];
+  const start = startLine ?? 1,
+    end = Math.min(endLine ?? lines.length, lines.length);
+  if (start > lines.length)
+    throw new AppError("Der Zeilenbereich liegt hinter der Datei.");
+  return {
+    path: relative,
+    content: lines.slice(start - 1, end).join(""),
+    version: file.version,
+    totalLines: lines.length,
+    startLine: start,
+    endLine: end,
+  };
 }
 async function atomicText(full, content) {
   await fs.mkdir(path.dirname(full), { recursive: true });

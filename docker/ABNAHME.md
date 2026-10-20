@@ -1,5 +1,13 @@
 # Docker-Abnahmeprotokoll
 
+## Token-Effizienz, 20.10.2026: lokale Prüfung
+
+Windows-Arbeitskopie mit Node 24.19.0: 525 Vitest-Tests bestanden, fünf Tests mangels lokaler Sprachlaufzeit übersprungen; alle 46 Playwright-Tests bestanden. Die gezielten Tests für Kontext, OpenAI und Ergebnisprojektion wurden nach der abschließenden Snapshot-Anpassung erneut ausgeführt (76 bestanden). Nutzungsanzeige und Nachladen wurden mit einer ausschließlich lokalen OpenAI-Fixture geprüft; die mobile Darstellung wurde visuell kontrolliert. Die bestehende Modell-/Antwort-/Komprimierungskonfiguration blieb unverändert. Es wurden weder kostenpflichtige Modellaufrufe noch Deployments durchgeführt.
+
+`node scripts/compare-token-efficiency.mjs` liefert für den dokumentierten Ablauf 34,0 % weniger LM-Studio-Gesprächsdaten und 35,5 % weniger OpenAI-Gesprächsdaten. Die LM-Studio-Baseline berücksichtigt die zuvor vorhandenen Ergebnislimits. Payload-Bytes sind gemessen, Tokenizer und Provider sind Fixtures; reale Provider-Tokens und Cache-Hit-Raten bleiben ausdrücklich ungemessen. Details und Schnittstellen stehen in [TOKEN-EFFIZIENZ.md](../TOKEN-EFFIZIENZ.md).
+
+`npm run test:docker` wurde aufgerufen und meldete mangels erreichbarem Linux-Docker-Daemon ausdrücklich **übersprungen**. Die Cursor-/UTF-8- und Byteoffset-Logik des Docker-Adapters wurde lokal mit Runner-Mocks geprüft; dies ersetzt keine Container- oder Linux-Plattformabnahme. Formatprüfung und `git diff --check` gehören zur lokalen Abschlussprüfung.
+
 ## Deployment vom 19.10.2026: verständlicher Python-Einstieg
 
 Der Funktionsstand `f10b364176796cc675e27700f3d51cfe4d82f8e0` wurde auf `feature/docker-deployment` committed, gepusht und auf der bestehenden Ubuntu-Instanz `/home/zfzfg/sterracode-test` installiert. „Python Schritt für Schritt“ erscheint nur bei einer geöffneten Python-Datei; der Dialog erklärt die Aufzeichnung und blendet zusätzliche Eingaben sowie die noch nicht nutzbare Wiedergabe zunächst aus. Die lokale Prüfung umfasst 37 bestandene Playwright-Tests einschließlich Dateitypwechsel, Neuladen, Wiedergabe und Tastaturfokus. Screenshotänderungen wurden visuell geprüft; Formatprüfung erfolgreich.
@@ -99,6 +107,7 @@ Der vollständige Ubuntu-Katalog-/Restore-/Import-Smoke ist erfolgreich abgeschl
 Die erste Ubuntu-Verbindung zu LM Studio lief in ein TCP-Zeitlimit. Aktiviertes CORS änderte daran nichts. Das Eintragen der engen Windows-Firewallregel benötigte Administratorrechte; nach Ausführung des bereitgestellten Skripts durch den Benutzer gelang der reale Container-Nachweis einschließlich nativer WebSocket-Verbindung, Tokenisierung und Inferenz. Dieser Netzwerkpunkt ist abgeschlossen.
 
 Eine tatsächliche OpenAI-Verbindung benötigt einen bereitgestellten API-Schlüssel. Ohne Schlüssel werden die Provider-/Secret-/Responses-Verträge mit isolierten Tests geprüft; eine echte Anfrage wird nicht behauptet. IPv6 und öffentlich gültige HTTPS-Zertifikate erfordern die passende Netz-/DNS-Umgebung. Windows-Docker bleibt ausdrücklich offen.
+
 ## Update vom 19.10.2026: Getrennte OpenAI-Kontextverwaltung
 
 - Codecommit `13d0968b2454ba2389d83a0d87c9fbe185262156` auf main veröffentlicht und per SSH mit geprüftem Hostschlüssel auf Ubuntu unter `/home/zfzfg/sterracode-test` bereitgestellt. Bestehende Archivinstallation aktualisiert; keine zweite laufende Installation angelegt. App und Runner neu gebaut und über das Startskript mit erhaltenen Volumes ersetzt. Andere Compose-Projekte blieben unberührt.
@@ -135,4 +144,3 @@ Neue Imageidentitäten:
 - **26/26 Browserprüfungen** für App, Lernunterstützung und Bewertung erfolgreich. Neue Regressionen für beide Lernwünsche, erhaltene Einklappzustände und die Testabschlussprüfung bestanden. Screenshot des eingeklappten Aufgabenbereichs visuell geprüft. Geänderte Dateien bestehen Prettier und git diff --check.
 - Konsistente Sicherung: `/home/zfzfg/sterracode-test/backups/pre-task-continuation-20261019`. Vorheriges App-Image unter `rollback-task-continuation-20261019` erhalten. App neu gebaut, Runner und Volumes weiterverwendet. App und Runner healthy; Healthcheck und ausgelieferte neue Frontendmodule vom Windows-Rechner geprüft. Keine kostenpflichtige Modellanfrage bei der Live-Prüfung.
 - Neues App-Image: `sha256:5b20d833ea9f8c6eb476c966fef37ec4e7afc10a4159b9431934bf40dfd1d78f`. Vollständigen Laufzeit-/Restore-Smoke für diese Frontendänderung nicht wiederholt.
-

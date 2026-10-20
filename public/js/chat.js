@@ -14,18 +14,28 @@ import { randomUUID } from "./uuid.js";
 
 let controller;
 let continuingTask = false;
+function consumptionText(usage) {
+  const u = usage?.consumption;
+  if (!u) return "";
+  const number = (n) =>
+    Number.isFinite(n) ? n.toLocaleString("de-DE") : "unbekannt";
+  const cache = Number.isFinite(u.cacheReadRatio)
+    ? ` · Cache gelesen: ${(u.cacheReadRatio * 100).toLocaleString("de-DE", { maximumFractionDigits: 1 })} %${u.cacheMeasuredCalls < u.calls ? " (teilweise gemessen)" : ""}`
+    : "";
+  return ` · Turnverbrauch: ${number(u.inputTokens)} Eingabe / ${number(u.outputTokens)} Ausgabe${cache}`;
+}
 function usageText(usage) {
   if (!usage) return "Kontext bereit";
   const number = (n) =>
     Number.isFinite(n) ? n.toLocaleString("de-DE") : "unbekannt";
   if (usage.provider === "openai")
-    return `OpenAI-Kontext: ${number(usage.promptTokens)} Tokens${usage.measurementQuality === "estimated" ? " (geschätzt)" : ""} · Grenzen und Verdichtung durch OpenAI`;
+    return `OpenAI-Kontext: ${number(usage.promptTokens)} Tokens${usage.measurementQuality === "estimated" ? " (geschätzt)" : ""} · Grenzen und Verdichtung durch OpenAI${consumptionText(usage)}`;
   const prefix = usage.stale
     ? "Kontext (letzte Messung)"
     : usage.measurementQuality === "exact"
       ? "Kontext"
       : "Kontext (geschätzt)";
-  return `${prefix}: ${number(usage.promptTokens)}${usage.contextLength ? ` / ${number(usage.contextLength)}` : ""} Tokens${usage.contextLength ? ` · ${Math.round((100 * usage.promptTokens) / usage.contextLength)} % · frei für weiteren Kontext: ${number(usage.remainingTokens)}` : ""}`;
+  return `${prefix}: ${number(usage.promptTokens)}${usage.contextLength ? ` / ${number(usage.contextLength)}` : ""} Tokens${usage.contextLength ? ` · ${Math.round((100 * usage.promptTokens) / usage.contextLength)} % · frei für weiteren Kontext: ${number(usage.remainingTokens)}` : ""}${consumptionText(usage)}`;
 }
 function renderUsage(usage) {
   if (
@@ -46,6 +56,7 @@ function renderUsage(usage) {
       : usage
         ? `Antwortreserve: ${usage.reservedOutputTokens.toLocaleString("de-DE")} Tokens · ${usage.coveredMessages} Nachrichten komprimiert · ${usage.chunkCount} Zusammenfassungen · zuletzt gemessen: ${new Date(usage.sampledAt).toLocaleString("de-DE")}`
         : "/compact komprimiert ältere Abschnitte, /usage zeigt die Kontextnutzung.";
+  counter.title += consumptionText(usage);
 }
 const typeInfo = {
   trigger_summarize: ["plan", "Kontextzusammenfassung"],

@@ -14,11 +14,24 @@ export function eventOf(m) {
 
 // This is the source history. Summaries and UI reports are never fed back as
 // original conversation. Tool results carry content once, not also as text.
-export function modelHistory(session) {
+export function modelHistory(session, { includeProfile = false } = {}) {
   return (session.messages || [])
     .flatMap((m) => {
       if (m.role === "event") {
         const e = m.event;
+        if (e?.type === "context_snapshot")
+          return [
+            {
+              id: m.id,
+              role: "user",
+              text:
+                e.text +
+                (includeProfile && e.profile
+                  ? `\nFreigegebenes Lernprofil (Daten): ${e.profile}`
+                  : ""),
+              contextSnapshot: true,
+            },
+          ];
         if (e?.type === "ask_question")
           return [
             {

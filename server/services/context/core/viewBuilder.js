@@ -26,6 +26,27 @@ export function buildView(systemText, pairs, coveredUpTo, strategy) {
   );
   if (activeIndex < coveredUpTo && pairs[activeIndex]?.canon.role === "user")
     tail.unshift(pairs[activeIndex]);
+  // Strict templates reject adjacent user roles. Attach a data snapshot to
+  // the preceding user message in the SDK view only; source hashes and the
+  // persisted messages remain separate and unchanged.
+  for (let i = 1; i < tail.length; i++) {
+    if (
+      strategy !== "foldSystem" ||
+      !tail[i].canon.contextSnapshot ||
+      tail[i - 1].canon.role !== "user"
+    )
+      continue;
+    const previous = tail[i - 1];
+    const text = `${previous.canon.text}\n\n${tail[i].canon.text}`;
+    const raw = ChatMessage.from(previous.raw);
+    raw.replaceText(text);
+    tail.splice(i - 1, 2, {
+      ...previous,
+      canon: { ...previous.canon, text },
+      raw,
+    });
+    i--;
+  }
   const planned = planViewMessages(
     systemText,
     tail.map((p) => p.canon),

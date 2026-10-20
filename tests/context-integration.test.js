@@ -84,6 +84,119 @@ async function history(count = 8, size = 1800) {
 }
 
 describe("Native Kontextprüfung und Aktionen", () => {
+  it("erhält Zustandsdaten mit Systemrollen-Fallback und strenger Rollenfolge", async () => {
+    const apply = model.applyPromptTemplate.bind(model);
+    model.applyPromptTemplate = async (chat, opts) => {
+      const messages = openAIMessages(chat);
+      if (messages.some((m) => m.role === "system"))
+        throw new Error("system role not supported");
+      if (
+        messages.some(
+          (m, i) => i && m.role === "user" && messages[i - 1].role === "user",
+        )
+      )
+        throw new Error("conversation roles must alternate");
+      return apply(chat, opts);
+    };
+    const s = await sessions.createSession();
+    const result = await teacher.runTeacher({
+      sessionId: s.id,
+      userMessage: "MEIN_AUFTRAG",
+    });
+    expect(result.turn.status, result.turn.error).toBe("done");
+    expect(model.calls[0].messages.every((m) => m.role !== "system")).toBe(
+      true,
+    );
+    expect(JSON.stringify(model.calls[0].messages)).toContain("MEIN_AUFTRAG");
+    expect(JSON.stringify(model.calls[0].messages)).toContain(
+      "ZUSTANDS-SNAPSHOT",
+    );
+    expect(result.session.messages.find((m) => m.role === "user").content).toBe(
+      "MEIN_AUFTRAG",
+    );
+  });
+  it("behält den letzten exakten Zustand auch wenn dessen Snapshot komprimiert wurde", async () => {
+    const { appendStateSnapshot } =
+      await import("../server/services/context/prompt.js");
+    await storage.updateSettings({
+      keepRecentTokens: 300,
+      chunkTokens: 1000,
+      summarizerMaxTokens: 200,
+    });
+    const s = await sessions.createSession();
+    const current = await sessions.mutateSession(s.id, (v) => {
+      v.messages.push(sessions.message("user", "Mein ursprünglicher Auftrag"));
+      v.currentTask = { id: "EXAKTE_AUFGABE", title: "Erhalten" };
+      appendStateSnapshot(v, { turnId: randomUUID() });
+      for (let i = 0; i < 20; i++)
+        v.messages.push(
+          sessions.message(
+            i % 2 ? "assistant" : "user",
+            "Unwichtige Beispiele. ".repeat(150),
+          ),
+        );
+      v.messages.push(sessions.message("user", "Weiter"));
+    });
+    const ctx = await manager(current);
+    const result = await ctx.prepare(current, [], { force: true });
+    expect(result.contextUsage.coveredMessages).toBeGreaterThan(2);
+    expect(JSON.stringify(openAIMessages(result.chat))).toContain(
+      "EXAKTE_AUFGABE",
+    );
+    const restarted = await manager(current);
+    const again = await restarted.prepare(current, [], { diagnostics: true });
+    expect(openAIMessages(again.chat)).toEqual(openAIMessages(result.chat));
+  });
+  it("speichert tatsächliche SDK-Nutzung ohne Cache-Werte zu erfinden", async () => {
+    model = fixtureModel({
+      predict: () => ({
+        content: "Antwort",
+        stats: { promptTokensCount: 1000, predictedTokensCount: 25 },
+      }),
+    });
+    const s = await sessions.createSession();
+    const result = await teacher.runTeacher({
+      sessionId: s.id,
+      userMessage: "Hallo",
+    });
+    expect(result.turn.status, result.turn.error).toBe("done");
+    expect(result.turn.usage).toMatchObject({
+      inputTokens: 1000,
+      outputTokens: 25,
+      totalTokens: 1025,
+      cacheReadRatio: null,
+    });
+    expect(result.contextUsage.consumption).toEqual(result.turn.usage);
+  });
+  it("erfasst SDK-Verbrauch auch für interne Zusammenfassungen", async () => {
+    await storage.updateSettings({
+      keepRecentTokens: 100,
+      chunkTokens: 1000,
+      summarizerMaxTokens: 200,
+    });
+    model = fixtureModel({
+      predict: () => ({
+        content: "Zusammenfassung des Lernstands.",
+        stats: { promptTokensCount: 500, predictedTokensCount: 50 },
+      }),
+    });
+    const s = await history(20, 1500);
+    const result = await teacher.runTeacher({
+      sessionId: s.id,
+      userMessage: "/compact",
+    });
+    expect(result.turn.status, result.turn.error).toBe("done");
+    const receipts = result.session.messages.filter(
+      (m) => m.turnId === result.turn.id && m.event?.type === "model_usage",
+    );
+    expect(receipts.length).toBeGreaterThan(0);
+    expect(result.turn.usage).toMatchObject({
+      calls: receipts.length,
+      inputTokens: receipts.length * 500,
+      outputTokens: receipts.length * 50,
+    });
+    expect(JSON.stringify(receipts)).not.toContain("Fakt-");
+  });
   it("misst inklusive Tools und verwendet genau das reservierte Antwortlimit", async () => {
     model.contextLength = 4096;
     await storage.updateSettings({ maxTokensResponse: 32768 });
@@ -362,7 +475,10 @@ describe("Chunks, Cache und Arbeitsstand", () => {
     expect(
       JSON.stringify(
         first.session.messages.filter(
-          (m) => m.event?.type !== "context_compaction",
+          (m) =>
+            !["context_compaction", "model_usage", "context_snapshot"].includes(
+              m.event?.type,
+            ),
         ),
       ),
     ).toBe(original);

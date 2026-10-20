@@ -2,6 +2,7 @@ import { Chat } from "@lmstudio/sdk";
 import { randomUUID } from "node:crypto";
 import { AppError } from "./storage.js";
 import { getOpenAIKey } from "./providerCredentials.js";
+import { openAIUsage } from "./modelUsage.js";
 
 // Transport injection is exclusively a module test seam. Neither settings nor
 // request bodies can change this origin or send a credential to another host.
@@ -288,7 +289,11 @@ export async function connectOpenAIModel(settings, signal) {
           "OPENAI_INVALID_RESPONSE",
           502,
         );
-      return result.output;
+      return {
+        output: result.output,
+        usage: openAIUsage(result),
+        responseId: result.id,
+      };
     },
     setProviderHistory(messages) {
       reasoning.clear();
@@ -327,6 +332,8 @@ export async function connectOpenAIModel(settings, signal) {
         tokensCount: response.usage?.output_tokens || 1,
       });
       return {
+        usage: openAIUsage(response),
+        responseId: response.id,
         content: visibleText(response),
         nonReasoningContent: visibleText(response),
         stats: {
@@ -468,6 +475,8 @@ export async function runOpenAIModelPass({
       };
     });
     await onAssistant({
+      usage: openAIUsage(response),
+      responseId: response.id,
       content: visibleText(response),
       tool_calls: calls,
       thinking: "",

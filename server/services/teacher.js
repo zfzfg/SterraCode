@@ -17,6 +17,8 @@ import { sourceHash } from "./context/sourceHash.js";
 import { contextCommand } from "./context/settings.js";
 import { isTransientEngineError } from "./context/core/retry.js";
 import { getProfile, profileToPromptText } from "./profileManager.js";
+import { appendStateSnapshot } from "./context/prompt.js";
+import { turnUsage } from "./modelUsage.js";
 
 const active = new Map();
 export function abortAllTurns() {
@@ -261,6 +263,10 @@ export async function runTeacher({
     if (action) {
       if (manager && !usage) {
         try {
+          if (action === "compact")
+            session = await mutateSession(sessionId, (s) =>
+              appendStateSnapshot(s, { profile, turnId }),
+            );
           const prepared = await manager.prepare(session, definitions, {
             force: action === "compact",
             diagnostics: action === "usage",
@@ -310,7 +316,9 @@ export async function runTeacher({
       };
       while (true) {
         controller.signal.throwIfAborted();
-        session = await loadSession(sessionId);
+        session = await mutateSession(sessionId, (s) =>
+          appendStateSnapshot(s, { profile, retry: !!retryOf, turnId }),
+        );
         const prepared = await manager.prepare(session, definitions, {
           force,
           profile,
@@ -345,9 +353,15 @@ export async function runTeacher({
               if (response.providerState)
                 response.providerState.sourceHash = sourceHash(
                   (await loadSession(sessionId)).messages,
+                  { includeProfile: settings.crossChatProfileEnabled },
                 );
               const m = message("assistant", response.content || "", {
                 turnId,
+                modelCall: true,
+                ...(response.usage ? { usage: response.usage } : {}),
+                ...(response.responseId
+                  ? { responseId: response.responseId }
+                  : {}),
                 thinking: response.thinking || thinking,
                 ...(response.providerItems?.length
                   ? { providerItems: response.providerItems }
@@ -359,7 +373,15 @@ export async function runTeacher({
                   ? { tool_calls: response.tool_calls }
                   : {}),
               });
-              await mutateSession(sessionId, (s) => s.messages.push(m));
+              await mutateSession(sessionId, (s) => {
+                if (
+                  m.responseId &&
+                  s.messages.some((old) => old.responseId === m.responseId)
+                )
+                  return;
+                s.messages.push(m);
+                s.turns[turnId].usage = turnUsage(s.messages, turnId);
+              });
               assistantSaved = true;
               if (!stream && m.content)
                 emit("token", { token: m.content, turnId });
@@ -493,6 +515,11 @@ export async function runTeacher({
     session = await mutateSession(sessionId, (s) => {
       s.turns[turnId].status = "done";
       s.turns[turnId].completedAt = new Date().toISOString();
+      const consumption = turnUsage(s.messages, turnId);
+      if (consumption) {
+        s.turns[turnId].usage = consumption;
+        usage = { ...usage, consumption };
+      }
       s.contextUsage = usage;
       s.turns[turnId].contextUsage = usage;
     });
@@ -516,6 +543,7 @@ export async function runTeacher({
         s.messages.push(
           message("assistant", fullText, {
             turnId,
+            modelCall: true,
             incomplete: true,
             thinking,
           }),
@@ -533,6 +561,11 @@ export async function runTeacher({
             error: aborted ? "Antwort abgebrochen." : error.message,
           }
         : estimatedUsage(s, settings, error.message);
+      const consumption = turnUsage(s.messages, turnId);
+      if (consumption) {
+        turn.usage = consumption;
+        usage = { ...usage, consumption };
+      }
       s.contextUsage = usage;
       turn.contextUsage = usage;
     });

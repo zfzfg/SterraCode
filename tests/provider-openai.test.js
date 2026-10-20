@@ -10,6 +10,7 @@ import {
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { Chat } from "@lmstudio/sdk";
 
 let temp,
@@ -80,6 +81,7 @@ beforeEach(async () => {
     apiKey: "sk-fixture-private-key",
   });
   await storage.updateSettings({
+    ...storage.defaultSettings(),
     provider: "openai",
     openAIModel: "fixture-responses-model",
   });
@@ -155,6 +157,345 @@ describe("OpenAI key handling", () => {
   });
 });
 describe("Responses provider", () => {
+  it("counts duplicate completion frames once", async () => {
+    const response = {
+      id: "same-completion",
+      status: "completed",
+      output: [message("Einmal")],
+      usage: {
+        input_tokens: 100,
+        output_tokens: 20,
+        input_tokens_details: { cached_tokens: 50 },
+      },
+    };
+    openai.setOpenAITransportForTests(async (url) => {
+      if (url.endsWith("/responses/input_tokens"))
+        return jsonResponse({ input_tokens: 100 });
+      const frame = `data: ${JSON.stringify({ type: "response.completed", response })}\n\n`;
+      return new Response(frame + frame, {
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    });
+    const session = await sessions.createSession();
+    const result = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Einmal zählen",
+    });
+    expect(result.turn.status, result.turn.error).toBe("done");
+    expect(result.turn.usage).toMatchObject({
+      calls: 1,
+      inputTokens: 100,
+      outputTokens: 20,
+    });
+    expect(
+      result.session.messages.filter((m) => m.responseId === response.id),
+    ).toHaveLength(1);
+  });
+  it("removes obsolete snapshots on edit and deletion before producing new state", async () => {
+    const session = await sessions.createSession();
+    const first = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Alter Auftrag",
+    });
+    const user = first.session.messages.find((m) => m.role === "user");
+    const snapshot = first.session.messages.find(
+      (m) => m.event?.type === "context_snapshot",
+    );
+    const edited = await teacher.editUserMessage({
+      sessionId: session.id,
+      messageId: user.id,
+      newContent: "Neuer Auftrag",
+    });
+    expect(edited.messages.some((m) => m.id === snapshot.id)).toBe(false);
+    requests.length = 0;
+    const next = await teacher.runTeacher({
+      sessionId: session.id,
+      existingUserMessageId: user.id,
+    });
+    expect(next.turn.status, next.turn.error).toBe("done");
+    const input = requests.find((r) => r.url.endsWith("/responses")).body.input;
+    expect(JSON.stringify(input)).not.toContain("Alter Auftrag");
+    expect(JSON.stringify(input)).toContain("Neuer Auftrag");
+    const removed = await teacher.deleteLastUserMessage({
+      sessionId: session.id,
+    });
+    expect(
+      removed.session.messages.some(
+        (m) => m.event?.type === "context_snapshot",
+      ),
+    ).toBe(false);
+  });
+  it("records measured usage across streaming tool rounds without counting token probes or /usage", async () => {
+    const session = await sessions.createSession();
+    responses.push({
+      id: "resp-usage-tools",
+      status: "completed",
+      usage: {
+        input_tokens: 1000,
+        output_tokens: 100,
+        input_tokens_details: { cached_tokens: 800, cache_write_tokens: 200 },
+        output_tokens_details: { reasoning_tokens: 60 },
+      },
+      output: [
+        {
+          type: "function_call",
+          call_id: "usage-files",
+          name: "list_files",
+          arguments: "{}",
+        },
+      ],
+    });
+    responses.push({
+      id: "resp-usage-answer",
+      status: "completed",
+      usage: {
+        input_tokens: 3000,
+        output_tokens: 200,
+        input_tokens_details: { cached_tokens: 2700, cache_write_tokens: 300 },
+        output_tokens_details: { reasoning_tokens: 120 },
+      },
+      output: [message("Fertig")],
+    });
+    const result = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Verbrauch prüfen",
+      stream: true,
+    });
+    expect(result.turn.status, result.turn.error).toBe("done");
+    expect(result.turn.usage).toMatchObject({
+      calls: 2,
+      inputTokens: 4000,
+      outputTokens: 300,
+      reasoningTokens: 180,
+      totalTokens: 4300,
+      cacheReadRatio: 0.875,
+      cacheWriteTokens: 500,
+    });
+    expect(result.contextUsage.consumption).toEqual(result.turn.usage);
+    const assistants = result.session.messages.filter(
+      (m) => m.role === "assistant",
+    );
+    expect(assistants.map((m) => m.responseId)).toEqual([
+      "resp-usage-tools",
+      "resp-usage-answer",
+    ]);
+    expect(assistants.every((m) => m.usage)).toBe(true);
+    const snapshots = result.session.messages.filter(
+      (m) => m.event?.type === "context_snapshot",
+    );
+    const diagnosed = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "/usage",
+    });
+    expect(diagnosed.turn.usage).toBeUndefined();
+    expect(
+      diagnosed.session.messages.filter(
+        (m) => m.event?.type === "context_snapshot",
+      ),
+    ).toEqual(snapshots);
+    expect(requests.filter((r) => r.url.endsWith("/responses"))).toHaveLength(
+      2,
+    );
+  });
+  it("exposes usage for JSON responses and leaves missing cache fields unknown", async () => {
+    const { model } = await openai.connectOpenAIModel(
+      await storage.getSettings(),
+    );
+    responses.push({
+      id: "json-usage",
+      status: "completed",
+      usage: { input_tokens: 90, output_tokens: 10 },
+      output: [message("JSON")],
+    });
+    const result = await model.respond(Chat.from("Hallo"));
+    expect(result).toMatchObject({
+      responseId: "json-usage",
+      usage: {
+        inputTokens: 90,
+        outputTokens: 10,
+        cacheReadTokens: null,
+        reasoningTokens: null,
+      },
+    });
+  });
+  it("records standalone JSON compaction usage and never reprojects the returned window", async () => {
+    const session = await sessions.createSession();
+    await teacher.runTeacher({ sessionId: session.id, userMessage: "Vorher" });
+    const window = [
+      {
+        type: "function_call",
+        call_id: "compact-read",
+        name: "read_file",
+        arguments: "{}",
+      },
+      {
+        type: "function_call_output",
+        call_id: "compact-read",
+        output: "UNTOUCHED_".repeat(3000),
+      },
+      { type: "compaction", encrypted_content: "opaque-native-window" },
+    ];
+    openai.setOpenAITransportForTests(async (url, options) => {
+      const body = JSON.parse(options.body);
+      requests.push({ url, body });
+      if (url.endsWith("/responses/compact"))
+        return jsonResponse({
+          id: "compact-usage",
+          output: window,
+          usage: { input_tokens: 2000, output_tokens: 200 },
+        });
+      if (url.endsWith("/responses/input_tokens"))
+        return jsonResponse({ input_tokens: 500 });
+      return streaming({ status: "completed", output: [message("Weiter")] });
+    });
+    const compacted = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "/compact",
+    });
+    expect(compacted.turn.usage).toMatchObject({
+      calls: 1,
+      inputTokens: 2000,
+      outputTokens: 200,
+      totalTokens: 2200,
+      cacheReadRatio: null,
+    });
+    requests.length = 0;
+    await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Fortsetzen",
+    });
+    expect(
+      requests.find((r) => r.url.endsWith("/responses")).body.input.slice(1, 4),
+    ).toEqual(window);
+  });
+  it("preserves an identical input prefix when the active file changes", async () => {
+    const session = await sessions.createSession();
+    await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Erster Auftrag",
+    });
+    const before = requests.find((r) => r.url.endsWith("/responses")).body
+      .input;
+    await sessions.mutateSession(session.id, (s) => {
+      s.activeFile = "other.py";
+    });
+    const result = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Zweiter Auftrag",
+    });
+    expect(result.turn.status, result.turn.error).toBe("done");
+    const after = requests.filter((r) => r.url.endsWith("/responses")).at(-1)
+      .body.input;
+    expect(after.slice(0, before.length)).toEqual(before);
+    expect(after.at(-1).content).toContain("other.py");
+    const snapshots = result.session.messages.filter(
+      (m) => m.event?.type === "context_snapshot",
+    );
+    expect(snapshots).toHaveLength(2);
+    const unchanged = await teacher.runTeacher({
+      sessionId: session.id,
+      userMessage: "Weiter",
+    });
+    expect(
+      unchanged.session.messages.filter(
+        (m) => m.event?.type === "context_snapshot",
+      ),
+    ).toEqual(snapshots);
+  });
+  it("projects legacy writes and limits large OpenAI results while preserving original recovery data", async () => {
+    await storage.updateSettings({
+      maxToolResultTokens: 400,
+      maxTotalToolResultTokens: 2000,
+    });
+    const s = await sessions.createSession();
+    const original = "print('large file')\n".repeat(1000);
+    const raw = JSON.stringify({
+      type: "read_file",
+      path: "large.py",
+      content: original,
+      version: "version",
+    });
+    const resultId = randomUUID();
+    const session = await sessions.mutateSession(s.id, (v) =>
+      v.messages.push(
+        sessions.message("user", "Lies die Datei"),
+        sessions.message("assistant", "", {
+          tool_calls: [
+            {
+              id: "legacy-write",
+              function: {
+                name: "write_file",
+                arguments: JSON.stringify({ path: "large.py", code: original }),
+              },
+            },
+          ],
+        }),
+        sessions.message(
+          "tool",
+          JSON.stringify({
+            type: "write_file",
+            content: original,
+            status: "applied",
+            path: "large.py",
+            version: "version",
+          }),
+          { tool_call_id: "legacy-write" },
+        ),
+        sessions.message("assistant", "", {
+          tool_calls: [
+            {
+              id: "legacy-read",
+              function: { name: "read_file", arguments: "{}" },
+            },
+          ],
+        }),
+        {
+          ...sessions.message("tool", raw, { tool_call_id: "legacy-read" }),
+          id: resultId,
+        },
+      ),
+    );
+    const { OpenAIContext } =
+      await import("../server/services/openAIContext.js");
+    const connection = await openai.connectOpenAIModel(
+      await storage.getSettings(),
+    );
+    const manager = new OpenAIContext({
+      connection,
+      settings: await storage.getSettings(),
+      signal: new AbortController().signal,
+    });
+    await manager.prepare(session, []);
+    const outputs = connection.model.nativeInput.filter(
+      (i) => i.type === "function_call_output",
+    );
+    expect(JSON.parse(outputs[0].output)).toEqual({
+      type: "write_file",
+      status: "applied",
+      path: "large.py",
+      version: "version",
+    });
+    expect(JSON.parse(outputs[1].output)).toMatchObject({
+      truncated: true,
+      recovery: { messageId: resultId },
+    });
+    expect(Math.ceil(outputs[1].output.length / 4)).toBeLessThanOrEqual(400);
+    let offset = 0,
+      recovered = "";
+    do {
+      const page = await manager.readResult(session, resultId, offset);
+      recovered += page.content;
+      offset = page.nextOffset;
+    } while (offset !== null);
+    expect(recovered).toBe(raw);
+    const first = JSON.stringify(connection.model.nativeInput);
+    await manager.prepare(session, []);
+    expect(JSON.stringify(connection.model.nativeInput)).toBe(first);
+    expect(
+      (await sessions.loadSession(s.id)).messages.find((m) => m.id === resultId)
+        .content,
+    ).toBe(raw);
+  });
   it("isolates token memos and context namespaces by provider and effective LM Studio origin", async () => {
     const { ContextManager, contextProviderIdentity } =
       await import("../server/services/context/index.js");

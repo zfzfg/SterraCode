@@ -2,7 +2,12 @@ import { Chat } from "@lmstudio/sdk";
 import { createHash } from "node:crypto";
 import { modelHistory } from "./context/history.js";
 import { systemPrompt } from "./context/prompt.js";
-import { readToolResult } from "./context/results.js";
+import {
+  ResultLimiter,
+  projectHistory,
+  readToolResult,
+} from "./context/results.js";
+import { CONTEXT_DEFAULTS } from "./context/settings.js";
 import { estimateTokens } from "./context/core/estimate.js";
 import { sourceHash } from "./context/sourceHash.js";
 
@@ -14,15 +19,42 @@ export class OpenAIContext {
     this.settings = settings;
     this.signal = signal;
     this.emit = onEvent;
+    this.counts = new Map();
+    this.count = async (text) => {
+      this.signal.throwIfAborted();
+      const key = createHash("sha256").update(text).digest("hex");
+      if (!this.counts.has(key)) {
+        const count = await this.model.countTokens(text);
+        if (this.counts.size >= 256) this.counts.clear();
+        this.counts.set(key, count);
+      }
+      return this.counts.get(key);
+    };
   }
   async initialize() {
     this.signal.throwIfAborted();
   }
   newLimiter() {
-    return { cap: async (content) => content };
+    return new ResultLimiter(
+      this.count,
+      this.settings.maxToolResultTokens ?? CONTEXT_DEFAULTS.maxToolResultTokens,
+      this.settings.maxTotalToolResultTokens ??
+        CONTEXT_DEFAULTS.maxTotalToolResultTokens,
+    );
   }
   async readResult(session, messageId, offset = 0) {
-    return readToolResult(session, messageId, offset, Infinity, async () => 0);
+    // Leave room for the immediate result limiter's recovery envelope.
+    return readToolResult(
+      session,
+      messageId,
+      offset,
+      Math.max(
+        200,
+        (this.settings.maxToolResultTokens ??
+          CONTEXT_DEFAULTS.maxToolResultTokens) - 128,
+      ),
+      this.count,
+    );
   }
   async prepare(
     session,
@@ -30,7 +62,12 @@ export class OpenAIContext {
     { force = false, profile = "", retry = false } = {},
   ) {
     this.signal.throwIfAborted();
-    const history = new Map(modelHistory(session).map((m) => [m.id, m]));
+    const history = new Map(
+      modelHistory(session, {
+        includeProfile: this.settings.crossChatProfileEnabled,
+      }).map((m) => [m.id, m]),
+    );
+    const resultMessages = new Map();
     let input = [];
     const sourceHasher = createHash("sha256").update("[");
     let sourceCount = 0;
@@ -55,7 +92,7 @@ export class OpenAIContext {
         const canon = history.get(message.id);
         if (canon.text || (canon.role !== "tool" && !canon.toolCalls?.length))
           input.push({ role: canon.role, content: canon.text });
-        if (canon.toolCalls?.length)
+        if (canon.toolCalls?.length && !state)
           input.push(...(message.providerItems || []));
         for (const call of canon.toolCalls || [])
           input.push({
@@ -64,18 +101,42 @@ export class OpenAIContext {
             name: call.name,
             arguments: call.args || "{}",
           });
-        for (const result of canon.toolResults || [])
-          input.push({
+        for (const result of canon.toolResults || []) {
+          const item = {
             type: "function_call_output",
             call_id: result.toolCallId,
             output: result.content,
-          });
+          };
+          resultMessages.set(item, message.id);
+          input.push(item);
+        }
       }
       if (history.has(message.id)) {
         if (sourceCount++) sourceHasher.update(",");
         sourceHasher.update(JSON.stringify(history.get(message.id)));
       }
     }
+    // Project only original results that survived provider compaction. Native
+    // compact windows are opaque and must never be reserialized or truncated.
+    const retained = new Set(
+      input.map((item) => resultMessages.get(item)).filter(Boolean),
+    );
+    const projected = new Map(
+      (
+        await projectHistory(
+          [...history.values()].filter(
+            (m) => m.role !== "tool" || retained.has(m.id),
+          ),
+          () => this.newLimiter(),
+        )
+      ).map((m) => [m.id, m]),
+    );
+    input = input.map((item) => {
+      const id = resultMessages.get(item);
+      return id
+        ? { ...item, output: projected.get(id).toolResults[0].content }
+        : item;
+    });
     const root = {
       role: "developer",
       content: systemPrompt(this.settings, session, profile, retry),
@@ -83,14 +144,20 @@ export class OpenAIContext {
     // Always supply current workspace instructions, even after API compaction.
     input = [root, ...input.filter((item) => item.role !== "developer")];
     if (force) {
-      input = await this.model.compact(input);
+      const compacted = await this.model.compact(input);
+      input = compacted.output;
       this.emit("context-report", {
         type: "context_compaction",
+        modelCall: true,
+        usage: compacted.usage,
+        responseId: compacted.responseId,
         providerState: {
           model: this.model.identifier,
           output: input,
           replace: true,
-          sourceHash: sourceHash(session.messages),
+          sourceHash: sourceHash(session.messages, {
+            includeProfile: this.settings.crossChatProfileEnabled,
+          }),
         },
         provider: "openai",
       });

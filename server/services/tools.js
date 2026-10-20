@@ -29,8 +29,13 @@ export const TOOL_DEFINITIONS = [
   tool("list_files", "Listet Dateien und Ordner im Session-Workspace.", {}),
   tool(
     "read_file",
-    "Liest Inhalt und aktuelle Dateiversion. Fehlende Dateien haben beim Anlegen expectedVersion null.",
-    { path: string },
+    "Liest Inhalt und aktuelle Dateiversion. Für große Dateien startLine/endLine nutzen (inklusive, ab 1). Version gilt für die ganze Datei. Fehlende Dateien haben beim Anlegen expectedVersion null.",
+    {
+      path: string,
+      startLine: { type: "integer", minimum: 1 },
+      endLine: { type: "integer", minimum: 1 },
+    },
+    ["path"],
   ),
   tool(
     "write_file",
@@ -49,8 +54,9 @@ export const TOOL_DEFINITIONS = [
   ),
   tool(
     "read_terminal_output",
-    "Liest die aktuelle Ausgabe eines zuvor gestarteten Prozesses.",
-    { processId: string },
+    "Liest bis zu 16 KiB Ausgabe eines zuvor gestarteten Prozesses. nextCursor unverändert als cursor übergeben, um nur neue Ausgabe nachzuladen; ohne cursor ab Anfang. Bei pageTruncated weiter nachladen.",
+    { processId: string, cursor: string },
+    ["processId"],
   ),
   tool(
     "ask_question",

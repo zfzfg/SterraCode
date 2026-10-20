@@ -128,7 +128,7 @@ export function chunkEnds(boundaries, tokens, from, chunkTokens, maxCut) {
  */
 export function currentTurnStart(msgs) {
   for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].role === "user") return i;
+    if (msgs[i].role === "user" && !msgs[i].contextSnapshot) return i;
   }
   return 0;
 }

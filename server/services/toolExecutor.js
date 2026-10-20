@@ -9,14 +9,14 @@ import { randomUUID } from "node:crypto";
 import { AppError, getSettings } from "./storage.js";
 import { mutateSession, validatePlan, setLearningPlan } from "./sessions.js";
 import { readFile, writeFile, listWorkspace } from "./workspace.js";
-import {
-  startProcess,
-  readProcess,
-  stopProcess,
-  waitProcess,
-} from "./processes.js";
+import { startProcess, stopProcess, waitProcess } from "./processes.js";
 import { getProfile, profileToPromptText } from "./profileManager.js";
 import { getTrace, traceEvents } from "./traces.js";
+import {
+  terminalPage,
+  terminalRuntime,
+  readTerminalPage,
+} from "./terminalPages.js";
 const text = (v, name) => {
   if (typeof v !== "string" || !v.trim() || v.length > 100000)
     throw new AppError(`Ungültiges Tool-Feld: ${name}`);
@@ -67,7 +67,7 @@ export async function executeTool(name, args, context) {
       case "list_files":
         return { type: name, files: await listWorkspace(sessionId) };
       case "read_file":
-        return { type: name, ...(await readFile(sessionId, args.path)) };
+        return { type: name, ...(await readFile(sessionId, args.path, args)) };
       case "write_file":
         return await (
           (await getSettings()).reviewAIChanges ? proposeFile : writeFile
@@ -103,7 +103,13 @@ export async function executeTool(name, args, context) {
         try {
           return {
             type: name,
-            ...(await waitProcess(job.processId, sessionId)),
+            ...terminalPage(
+              await waitProcess(job.processId, sessionId),
+              sessionId,
+              terminalRuntime(),
+              0,
+              true,
+            ),
           };
         } finally {
           signal?.removeEventListener("abort", stop);
@@ -112,7 +118,12 @@ export async function executeTool(name, args, context) {
       case "read_terminal_output":
         return {
           type: name,
-          ...(await readProcess(args.processId, sessionId)),
+          ...(await readTerminalPage(
+            args.processId,
+            sessionId,
+            args.cursor,
+            true,
+          )),
         };
       case "ask_question": {
         const question = text(args.question, "question");
