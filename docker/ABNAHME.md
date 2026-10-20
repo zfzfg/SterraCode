@@ -1,4 +1,19 @@
-# Docker-Abnahmeprotokoll
+# Docker deployment and acceptance records
+
+## Ubuntu deployment 1.1.0 — 2026-10-20
+
+The release is installed at `zfzfg@192.168.178.104:/home/zfzfg/sterracode-test` and reachable at `http://192.168.178.104:3000`. This directory is a source-package installation rather than a Git checkout. SHA-256-verified `git archive` packages transferred the committed source. `SOURCE_COMMIT` is **`28313992d9ed113143f574073b36bbaea0f1cde5`**, following feature release commit `b73b75cd864b30f5473c8a0dc4c914053657d3ff`. The separate documentation commit is recorded in `DEPLOYMENT_RECORD_COMMIT`.
+
+- Both **1.1.0** images built successfully on Ubuntu/Linux amd64 and carry the OCI version label. App and runner were recreated using the existing project, `.env`, ports, and volumes; both healthchecks passed, and runner status is `ready`. Installed Python, JavaScript, Bash, and Java remain available.
+- Running app image: `sha256:bf98f1f3a2ffe117424c7280c2b71973c0f3cbb7876794704c7cd7d010b65daf`.
+- Running runner image: `sha256:42f4de6a2f42f73387748f5f40be606a5c26c72cc9d686dbe4c49683817afe01`.
+- Consistent pre-update backup: `/home/zfzfg/sterracode-test/backups/pre-i18n-1.1.0-20261020-180142`. Previous source/configuration/images are retained there and under image tags `rollback-20261020-180142`. No production volumes were deleted, no password was reset, and no firewall settings changed.
+- Before/after fingerprints confirm **14 sessions** with unchanged messages/tasks/learning plans and **19 byte-identical workspace files**. `.env`, settings, provider credentials, the administrator password record, and both existing login identities are preserved. Normal authentication idle/last-used timestamps changed through existing browser activity; they are not incorrectly described as byte-identical auth storage. Loading every existing session completed the locale migration without changing those original contents.
+- Standard isolated Docker smoke **passed** (`sterra-smoke-b187e39e`): protected setup/sign-in, actual JavaScript/Bash/Python execution, UTF-8/stdin, process isolation/stop, idempotency/restart, cache-based recovery, consistent backup, restoration in a second project, and legacy import in a third. This was the standard smoke, not a new full seven-optional-runtime catalog acceptance.
+- Separate `trace-smoke.mjs` and `grading-smoke.mjs` **passed** in disposable projects, including real Python tracing/grading, limits, cancellation, and runner restart without replay. Their test containers/volumes were removed by the test scripts.
+- Linux regression run in an isolated Node **24.22.0** / Debian/Python container: **39 files, 598 passed, 7 explicit skips**, with `--maxWorkers=2`. Skips were unavailable Go, Rust, C++, C#, Lua, Java, and the native PowerShell parser. Python, JavaScript, Bash, and Linux parent-directory pinning were actually exercised. The image's production dependency default and non-executable test tmpfs were corrected in the disposable harness before this meaningful run. One existing proposal interruption mock initially matched only raw Windows-style destinations; commit `2831399` resolves the actual target directory, exercising Linux's pinned `/proc/self/fd` write path. The corrected full Linux suite and focused Windows proposal suite (15/15) passed; no product write/recovery logic was weakened.
+- A fresh Chromium context on the Windows LAN client, deliberately using a German browser locale, displayed **Sign in to SterraCode** with `html lang="en"`. Live switching to German and Spanish worked; Spanish survived reload. Protected session access returned 401, and no page errors occurred. The [English login screenshot](../docs/i18n/screenshots/ubuntu-1.1.0-login-en.png) was visually inspected.
+- No paid OpenAI or real LAN-model inference was triggered for this deployment. ARM64, IPv6, and public-CA TLS were not newly accepted by these checks. Existing historical platform records below remain unchanged.
 
 ## Release 1.1.0 — local validation, 2026-10-20
 
