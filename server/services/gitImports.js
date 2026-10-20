@@ -236,7 +236,10 @@ async function runGit(
       windowsHide: true,
       stdio: [input ? "pipe" : "ignore", "pipe", "pipe"],
     });
-    if (input) { child.stdin.on("error", () => {}); child.stdin.end(input); }
+    if (input) {
+      child.stdin.on("error", () => {});
+      child.stdin.end(input);
+    }
     const chunks = [];
     let size = 0,
       failure = null,
@@ -345,20 +348,6 @@ export async function getGitImportCapabilities() {
       limit: 1024,
       timeout: 10000,
     });
-    const small = entries.filter((entry) => entry.type === "file" && entry.bytes <= 1024);
-    for (let start = 0; start < small.length; start += 1000) {
-      const batch = small.slice(start, start + 1000);
-      const blobs = await runGit(["-C", repository(directory), "cat-file", "--batch"], { directory, signal, input: batch.map((entry) => entry.oid).join("\n") + "\n", limit: 2 * 1024 * 1024 });
-      let offset = 0;
-      for (const entry of batch) {
-        const newline = blobs.indexOf(10, offset);
-        if (newline < 0 || blobs.subarray(offset, newline).toString("ascii") !== `${entry.oid} blob ${entry.bytes}`) throw gitError("failed");
-        const content = blobs.subarray(newline + 1, newline + 1 + entry.bytes).toString("utf8");
-        offset = newline + 1 + entry.bytes + 1;
-        const pointer = /^version https:\/\/git-lfs.github.com\/spec\/v1\r?\n(?:ext-[^\n]*\r?\n)*oid sha256:[a-f0-9]{64}\r?\nsize (\d+)\r?\n?$/.exec(content);
-        if (pointer) { entry.lfsPointer = true; entry.lfsObjectBytes = pointer[1]; warnings.push({ path: entry.path, code: "GIT_LFS_POINTER_NOT_DOWNLOADED" }); }
-      }
-    }
     return {
       available: true,
       protocols: ["https", "ssh"],
@@ -368,7 +357,60 @@ export async function getGitImportCapabilities() {
       ).split(","),
     };
   } catch {
-    return { available: false, protocols: [], reasonCode: "GIT_UNAVAILABLE" };
+    return {
+      available: false,
+      protocols: [],
+      reasonCode: "GIT_UNAVAILABLE",
+      messageKey: "serverFeature:git.unavailable",
+    };
+  }
+}
+const lfsPointer =
+  /^version https:\/\/git-lfs\.github\.com\/spec\/v1\r?\n(?:ext-[^\n]*\r?\n)*oid sha256:[a-f0-9]{64}\r?\nsize (\d+)\r?\n?$/;
+export async function annotateLfsPointers(
+  directory,
+  entries,
+  warnings,
+  signal,
+) {
+  const small = entries.filter(
+    (entry) => entry.type === "file" && entry.bytes <= 1024,
+  );
+  for (let start = 0; start < small.length; start += 1000) {
+    const batch = small.slice(start, start + 1000);
+    const blobs = await runGit(
+      ["-C", repository(directory), "cat-file", "--batch"],
+      {
+        directory,
+        signal,
+        input: `${batch.map((entry) => entry.oid).join("\n")}\n`,
+        limit: 2 * 1024 * 1024,
+      },
+    );
+    let offset = 0;
+    for (const entry of batch) {
+      const newline = blobs.indexOf(10, offset);
+      const header = `${entry.oid} blob ${entry.bytes}`;
+      if (
+        newline < 0 ||
+        blobs.subarray(offset, newline).toString("ascii") !== header
+      )
+        throw gitError("failed", "GIT_FETCH_FAILED", 422);
+      const content = blobs
+        .subarray(newline + 1, newline + 1 + entry.bytes)
+        .toString("utf8");
+      offset = newline + 1 + entry.bytes + 1;
+      const pointer = lfsPointer.exec(content);
+      if (!pointer) continue;
+      entry.lfsPointer = true;
+      entry.lfsObjectBytes = pointer[1];
+      warnings.push({
+        path: entry.path,
+        code: "GIT_LFS_POINTER_NOT_DOWNLOADED",
+        messageKey: "features:codebase.warnings.lfs",
+        params: { path: entry.path },
+      });
+    }
   }
 }
 export async function inspectGitSnapshot({
@@ -425,9 +467,11 @@ export async function inspectGitSnapshot({
         mode: 0o600,
         flag: "wx",
       });
+      // HostKeyAlias is matched literally. OpenSSH only adds [host]:port
+      // when the alias is unset, and brackets in an alias are wildcards.
       await fs.writeFile(
         knownHosts,
-        `${target.port === 22 ? target.hostname : `[${target.hostname}]:${target.port}`} ${credential.hostKey}\n`,
+        `${target.hostname} ${credential.hostKey}\n`,
         { mode: 0o600, flag: "wx" },
       );
       if (credential.passphrase) {
@@ -466,6 +510,8 @@ export async function inspectGitSnapshot({
         "-o",
         "StrictHostKeyChecking=yes",
         "-o",
+        "CheckHostIP=no",
+        "-o",
         `UserKnownHostsFile=${knownHosts}`,
         "-o",
         `GlobalKnownHostsFile=${process.platform === "win32" ? "NUL" : "/dev/null"}`,
@@ -488,7 +534,7 @@ export async function inspectGitSnapshot({
         "-o",
         "ProxyJump=none",
         "-o",
-        `HostKeyAlias=${target.port === 22 ? target.hostname : `[${target.hostname}]:${target.port}`}`,
+        `HostKeyAlias=${target.hostname}`,
         "-o",
         `HostName=${target.address}`,
         "-p",
@@ -583,6 +629,11 @@ export async function inspectGitSnapshot({
             type === "submodule"
               ? "GIT_SUBMODULE_SKIPPED"
               : "GIT_SPECIAL_FILE_SKIPPED",
+          messageKey:
+            type === "submodule"
+              ? "features:codebase.warnings.submodules"
+              : "features:codebase.warnings.specialFile",
+          params: { path: filename },
         });
       entries.push({
         path: filename,
@@ -593,6 +644,7 @@ export async function inspectGitSnapshot({
       if (entries.length > (budget.maxEntries || 100000))
         throw gitError("limit", "IMPORT_RESOURCE_LIMIT", 413);
     }
+    await annotateLfsPointers(directory, entries, warnings, signal);
     return {
       entries,
       warnings,

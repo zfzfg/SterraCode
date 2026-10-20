@@ -612,6 +612,7 @@
     "gitAuth": "Authentifizierung",
     "publicGit": "Öffentlich",
     "gitSnapshot": "Importiert einen festen Commit. Submodule, LFS-Downloads und Repository-Skripte werden nicht automatisch ausgeführt.",
+    "gitUnavailable": "Git ist auf diesem Server nicht verfügbar. Der ZIP-Import bleibt nutzbar.",
     "background": "Im Hintergrund fortsetzen",
     "backgroundHelp": "Nutze „Import abbrechen“ oder „Im Hintergrund fortsetzen“.",
     "cancelImport": "Import abbrechen",
@@ -721,8 +722,9 @@
       "specialFile": "Keine reguläre Datei"
     },
     "warnings": {
-      "submodules": "Submodule werden nicht automatisch importiert.",
-      "lfs": "LFS-Dateien können als Pointer vorliegen."
+      "submodules": "Das Submodul {{path}} wird nicht automatisch importiert.",
+      "lfs": "LFS-Inhalt von {{path}} wurde nicht heruntergeladen. Die Pointerdatei bleibt lesbar.",
+      "specialFile": "{{path}} ist keine reguläre Datei und wurde nicht importiert."
     },
     "errors": {
       "import": "Import nicht möglich ({{reason}}). Prüfe Quelle und Auswahl oder versuche es erneut.",

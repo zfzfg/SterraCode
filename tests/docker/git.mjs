@@ -128,6 +128,12 @@ async function fixture() {
     "/fixtures/work",
     "/fixtures/repos/demo.git",
   ]);
+  // sshd runs upload-pack as git. The HTTPS backend runs as root, so both
+  // the owning user and an explicit safe directory are required.
+  await command("chown", ["-R", "git:git", "/fixtures/repos"]);
+  await command("git", ["config", "--system", "--add", "safe.directory", "*"]);
+  const gitUid = Number((await command("id", ["-u", "git"])).trim());
+  const gitGid = Number((await command("id", ["-g", "git"])).trim());
   await fs.mkdir("/home/git/.ssh", { mode: 0o700 });
   await fs.writeFile(
     "/home/git/.ssh/authorized_keys",
@@ -171,10 +177,15 @@ async function fixture() {
         return;
       }
       const child = spawn("git", ["http-backend"], {
+        uid: gitUid,
+        gid: gitGid,
         env: {
           PATH: process.env.PATH,
           GIT_PROJECT_ROOT: "/fixtures/repos",
           GIT_HTTP_EXPORT_ALL: "1",
+          GIT_CONFIG_COUNT: "1",
+          GIT_CONFIG_KEY_0: "safe.directory",
+          GIT_CONFIG_VALUE_0: "*",
           REQUEST_METHOD: req.method,
           QUERY_STRING: url.search.slice(1),
           PATH_INFO: url.pathname.replace(/^\/(?:private|public)\//, "/"),
@@ -285,6 +296,16 @@ async function client() {
     assert(snapshot.warnings.some((w) => w.code === "GIT_SUBMODULE_SKIPPED"));
     assert(
       snapshot.warnings.some((w) => w.code === "GIT_SPECIAL_FILE_SKIPPED"),
+    );
+    assert(
+      snapshot.warnings.some(
+        (w) =>
+          w.code === "GIT_LFS_POINTER_NOT_DOWNLOADED" && w.path === "large.dat",
+      ),
+    );
+    assert.equal(
+      snapshot.entries.find((entry) => entry.path === "large.dat")?.lfsPointer,
+      true,
     );
     await materializeGitSnapshot({
       directory,

@@ -34,7 +34,9 @@ export async function openCodebaseImport() {
     ref: "",
     credentialId: "",
   };
-  let selectionRules = draft?.rules || job?.selection?.rules || [],
+  let gitUnavailable = false,
+    gitCapabilities,
+    selectionRules = draft?.rules || job?.selection?.rules || [],
     name = draft?.name || "",
     locale = draft?.locale || getLocale(),
     query = "",
@@ -103,7 +105,10 @@ export async function openCodebaseImport() {
           ),
         })
       : "";
-    next.disabled = busy || (step > 1 && !value?.selectedFiles);
+    next.disabled =
+      busy ||
+      (step > 1 && !value?.selectedFiles) ||
+      (step === 1 && sourceDraft.kind === "git" && gitUnavailable);
   }
   async function cancelImport() {
     sequence++;
@@ -181,6 +186,14 @@ export async function openCodebaseImport() {
       );
     const operationId = randomUUID();
     if (sourceDraft.kind === "zip" && !file) throw new Error(tr("chooseZip"));
+    if (sourceDraft.kind === "git") {
+      gitCapabilities ||= await api(`${base}/capabilities`);
+      gitUnavailable = gitCapabilities?.available === false;
+      if (gitUnavailable)
+        throw new Error(
+          translateMessage(gitCapabilities, tr("gitUnavailable")),
+        );
+    }
     job = await api(base, {
       method: "POST",
       body: {
@@ -525,6 +538,18 @@ export async function openCodebaseImport() {
         node("p", "muted", tr("gitSnapshot")),
       );
       refreshCredentials().catch(showError);
+      if (!gitCapabilities)
+        api(`${base}/capabilities`)
+          .then((caps) => {
+            gitCapabilities = caps;
+            gitUnavailable = caps?.available === false;
+            if (closed || sourceDraft.kind !== "git") return;
+            if (gitUnavailable)
+              status.textContent = translateMessage(caps, tr("gitUnavailable"));
+            updateSummary();
+          })
+          .catch(showError);
+      else if (gitUnavailable) status.textContent = tr("gitUnavailable");
     }
   }
   function renderConfirmation() {

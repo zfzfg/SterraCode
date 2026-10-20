@@ -344,9 +344,11 @@ test("Versionsgebundene Chatbelege und paginierte Dateiaktionen erhalten normale
   await expect(page.locator("#file-path")).toHaveText("main.py");
   await page.locator("#tab-files").click();
   await page
-    .getByRole("button", { name: "main.py umbenennen", exact: true })
+    .getByRole("button", { name: "Umbenennen: main.py", exact: true })
     .click();
-  await page.getByLabel("Neuer Pfad", { exact: true }).fill("greeting.py");
+  await page
+    .getByLabel("Neuer relativer Pfad", { exact: true })
+    .fill("greeting.py");
   await page
     .locator("#app-dialog")
     .getByRole("button", { name: "Speichern", exact: true })
@@ -357,7 +359,7 @@ test("Versionsgebundene Chatbelege und paginierte Dateiaktionen erhalten normale
       .getByRole("button", { name: "greeting.py", exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "README.md löschen", exact: true })
+    .getByRole("button", { name: "Löschen: README.md", exact: true })
     .click();
   await page
     .locator("#app-dialog")
@@ -432,8 +434,9 @@ test("Git-Zugänge entsperren nur vorübergehend und erzeugte Schlüssel zeigen 
     .locator("#app-dialog")
     .getByRole("button", { name: "Speichern", exact: true })
     .click();
+  await expect(page.locator("#app-dialog")).toBeHidden();
   expect(unlock).toEqual({ passphrase: secret, expectedVersion: 3 });
-  expect(await page.locator("#field-passphrase").inputValue()).toBe("");
+  await expect(page.locator("#field-passphrase")).toHaveValue("");
   expect(
     await page.evaluate(() => JSON.stringify({ ...localStorage })),
   ).not.toContain(secret);

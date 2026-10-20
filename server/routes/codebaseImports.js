@@ -22,6 +22,14 @@ router.get(
   "/",
   route(async (req, res) => res.json(await listCodebaseImports())),
 );
+router.get(
+  "/capabilities",
+  route(async (req, res) => {
+    const { getGitImportCapabilities } =
+      await import("../services/gitImports.js");
+    res.json(await getGitImportCapabilities());
+  }),
+);
 router.post(
   "/",
   route(async (req, res) =>

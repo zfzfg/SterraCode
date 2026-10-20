@@ -284,3 +284,51 @@ it("materializes only selected immutable blobs and honors root mapping without c
     }),
   ).rejects.toBeTruthy();
 });
+it("reports local Git and marks LFS pointers without downloading objects", async () => {
+  const caps = await git.getGitImportCapabilities();
+  expect(caps).toMatchObject({ available: true, protocols: ["https", "ssh"] });
+  const directory = path.join(root, "lfs"),
+    repo = path.join(directory, "repository"),
+    pointer =
+      "version https://git-lfs.github.com/spec/v1\noid sha256:" +
+      "ab".repeat(32) +
+      "\nsize 42\n",
+    readme = "hello\n";
+  await fs.mkdir(repo, { recursive: true });
+  await execute("git", ["init", "--bare", repo], { windowsHide: true });
+  const pointerFile = path.join(root, "pointer.txt"),
+    readmeFile = path.join(root, "readme.txt");
+  await fs.writeFile(pointerFile, pointer);
+  await fs.writeFile(readmeFile, readme);
+  const hash = async (file) =>
+    (
+      await execute("git", ["-C", repo, "hash-object", "-w", file], {
+        windowsHide: true,
+      })
+    ).stdout.trim();
+  const entries = [
+    {
+      path: "asset.bin",
+      type: "file",
+      oid: await hash(pointerFile),
+      bytes: Buffer.byteLength(pointer),
+    },
+    {
+      path: "readme.txt",
+      type: "file",
+      oid: await hash(readmeFile),
+      bytes: Buffer.byteLength(readme),
+    },
+  ];
+  const warnings = [];
+  await git.annotateLfsPointers(directory, entries, warnings);
+  expect(entries[0]).toMatchObject({ lfsPointer: true, lfsObjectBytes: "42" });
+  expect(entries[1].lfsPointer).toBeUndefined();
+  expect(warnings).toEqual([
+    expect.objectContaining({
+      path: "asset.bin",
+      code: "GIT_LFS_POINTER_NOT_DOWNLOADED",
+      messageKey: "features:codebase.warnings.lfs",
+    }),
+  ]);
+});
