@@ -28,15 +28,39 @@ import {
   errorPayload,
 } from "./services/i18n.js";
 import { LOCALES } from "../shared/i18n/locale.js";
+import { createUpdateService, applicationVersion } from "./services/updates.js";
+import { createUpdatesRouter } from "./routes/updates.js";
+import { activeTurnCount } from "./services/teacher.js";
 import { localizeFields } from "./services/messageOutput.js";
 
 export function createApp({
   config = loadConfig(),
   auth = createAuthService({ dataDir: config.dataDir }),
+  updates = createUpdateService(config),
 } = {}) {
   const app = express();
   app.disable("x-powered-by");
   app.use(localeMiddleware);
+  app.locals.updates = updates;
+  let updateMaintenance = process.env.STERRACODE_UPDATE_PENDING === "1";
+  let activeMutations = 0;
+  // Dedicated service authentication, independent of browser sessions and Host headers.
+  app.post(
+    "/internal/updates",
+    express.json({ limit: "1kb" }),
+    route(async (req, res) => {
+      if (!(await updates.internalAuthorized(req.get("authorization"))))
+        return res.status(401).json({ error: "Authentication required." });
+      if (req.body.action === "drain") updateMaintenance = true;
+      else if (req.body.action === "resume") updateMaintenance = false;
+      else if (req.body.action !== "status")
+        return res.status(400).json({ error: "Unknown action." });
+      res.json({
+        busy: activeMutations > 0 || activeTurnCount() > 0,
+        version: applicationVersion,
+      });
+    }),
+  );
   let maintenance = false;
   app.locals.beginMaintenance = () => {
     maintenance = true;
@@ -112,6 +136,30 @@ export function createApp({
   });
   app.use("/api", createAuthRouter(config, auth));
   app.use("/api", requireAuthentication(config, auth));
+  app.use("/api/updates", createUpdatesRouter(updates));
+  app.use("/api", (req, res, next) => {
+    const mutation = !["GET", "HEAD", "OPTIONS"].includes(req.method);
+    if (updateMaintenance && mutation)
+      return res.status(503).json({
+        error: req.t("updates:maintenance"),
+        messageKey: "updates:maintenance",
+        params: {},
+        code: "SERVER_MAINTENANCE",
+      });
+    if (mutation) {
+      activeMutations++;
+      let released = false;
+      const release = () => {
+        if (!released) {
+          released = true;
+          activeMutations--;
+        }
+      };
+      res.once("finish", release);
+      res.once("close", release);
+    }
+    next();
+  });
   app.use("/api", createAccountRouter(config, auth));
   app.use("/api", createServerRouter(config));
   app.use("/api/programs", programs);

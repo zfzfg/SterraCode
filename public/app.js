@@ -27,6 +27,7 @@ import {
   openCredentials,
 } from "./js/setup.js";
 import { openPrograms } from "./js/programs.js";
+import { initUpdates, openUpdateSettings } from "./js/updates.js";
 import { initTracer } from "./js/tracer.js";
 import { initPreview } from "./js/preview.js";
 import { openProfile } from "./js/profile.js";
@@ -597,6 +598,12 @@ async function openSettings() {
     title: t("app:static.settings"),
     actions: [
       {
+        label: t("updates:title"),
+        onClick: () => {
+          nextAction = openUpdateSettings;
+        },
+      },
+      {
         label: t("auth:credentials.title"),
         onClick: () => {
           nextAction = async () => {
@@ -710,6 +717,7 @@ async function showServer() {
 }
 async function init() {
   const access = await ensureAccess();
+  initUpdates();
   state.server = await api("/api/server");
   if (state.server.mode === "docker" || access.authRequired)
     $("workspace-status").textContent = t("app:server.mode", {

@@ -1,6 +1,8 @@
 $ErrorActionPreference = 'Stop'
 $script:SterraRoot = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $script:SterraRoot
+$env:STERRACODE_BUILD_VERSION = (Get-Content -LiteralPath (Join-Path $script:SterraRoot "package.json") -Raw | ConvertFrom-Json).version
+if (-not $env:STERRACODE_VERSION) { $env:STERRACODE_VERSION = 'local' }
 function Get-SterraEnv([string]$Name, [string]$Fallback = '') {
     if (Test-Path -LiteralPath '.env') {
         foreach ($line in [IO.File]::ReadAllLines((Join-Path $script:SterraRoot '.env'))) {
@@ -34,7 +36,23 @@ function Invoke-SterraCompose {
     $project = Get-SterraEnv 'COMPOSE_PROJECT_NAME' 'sterracode'
     $oldPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $imageId = & docker image inspect "${project}-runner:1.1.0" --format '{{.Id}}' 2>$null
+    if ($env:STERRACODE_VERSION -eq 'local') {
+        foreach ($serviceName in @('app', 'runner')) {
+            $targetImage = "${project}-${serviceName}:local"
+            & docker image inspect $targetImage 2>$null | Out-Null
+            if ($LASTEXITCODE) {
+                $containers = @(& docker ps -aq --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$serviceName")
+                if ($LASTEXITCODE -eq 0 -and $containers.Count -eq 1 -and $containers[0]) {
+                    $legacyImage = & docker inspect --format '{{.Image}}' $containers[0]
+                    if ($LASTEXITCODE -eq 0) {
+                        & docker tag $legacyImage $targetImage
+                        if ($LASTEXITCODE) { $ErrorActionPreference = $oldPreference; throw 'Could not preserve the existing Docker image under its local tag.' }
+                    }
+                }
+            }
+        }
+    }
+    $imageId = & docker image inspect "${project}-runner:${env:STERRACODE_VERSION}" --format '{{.Id}}' 2>$null
     $ErrorActionPreference = $oldPreference
     if ($LASTEXITCODE -eq 0 -and $imageId) { $env:STERRACODE_RUNNER_IMAGE_DIGEST = $imageId.Trim() }
     & docker compose @script:SterraCompose @args

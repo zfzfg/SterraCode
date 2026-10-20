@@ -6,7 +6,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 FROM ${NODE_IMAGE} AS app
-LABEL org.opencontainers.image.version="1.1.0"
+ARG APP_VERSION=dev
+LABEL org.opencontainers.image.version="${APP_VERSION}"
+LABEL org.opencontainers.image.source="https://github.com/zfzfg/SterraCode"
 ENV NODE_ENV=production STERRACODE_MODE=docker STERRACODE_DATA_DIR=/data STERRACODE_WORKSPACE_DIR=/workspaces
 WORKDIR /app
 RUN groupadd --gid 10001 sterracode && useradd --uid 10001 --gid 10001 --no-create-home sterracode

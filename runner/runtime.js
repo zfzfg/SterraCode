@@ -39,7 +39,7 @@ export const SPECS = {
   java: [["javac", ["-version"]]],
 };
 export const TOOL_PATH =
-  "/opt/sterracode/go/bin:/opt/sterracode/rust/bin:/usr/local/bin:/usr/bin:/bin";
+  "/opt/sterracode/go/bin:/opt/sterracode/rust/bin:/opt/sterracode/csharp:/usr/local/bin:/usr/bin:/bin";
 export function childEnvironment(config, workspace) {
   const cache = config.toolCacheDir;
   return {

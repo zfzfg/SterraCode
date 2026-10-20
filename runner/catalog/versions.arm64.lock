@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "version": "2026.10.19.1",
+  "suite": "bookworm",
+  "architecture": "arm64",
+  "approvedArchitectures": [
+    "arm64"
+  ],
+  "image": "node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5",
+  "apt": {
+    "g++": {
+      "name": "g++",
+      "version": "4:12.2.0-3",
+      "architecture": "arm64",
+      "sha256": "12d5e878436f9fd76802f46aeb635a404b946facb49f151bc3960a3267dd07fc",
+      "filename": "pool/main/g/gcc-defaults/g++_12.2.0-3_arm64.deb"
+    },
+    "lua5.4": {
+      "name": "lua5.4",
+      "version": "5.4.4-3+deb12u1",
+      "architecture": "arm64",
+      "sha256": "fbcf06f6b3b6c61f7dad18ddbbd1e4c01f96a676554165fd6a96d77683e8381b",
+      "filename": "pool/main/l/lua5.4/lua5.4_5.4.4-3+deb12u1_arm64.deb"
+    },
+    "msopenjdk-25": {
+      "name": "msopenjdk-25",
+      "version": "25.0.3-1",
+      "architecture": "arm64",
+      "sha256": "8a2db634800c18575cefa4f7121e574a3124b5e64e13085ca6e4fb6937b6639d",
+      "filename": "pool/main/m/msopenjdk-25/msopenjdk-25_25.0.3-1_arm64.deb"
+    },
+    "python3": {
+      "name": "python3",
+      "version": "3.11.2-1+b1",
+      "architecture": "arm64",
+      "sha256": "d31a6f8bdea49711f221baee0e27197c314d0cbe748c020262d32650aca5f017",
+      "filename": "pool/main/p/python3-defaults/python3_3.11.2-1+b1_arm64.deb"
+    }
+  },
+  "go": {
+    "version": "1.27.2",
+    "url": "https://go.dev/dl/go1.27.2.linux-arm64.tar.gz",
+    "sha256": "94f3e30b8e374bc285e7dadc11e0865726b9bc6e85b841ccceaabc0214c6b7c8",
+    "provenance": "https://go.dev/dl/?mode=json&include=all"
+  },
+  "rust": {
+    "version": "1.90.0",
+    "manifestURL": "https://static.rust-lang.org/dist/channel-rust-1.90.0.toml",
+    "manifestSHA256": "489c19f20d331765ab2835661eb546de90f6446a107a8db83045e7371e45cae2",
+    "artifacts": [
+      {
+        "name": "rustc",
+        "url": "https://static.rust-lang.org/dist/2025-09-18/rustc-1.90.0-aarch64-unknown-linux-gnu.tar.xz",
+        "sha256": "4e1a9987a11d7d91f0d5afbf5333feb62f44172e4a31f33ce7246549003217f2"
+      },
+      {
+        "name": "cargo",
+        "url": "https://static.rust-lang.org/dist/2025-09-18/cargo-1.90.0-aarch64-unknown-linux-gnu.tar.xz",
+        "sha256": "bd8d1da6fe88ea7e29338f24277c22156267447adbfc47d690467ad32d02c2a7"
+      },
+      {
+        "name": "rust-std",
+        "url": "https://static.rust-lang.org/dist/2025-09-18/rust-std-1.90.0-aarch64-unknown-linux-gnu.tar.xz",
+        "sha256": "4952abb7d9d3ed7cea4f7ea44dcb23dc67631fae4ac44a5f059b90a4b5e9223f"
+      }
+    ]
+  },
+  "csharp": {
+    "version": "8.0.426",
+    "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/8.0.426/dotnet-sdk-8.0.426-linux-arm64.tar.gz",
+    "sha256": "efed09de05d15406aecd8f60da389fb436103171923c67c28b42b7285c2af818",
+    "sha512": "8a49694501bb67f35be0d345fec4ec660b7e311e6d31cde48e2699cc94cbd901d71dc5aef61a42bc35883e0175883cc2599f7f6ff4af3525381b7d7b8342bef5",
+    "provenance": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/8.0/releases.json"
+  }
+}

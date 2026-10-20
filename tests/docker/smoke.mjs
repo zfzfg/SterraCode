@@ -7,6 +7,9 @@ import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
+const appVersion = JSON.parse(
+  await fs.readFile(new URL("../../package.json", import.meta.url), "utf8"),
+).version;
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const info = spawnSync("docker", ["info", "--format", "{{.OSType}}"], {
   encoding: "utf8",
@@ -33,6 +36,8 @@ const port = await new Promise((resolve, reject) => {
 const base = `http://127.0.0.1:${port}`;
 const env = {
   ...process.env,
+  STERRACODE_VERSION: appVersion,
+  STERRACODE_BUILD_VERSION: appVersion,
   COMPOSE_PROJECT_NAME: project,
   STERRACODE_BIND_IP: "127.0.0.1",
   STERRACODE_PORT: String(port),
@@ -301,7 +306,21 @@ async function executionContracts(session) {
 try {
   console.log(`Docker-Smoke: isoliertes Projekt ${project}, Port ${port}.`);
   compose(["config", "--quiet"]);
-  compose(["build"]);
+  if (
+    process.env.STERRACODE_TEST_APP_IMAGE &&
+    process.env.STERRACODE_TEST_RUNNER_IMAGE
+  ) {
+    docker([
+      "tag",
+      process.env.STERRACODE_TEST_APP_IMAGE,
+      `${project}-app:${appVersion}`,
+    ]);
+    docker([
+      "tag",
+      process.env.STERRACODE_TEST_RUNNER_IMAGE,
+      `${project}-runner:${appVersion}`,
+    ]);
+  } else compose(["build"]);
   docker([
     "run",
     "--rm",
@@ -310,7 +329,7 @@ try {
     "/data:size=1m,mode=0700,uid=10001,gid=10001",
     "-v",
     `${path.join(root, "tests/docker/disk-full-live.mjs")}:/probe.mjs:ro`,
-    `${project}-app:1.1.0`,
+    `${project}-app:${appVersion}`,
     "node",
     "/probe.mjs",
   ]);
@@ -494,7 +513,7 @@ try {
     "2g",
     "--volumes-from",
     stoppedRunner,
-    `${project}-runner:1.1.0`,
+    `${project}-runner:${appVersion}`,
     "node",
     "--input-type=module",
     "-e",
@@ -549,8 +568,16 @@ try {
   assert.equal(manifest.format, 1);
   restoreProject = `${project}-restore`;
   // Reuse the tested immutable local image IDs, with separate target volume names.
-  docker(["tag", `${project}-app:1.1.0`, `${restoreProject}-app:1.1.0`]);
-  docker(["tag", `${project}-runner:1.1.0`, `${restoreProject}-runner:1.1.0`]);
+  docker([
+    "tag",
+    `${project}-app:${appVersion}`,
+    `${restoreProject}-app:${appVersion}`,
+  ]);
+  docker([
+    "tag",
+    `${project}-runner:${appVersion}`,
+    `${restoreProject}-runner:${appVersion}`,
+  ]);
   const restoreEnv = { COMPOSE_PROJECT_NAME: restoreProject };
   compose(
     [
@@ -602,8 +629,16 @@ try {
   compose(["stop"], false, restoreEnv);
   importProject = `${project}-import`;
   const importEnv = { COMPOSE_PROJECT_NAME: importProject };
-  docker(["tag", `${project}-app:1.1.0`, `${importProject}-app:1.1.0`]);
-  docker(["tag", `${project}-runner:1.1.0`, `${importProject}-runner:1.1.0`]);
+  docker([
+    "tag",
+    `${project}-app:${appVersion}`,
+    `${importProject}-app:${appVersion}`,
+  ]);
+  docker([
+    "tag",
+    `${project}-runner:${appVersion}`,
+    `${importProject}-runner:${appVersion}`,
+  ]);
   importDir = await fs.mkdtemp(path.join(os.tmpdir(), "sterra-legacy-"));
   const legacyId = randomUUID(),
     now = new Date().toISOString();

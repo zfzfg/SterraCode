@@ -136,10 +136,17 @@ docker compose -f compose.yaml -f compose.lan.yaml build
 bash start-docker.sh
 ```
 
-Release 1.1.0 tags app/runner images `:1.1.0`, including installer/admin/smoke references; both images carry an OCI version label. Do not change the Compose project name during updates: it identifies existing volumes. Never delete volumes or prune Docker to update. Rollback requires previous images and, for migrated data, the matching backup. Node 24/Bookworm is digest-pinned. Base-image/catalog changes require explicit checksum/version verification and architecture-specific runtime smokes.
+Source builds use the stable `:local` image tag by default. Helper scripts derive the OCI version label from `package.json`; direct Compose builds can set `STERRACODE_BUILD_VERSION` explicitly. `STERRACODE_VERSION` overrides the local tag. Published managed releases use immutable registry digests instead. Do not change the Compose project name during updates: it identifies existing volumes. Never delete volumes or prune Docker to update. Rollback requires previous images and, for migrated data, the matching backup. Node 24/Bookworm is digest-pinned. Base-image/catalog changes require explicit checksum/version verification and architecture-specific runtime smokes.
 
 Language is browser-local and available before authentication. English is the fresh default; saved German/Spanish choices remain. Old files/history do not change. The app needs packaged `shared/` and production i18next; the runner has no i18next dependency. Older validators may discard locale/provenance fields, so lossless downgrade is not assumed.
 
 `npm test` needs no Docker. `npm run test:docker` uses disposable projects for authentication, execution, recreation, backup/restore, and cleanup. Missing Linux Docker skips explicitly; `CI=1` or `STERRACODE_DOCKER_REQUIRED=1` makes it a failure. `STERRACODE_DOCKER_FULL=1` installs/runs/disables/enables/removes every optional runtime. Tests must not use live project names or volumes.
 
 Record platform results and deployment/image/backup identities in [docker/ABNAHME.md](docker/ABNAHME.md). Second-device LAN access, IPv6, public TLS, and real AI providers require their own available environment.
+
+# Managed release installations
+
+For the new one-command installer, native ARM64 release checks, optional automatic
+updates and explicit offline-backup migration, see [installer/README.md](installer/README.md).
+The source-based procedures below remain available. Only the optional managed
+updater receives Docker daemon access; the application and runner do not.

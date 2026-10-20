@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "protocol": 1,
+  "minUpdaterVersion": "1.0.0",
+  "upgradeFrom": ["1.1.0"]
+}

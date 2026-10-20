@@ -1,0 +1,145 @@
+name: Publish stable SterraCode release
+on:
+  push:
+    tags: ["v*.*.*"]
+permissions:
+  contents: read
+concurrency:
+  group: sterracode-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - name: Verify version and migration policy
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import { compareVersions, updaterVersion, versionPattern } from './shared/releases.js';
+          const {version} = JSON.parse(fs.readFileSync('package.json'));
+          if (process.env.GITHUB_REF_NAME !== `v${version}` || !/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Tag must match the stable package version');
+          const policy = JSON.parse(fs.readFileSync('installer/release-policy.json'));
+          if (policy.schema !== 1 || policy.protocol !== 1 || !versionPattern.test(policy.minUpdaterVersion) || !policy.upgradeFrom.every(v => versionPattern.test(v))) throw new Error('Invalid migration policy');
+          if (compareVersions(updaterVersion, policy.minUpdaterVersion) < 0) throw new Error('Release requires an updater newer than the one being built');
+          JS
+      - run: npm test
+      - run: npm run format:check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- --grep-invert 'Layout und Themes'
+  native:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, arch: amd64 }
+          - { os: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    env:
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - name: Build native images
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          docker build --build-arg APP_VERSION="$version" -f Dockerfile -t "ghcr.io/zfzfg/sterracode-app:$GITHUB_SHA-$ARCH" .
+          docker build --build-arg APP_VERSION="$version" -f Dockerfile.runner -t "ghcr.io/zfzfg/sterracode-runner:$GITHUB_SHA-$ARCH" .
+          updater_version="$(node --input-type=module -e 'import {updaterVersion} from "./shared/releases.js";console.log(updaterVersion)')"
+          docker build --build-arg UPDATER_VERSION="$updater_version" -f Dockerfile.updater -t "ghcr.io/zfzfg/sterracode-updater:$GITHUB_SHA-$ARCH" .
+      - name: Native full runtime and restore acceptance
+        run: npm run test:docker
+        env:
+          STERRACODE_DOCKER_REQUIRED: "1"
+          STERRACODE_DOCKER_FULL: "1"
+          STERRACODE_TEST_APP_IMAGE: ghcr.io/zfzfg/sterracode-app:${{ github.sha }}-${{ matrix.arch }}
+          STERRACODE_TEST_RUNNER_IMAGE: ghcr.io/zfzfg/sterracode-runner:${{ github.sha }}-${{ matrix.arch }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push provisional images without publishing a release
+        run: |
+          for kind in app runner updater
+          do
+            docker push "ghcr.io/zfzfg/sterracode-$kind:$GITHUB_SHA-$ARCH"
+          done
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import {execFileSync} from 'node:child_process';
+          const images = {};
+          for (const kind of ['app','runner','updater']) {
+            const name = `ghcr.io/zfzfg/sterracode-${kind}`;
+            const [image] = JSON.parse(execFileSync('docker',['image','inspect',`${name}:${process.env.GITHUB_SHA}-${process.env.ARCH}`]));
+            images[kind] = image.RepoDigests.find(d => d.startsWith(name+'@'));
+            if (!images[kind]) throw new Error('Published digest missing');
+          }
+          fs.writeFileSync(`native-${process.env.ARCH}.json`,JSON.stringify(images));
+          JS
+      - name: Managed installation and rollback acceptance
+        run: node tests/docker/managed.mjs
+        env:
+          STERRACODE_MANAGED_IMAGES: native-${{ matrix.arch }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.arch }}
+          path: native-${{ matrix.arch }}.json
+  publish:
+    needs: [validate, native]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - uses: actions/download-artifact@v4
+        with: { pattern: "native-*", merge-multiple: true }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish approved multi-architecture manifests and package
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import {execFileSync} from 'node:child_process';
+          const amd = JSON.parse(fs.readFileSync('native-amd64.json'));
+          const arm = JSON.parse(fs.readFileSync('native-arm64.json'));
+          const args = [];
+          for (const kind of ['app','runner','updater']) {
+            const tag = `ghcr.io/zfzfg/sterracode-${kind}:${process.env.GITHUB_REF_NAME}`;
+            execFileSync('docker',['buildx','imagetools','create','--tag',tag,amd[kind],arm[kind]],{stdio:'inherit'});
+            const manifest = JSON.parse(execFileSync('docker',['buildx','imagetools','inspect',tag,'--format','{{json .Manifest}}']));
+            args.push('--'+kind,manifest.digest);
+          }
+          execFileSync('python3',['scripts/package-release.py',...args],{stdio:'inherit'});
+          JS
+      - name: Verify anonymous downloads
+        run: |
+          DOCKER_CONFIG="$(mktemp -d)" node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import {execFileSync} from 'node:child_process';
+          const release = JSON.parse(fs.readFileSync('installer/dist/release.json'));
+          for (const image of Object.values(release.images)) execFileSync('docker',['buildx','imagetools','inspect',image],{stdio:'inherit'});
+          JS
+      - name: Publish stable release only after every acceptance check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --draft --generate-notes installer/dist/installer.zip installer/dist/release.json
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest

@@ -1,7 +1,12 @@
 import fs from "node:fs/promises";
 export const LOCK = JSON.parse(
   await fs.readFile(
-    new URL("./catalog/versions.lock", import.meta.url),
+    new URL(
+      process.arch === "arm64"
+        ? "./catalog/versions.arm64.lock"
+        : "./catalog/versions.lock",
+      import.meta.url,
+    ),
     "utf8",
   ),
 );
@@ -82,6 +87,13 @@ export const PROGRAMS = [
   },
 ].map((program) => ({
   ...program,
+  ...(program.id === "csharp" && LOCK.csharp
+    ? {
+        upstream: true,
+        packages: ["libicu72", "libssl3", "zlib1g", "libstdc++6"],
+        microsoft: false,
+      }
+    : {}),
   descriptionKey: `runner:catalog.${program.id}`,
   descriptionParams: {},
   language: program.id === "git" ? null : program.id,

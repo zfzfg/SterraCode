@@ -15,3 +15,6 @@ secrets/
 docker-backups/
 .vscode/
 .DS_Store
+sftp.txt
+installer/.upload-backups/
+installer/dist/

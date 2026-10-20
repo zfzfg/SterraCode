@@ -11,8 +11,13 @@ x-security: &security
   logging: *logging
 services:
   init:
-    build: { context: ., dockerfile: Dockerfile }
-    image: ${COMPOSE_PROJECT_NAME:-sterracode}-app:1.1.0
+    build:
+      {
+        context: .,
+        dockerfile: Dockerfile,
+        args: { APP_VERSION: "${STERRACODE_BUILD_VERSION:-dev}" },
+      }
+    image: ${COMPOSE_PROJECT_NAME:-sterracode}-app:${STERRACODE_VERSION:-local}
     user: "0:0"
     command: [node, docker/admin.mjs, init]
     read_only: true
@@ -32,8 +37,13 @@ services:
     logging: *logging
   app:
     <<: *security
-    build: { context: ., dockerfile: Dockerfile }
-    image: ${COMPOSE_PROJECT_NAME:-sterracode}-app:1.1.0
+    build:
+      {
+        context: .,
+        dockerfile: Dockerfile,
+        args: { APP_VERSION: "${STERRACODE_BUILD_VERSION:-dev}" },
+      }
+    image: ${COMPOSE_PROJECT_NAME:-sterracode}-app:${STERRACODE_VERSION:-local}
     restart: unless-stopped
     user: "10001:10001"
     read_only: true
@@ -79,8 +89,13 @@ services:
       retries: 4
   runner:
     <<: *security
-    build: { context: ., dockerfile: Dockerfile.runner }
-    image: ${COMPOSE_PROJECT_NAME:-sterracode}-runner:1.1.0
+    build:
+      {
+        context: .,
+        dockerfile: Dockerfile.runner,
+        args: { APP_VERSION: "${STERRACODE_BUILD_VERSION:-dev}" },
+      }
+    image: ${COMPOSE_PROJECT_NAME:-sterracode}-runner:${STERRACODE_VERSION:-local}
     restart: unless-stopped
     user: "0:0"
     mem_limit: 2g
@@ -115,7 +130,7 @@ services:
   admin:
     profiles: [tools]
     <<: *security
-    image: ${COMPOSE_PROJECT_NAME:-sterracode}-app:1.1.0
+    image: ${COMPOSE_PROJECT_NAME:-sterracode}-app:${STERRACODE_VERSION:-local}
     user: "0:0"
     read_only: true
     cap_drop: [ALL]

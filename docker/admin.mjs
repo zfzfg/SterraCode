@@ -17,6 +17,7 @@ const maxBytes = Number(
   process.env.STERRACODE_ARCHIVE_MAX_BYTES || 100 * 1024 ** 3,
 );
 const command = process.argv[2];
+const english = process.env.STERRACODE_ADMIN_ENGLISH === "1";
 const exists = (p) =>
   fs.lstat(p).then(
     () => true,
@@ -125,7 +126,9 @@ async function init() {
   } else if (!Buffer.from(await fs.readFile(a)).equals(await fs.readFile(b)))
     throw new Error("Die Dienstschlüssel stimmen nicht überein.");
   console.log(
-    "Volumes und Dienstschlüssel bereit; vorhandene Daten bleiben erhalten.",
+    english
+      ? "Volumes and service keys are ready; existing data was preserved."
+      : "Volumes und Dienstschlüssel bereit; vorhandene Daten bleiben erhalten.",
   );
 }
 async function auth() {
@@ -138,7 +141,9 @@ async function auth() {
   });
   console.log(
     key ||
-      "Die Instanz ist bereits eingerichtet; das Passwort wurde nicht verändert.",
+      (english
+        ? "This instance is already configured; its password was preserved."
+        : "Die Instanz ist bereits eingerichtet; das Passwort wurde nicht verändert."),
   );
 }
 async function importData() {
@@ -395,7 +400,9 @@ async function backup() {
     await fs.chown(path.join("/backup", name), uid, gid);
   await fs.chown("/backup", uid, gid);
   console.log(
-    "Konsistente Sicherung abgeschlossen; enthält Anmeldedaten und geschützte Secret-Archive. Verzeichnis vertraulich verwahren.",
+    english
+      ? "Consistent backup complete. It contains private credentials and service keys; keep it private."
+      : "Konsistente Sicherung abgeschlossen; enthält Anmeldedaten und geschützte Secret-Archive. Verzeichnis vertraulich verwahren.",
   );
 }
 async function restore() {
@@ -467,7 +474,9 @@ async function restore() {
   for (const p of ["/app-key/runner_key", "/runner-key/runner_key"])
     await fs.chmod(p, 0o400);
   console.log(
-    "Restore geprüft und abgeschlossen. Startskript ausführen und alte Session mit Verlauf sowie Programmausführung prüfen.",
+    english
+      ? "Restore validated and completed. Start the application and verify an old session, its history and a real program run."
+      : "Restore geprüft und abgeschlossen. Startskript ausführen und alte Session mit Verlauf sowie Programmausführung prüfen.",
   );
 }
 async function usage() {
@@ -496,7 +505,11 @@ if (
         "Befehle: init | setup-key | reset-password | import | backup [--offline] | restore | usage",
       );
   } catch (error) {
-    console.error(error.message);
+    console.error(
+      english
+        ? `Administration command "${command}" failed${error.code ? ` (${error.code})` : ""}. Check clean shutdown, backup integrity, empty restore targets, disk space and volume permissions.`
+        : error.message,
+    );
     process.exitCode = 1;
   }
 }

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Install SterraCode</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">STERRACODE</p>
+      <h1>Your coding workspace.<br />One command away.</h1>
+      <p>
+        Install SterraCode on your computer with Docker. Your projects stay on
+        your machine.
+      </p>
+      <h2>Windows · PowerShell</h2>
+      <pre><code>irm https://sterra.online/code-install/install.ps1 | iex</code></pre>
+      <p>
+        <a href="install.ps1" download>Download the PowerShell installer</a>
+      </p>
+      <h2>Linux &amp; macOS · Terminal</h2>
+      <pre><code>curl -fsSL https://sterra.online/code-install/install.sh | bash</code></pre>
+      <p><a href="install.sh" download>Download the Bash installer</a></p>
+      <h2>Before you start</h2>
+      <p>
+        The installer downloads the latest stable release. If downloads are
+        unavailable, check the releases page and try again after an installer
+        release has been published.
+      </p>
+      <p>
+        You need a running Linux Docker daemon, Docker Compose v2 and at least 8
+        GiB of free disk space. The installer detects your system and shows
+        Docker installation instructions if needed. Only architectures approved
+        by the selected release can be installed.
+      </p>
+      <p>
+        The installation uses <code>~/.sterracode</code> and port 3000 by
+        default. You can choose a LAN address. No firewall or router settings
+        are changed.
+      </p>
+      <h2>Updates on your terms</h2>
+      <p>
+        SterraCode shows available updates after you sign in. Install with one
+        click, or enable automatic updates, including compatible major releases,
+        in a maintenance window. Automatic updates start disabled.
+      </p>
+      <p>
+        The separate updater has Docker daemon access to replace containers and
+        make recovery backups. The application and code runner have no Docker
+        socket access.
+      </p>
+      <h2>Already running SterraCode?</h2>
+      <p>
+        The installer preserves installations created with these scripts.
+        Source-based installations require an explicit, backed-up migration;
+        they are never silently taken over.
+      </p>
+      <p>
+        <a
+          href="https://github.com/zfzfg/SterraCode/blob/main/installer/README.md"
+          >Installation and recovery guide</a
+        >
+        · <a href="https://github.com/zfzfg/SterraCode/releases">Releases</a>
+      </p>
+    </main>
+  </body>
+</html>

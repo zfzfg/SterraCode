@@ -23,6 +23,7 @@ import { applicationOption } from "./applicationQuestions.js";
 import { t } from "./i18n.js";
 
 const active = new Map();
+export const activeTurnCount = () => active.size;
 export function abortAllTurns() {
   for (const controller of active.values())
     controller.abort(

@@ -189,3 +189,11 @@ Technische Referenzen: [Responses und Funktionswerkzeuge](https://developers.ope
 Für eine unbeaufsichtigte erste Einrichtung kann `STERRACODE_ADMIN_PASSWORD_PATH` in `.env` auf eine geschützte Hostdatei zeigen. Das Secret-Overlay mountet sie als `STERRACODE_ADMIN_PASSWORD_FILE`; der Inhalt wird nur übernommen, solange noch kein Administratorkonto existiert. Mindestens zwölf Zeichen sind erforderlich. Ein bestehendes Passwort wird durch Neustarts oder spätere Änderungen dieser Datei nicht ersetzt. Einrichtungs- und Sitzungsschlüssel werden ausschließlich gehasht gespeichert; ein Passwortwechsel widerruft ältere Sitzungen.
 
 `STERRACODE_LM_STUDIO_URL` ist die Vorgabe für neue Einstellungen. Für eine dauerhafte administrative Adressvorgabe kann die App ausdrücklich `STERRACODE_LM_STUDIO_OVERRIDE_URL` erhalten; die gespeicherte Benutzeradresse bleibt dabei erhalten. Das ist eine nicht geheime URL und erfordert bei Änderung einen Neustart. LM-Studio-Token bleiben in der gesondert gemounteten Secret-Datei; ein Token- oder Adresswechsel erzeugt einen neuen nativen Client.
+
+# Verwaltete Release-Installationen
+
+Einzeiler, STRATO-Bereitstellung, native ARM64-Releaseprüfungen, optionale automatische
+Updates und die ausdrückliche Übernahme aus einer Offline-Sicherung stehen in
+[installer/README.md](installer/README.md). Die folgenden Verfahren für lokale
+Quellcode-Installationen bleiben verfügbar. Nur der optionale verwaltete Updater
+erhält Zugriff auf den Docker-Daemon; App und Runner erhalten ihn nicht.

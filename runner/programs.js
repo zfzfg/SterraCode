@@ -446,8 +446,8 @@ export class ProgramManager {
         .map((line) => line.split("\t"))
         .filter((entry) => entry[3] === "installed")
         .map(([name, version, architecture]) => [
-          name.replace(/:amd64$/, ""),
-          { name: name.replace(/:amd64$/, ""), version, architecture },
+          name.replace(/:(amd64|arm64)$/, ""),
+          { name: name.replace(/:(amd64|arm64)$/, ""), version, architecture },
         ]),
     );
   }
@@ -857,14 +857,14 @@ export class ProgramManager {
     );
     await fs.writeFile(
       "/etc/apt/sources.list.d/sterracode-microsoft.list",
-      `deb [arch=amd64 signed-by=${key}] https://packages.microsoft.com/debian/12/prod bookworm main\n`,
+      `deb [arch=${LOCK.architecture} signed-by=${key}] https://packages.microsoft.com/debian/12/prod bookworm main\n`,
       { mode: 0o644 },
     );
     // apt's sandbox must be able to read this public key, never the state dir.
     await fs.copyFile(key, "/usr/share/keyrings/sterracode-microsoft.gpg");
     await fs.writeFile(
       "/etc/apt/sources.list.d/sterracode-microsoft.list",
-      "deb [arch=amd64 signed-by=/usr/share/keyrings/sterracode-microsoft.gpg] https://packages.microsoft.com/debian/12/prod bookworm main\n",
+      `deb [arch=${LOCK.architecture} signed-by=/usr/share/keyrings/sterracode-microsoft.gpg] https://packages.microsoft.com/debian/12/prod bookworm main\n`,
     );
   }
   async install(program, restoring, job) {
@@ -999,8 +999,10 @@ export class ProgramManager {
         ...roots,
         ...closure
           .split("\n")
-          .filter((line) => /^[a-z0-9][a-z0-9+.-]*(?::amd64)?$/.test(line))
-          .map((line) => line.replace(/:amd64$/, "")),
+          .filter((line) =>
+            /^[a-z0-9][a-z0-9+.-]*(?::(?:amd64|arm64))?$/.test(line),
+          )
+          .map((line) => line.replace(/:(amd64|arm64)$/, "")),
       ]),
     ].filter((name) => installed.has(name));
     record.packages = names.map((name) => installed.get(name));
@@ -1096,7 +1098,7 @@ export class ProgramManager {
         file = await this.download(
           spec.url,
           spec.sha256,
-          `go-${spec.version}-amd64.tar.gz`,
+          `go-${spec.version}-${LOCK.architecture}.tar.gz`,
           job,
         );
       const metadata = await fetch(spec.provenance, {
@@ -1121,7 +1123,7 @@ export class ProgramManager {
           ?.files.some(
             (entry) =>
               entry.os === "linux" &&
-              entry.arch === "amd64" &&
+              entry.arch === LOCK.architecture &&
               entry.sha256 === spec.sha256,
           )
       )
@@ -1136,6 +1138,22 @@ export class ProgramManager {
         params: {},
       });
       await this.run("tar", ["-xzf", file, "--no-same-owner", "-C", root], job);
+      record.upstreamVerified = true;
+    } else if (program.id === "csharp" && LOCK.csharp) {
+      const spec = LOCK.csharp;
+      const file = await this.download(
+        spec.url,
+        spec.sha256,
+        `dotnet-${spec.version}-${LOCK.architecture}.tar.gz`,
+        job,
+      );
+      const target = `${root}/csharp`;
+      await fs.mkdir(target, { recursive: true, mode: 0o755 });
+      await this.run(
+        "tar",
+        ["-xzf", file, "--no-same-owner", "-C", target],
+        job,
+      );
       record.upstreamVerified = true;
     } else {
       const spec = LOCK.rust,
@@ -1262,8 +1280,10 @@ export class ProgramManager {
         ...program.packages,
         ...closure
           .split("\n")
-          .filter((line) => /^[a-z0-9][a-z0-9+.-]*(?::amd64)?$/.test(line))
-          .map((line) => line.replace(/:amd64$/, "")),
+          .filter((line) =>
+            /^[a-z0-9][a-z0-9+.-]*(?::(?:amd64|arm64))?$/.test(line),
+          )
+          .map((line) => line.replace(/:(amd64|arm64)$/, "")),
       ]);
       record = {
         packages: [...names]

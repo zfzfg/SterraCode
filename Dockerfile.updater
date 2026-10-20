@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+FROM docker:28-cli@sha256:625d9431a9f54c5a2bc90f24f0e1c3d55b1349fd857dd85035f98c2c9acbdd4d AS dockercli
+FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+WORKDIR /app
+ARG UPDATER_VERSION=dev
+LABEL org.opencontainers.image.version="${UPDATER_VERSION}" org.opencontainers.image.source="https://github.com/zfzfg/SterraCode"
+COPY installer ./installer
+COPY shared/releases.js ./shared/releases.js
+COPY package.json ./package.json
+ENTRYPOINT ["node", "/app/installer/runtime/cli.mjs"]
+CMD ["serve"]

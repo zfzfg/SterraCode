@@ -64,7 +64,7 @@ if [[ ${free_kb:-0} -lt 8388608 ]]; then echo 'Hinweis: weniger als 8 GiB auf di
 sterra_compose build
 # Binding in a host-network helper checks the actual address without host Node/Python.
 if [[ -z $(sterra_compose ps --status running --quiet app) ]] && [[ $(sterra_env STERRACODE_PROXY_MODE off) == off ]]; then
-  docker run --rm --network host --entrypoint node "$(sterra_env COMPOSE_PROJECT_NAME sterracode)-app:1.1.0" -e 'const n=require("node:net");const s=n.createServer();s.on("error",e=>{console.error("Port/Bind-Adresse nicht verfügbar: "+e.code);process.exit(1)});s.listen(Number(process.argv[2]),process.argv[1],()=>s.close())' "$(sterra_env STERRACODE_BIND_IP)" "$(sterra_env STERRACODE_PORT 3000)"
+  docker run --rm --network host --entrypoint node "$(sterra_env COMPOSE_PROJECT_NAME sterracode)-app:${STERRACODE_VERSION}" -e 'const n=require("node:net");const s=n.createServer();s.on("error",e=>{console.error("Port/Bind-Adresse nicht verfügbar: "+e.code);process.exit(1)});s.listen(Number(process.argv[2]),process.argv[1],()=>s.close())' "$(sterra_env STERRACODE_BIND_IP)" "$(sterra_env STERRACODE_PORT 3000)"
 fi
 sterra_compose run --rm --no-deps init
 echo 'Einrichtungsschlüssel (30 Minuten gültig; vertraulich aufbewahren):'

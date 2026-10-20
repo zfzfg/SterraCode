@@ -71,7 +71,7 @@ werden ausschließlich mit den gespeicherten exakten Versionen nachgeladen.
 Beschädigte Pakete werden abgewiesen. Entfernte Programme werden nicht durch
 Settings-Backups oder eine erneut gesetzte Initialprogrammliste wiederhergestellt.
 Architektur- und Suitewechsel erfordern eine ausdrückliche Manifestmigration.
-`linux/arm64` ist bis zur vollständigen Adapterprüfung gesperrt.
+Für `linux/arm64` liegt ein eigener Kandidatenkatalog `versions.arm64.lock` vor. Eine stabile ARM64-Veröffentlichung setzt die vollständige native Laufzeit-, Restore- und Updateabnahme im Releaseworkflow voraus.
 
 Für einen Releasewechsel: Basisimage-Digest und Katalogquelle prüfen, genaue
 Paket-/Archivversionen und Prüfsummen aktualisieren, Manifestwiederherstellung

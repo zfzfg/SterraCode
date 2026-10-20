@@ -80,6 +80,67 @@ async function instance(overrides = {}) {
   return { call, auth, dataDir, app };
 }
 describe("server configuration", () => {
+  it("protects update actions and only accepts the updater service credential for draining", async () => {
+    const { call, auth, app } = await instance();
+    for (const [endpoint, method] of [
+      ["/api/updates", "GET"],
+      ["/api/updates/check", "POST"],
+      ["/api/updates/install", "POST"],
+      ["/api/updates/settings", "PATCH"],
+    ]) {
+      expect(
+        (
+          await call(endpoint, {
+            method,
+            ...(method === "GET" ? {} : { body: {} }),
+          })
+        ).response.status,
+      ).toBe(401);
+    }
+    expect(
+      (
+        await call("/internal/updates", {
+          method: "POST",
+          body: { action: "drain" },
+        })
+      ).response.status,
+    ).toBe(401);
+    app.locals.updates.internalAuthorized = async (value) =>
+      value === "Bearer test-service-key";
+    const setupKey = await auth.createSetupKey();
+    const setup = await call("/api/setup", {
+      method: "POST",
+      body: { setupKey, password: "update-password-1234" },
+    });
+    const headers = { cookie: setup.cookie };
+    expect((await call("/api/updates", { headers })).data.managed).toBe(false);
+    expect(
+      (
+        await call("/api/updates/install", {
+          method: "POST",
+          body: {},
+          headers: { ...headers, origin: "http://attacker.invalid" },
+        })
+      ).response.status,
+    ).toBe(403);
+    const drain = await call("/internal/updates", {
+      method: "POST",
+      body: { action: "drain" },
+      headers: { authorization: "Bearer test-service-key" },
+    });
+    expect(drain.response.status).toBe(200);
+    expect(
+      (await call("/api/chat/settings", { method: "PATCH", body: {}, headers }))
+        .response.status,
+    ).toBe(503);
+    expect((await call("/api/updates", { headers })).response.status).toBe(200);
+    expect((await call("/api/health")).data).toEqual({ ok: true });
+    await call("/internal/updates", {
+      method: "POST",
+      body: { action: "resume" },
+      headers: { authorization: "Bearer test-service-key" },
+    });
+  });
   it("keeps npm local and Docker on the fixed internal listen address", () => {
     expect(loadConfig({}).authRequired).toBe(false);
     const config = loadConfig({

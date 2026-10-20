@@ -4,6 +4,8 @@ import { state, emit } from "./state.js";
 import { $, toast, formDialog } from "./ui.js";
 
 const models = new Map();
+export const hasUnsavedChanges = () =>
+  [...models.values()].some((record) => record.dirty || record.saving);
 let navigationVersion = 0;
 let current = null,
   editor;

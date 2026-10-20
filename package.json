@@ -17,7 +17,7 @@
     "audit:i18n:strict": "node tools/i18n/audit.mjs --scope product --strict",
     "test:i18n-audit": "vitest run tests/i18n-audit.test.js",
     "check:i18n": "node scripts/check-i18n.mjs",
-    "format:check": "prettier --check public server runner shared docker tests scripts tools/i18n *.config.js"
+    "format:check": "prettier --check public server runner shared docker tests scripts installer .github/workflows/release.yml tools/i18n *.config.js"
   },
   "engines": {
     "node": "^22.12.0 || ^24.0.0 || >=26.0.0"

@@ -37,7 +37,7 @@ Admission reserves one job per session, four overall, and two compilation slots 
 
 `catalog/versions.lock` pins Debian suite, architecture, base image, and catalog version. Debian/Microsoft packages have exact versions and SHA-256 values from signed indexes; the Microsoft public key is included. Go archives use pinned vendor metadata/checksums. Rust compiler/Cargo/library archives are checked against the GPG-verified vendor manifest. Browser callers cannot supply arbitrary package URLs or scripts.
 
-Successful installs record resolved dependencies, versions, architecture, and cached checksums. Container replacement restores those exact packages; missing cache entries are fetched only at the saved exact versions. Corrupt downloads fail. Removed runtimes are not reintroduced by settings backups or initial-program settings. Suite/architecture changes require explicit manifest migration; ARM64 is not accepted yet.
+Successful installs record resolved dependencies, versions, architecture, and cached checksums. Container replacement restores those exact packages; missing cache entries are fetched only at the saved exact versions. Corrupt downloads fail. Removed runtimes are not reintroduced by settings backups or initial-program settings. Suite/architecture changes require explicit manifest migration; Native ARM64 has its own `versions.arm64.lock` candidate catalog. Stable ARM64 releases require the complete native runtime, restore and managed-update acceptance in the release workflow.
 
 Release changes require checking base/catalog sources, exact versions/checksums, manifest restoration, and all runtime smokes on the accepted architecture. The application release number is separate from protocol version 1 and catalog version `2026.10.19.1`.
 

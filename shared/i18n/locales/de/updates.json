@@ -1,0 +1,22 @@
+{
+  "title": "Updates",
+  "available": "SterraCode {{latest}} ist verfügbar (installiert: {{installed}}).",
+  "installed": "Installierte Version: {{version}}",
+  "progress": "SterraCode wird aktualisiert. Der Arbeitsbereich verbindet sich anschließend erneut.",
+  "recoveryFailed": "Die Wiederherstellung benötigt Aufmerksamkeit. Lokalen Verwaltungsbefehl und Wiederherstellungsanleitung verwenden.",
+  "notes": "Versionshinweise",
+  "install": "Update installieren",
+  "takeover": "Installations- und Migrationsanleitung",
+  "incompatible": "Ein unterstützter Migrationspfad oder ein neuerer lokaler Updater ist erforderlich.",
+  "check": "Nach Updates suchen",
+  "checked": "Updateprüfung abgeschlossen.",
+  "automatic": "Alle kompatiblen stabilen Releases einschließlich Hauptversionen automatisch installieren.",
+  "hour": "Beginn des Wartungsfensters (0–23; eine Stunde): ",
+  "zone": "Zeitzone (IANA): ",
+  "save": "Speichern",
+  "close": "Schließen",
+  "unmanaged": "Diese Installation hat keinen Docker-Updater. Vor der Übernahme einer Quellcode-Installation die Migrationsanleitung befolgen.",
+  "error": "Die Updateaktion ist nicht verfügbar. Lokalen Updaterstatus und Kompatibilität prüfen.",
+  "maintenance": "Ein Update wird vorbereitet. Neue Änderungen sind vorübergehend angehalten.",
+  "checkFailed": "Der Releasedienst ist nicht erreichbar. Der Arbeitsbereich bleibt nutzbar."
+}

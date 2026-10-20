@@ -107,3 +107,10 @@ Docker checks use disposable Compose projects. `STERRACODE_DOCKER_FULL=1 npm run
 ## License
 
 SterraCode is licensed under the [MIT License](LICENSE).
+
+# Installation links and managed updates
+
+The public Docker installer, STRATO upload files, release publishing workflow and
+recovery/import instructions are documented in [installer/README.md](installer/README.md).
+The download links become usable after the hosting files and first approved stable
+release have been published. Existing source installations remain supported.

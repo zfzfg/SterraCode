@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][ValidateSet('backup', 'restore', 'import', 'reset-password', 'usage')][string]$Operation, [string]$Path, [switch]$Offline)
+param([Parameter(Mandatory)][ValidateSet('backup', 'restore', 'import', 'reset-password', 'usage')][string]$Operation, [string]$Path, [switch]$Offline, [switch]$NoRestart)
 . "$PSScriptRoot/docker-common.ps1"
 Test-SterraDocker
 Set-SterraComposeArgs
@@ -15,10 +15,10 @@ switch ($Operation) {
         Invoke-SterraCompose @options
         if ($Offline) {
             $project = Get-SterraEnv 'COMPOSE_PROJECT_NAME' 'sterracode'
-            & docker image save "${project}-app:1.1.0" "${project}-runner:1.1.0" -o (Join-Path $target 'images.tar')
+            & docker image save "${project}-app:${env:STERRACODE_VERSION}" "${project}-runner:${env:STERRACODE_VERSION}" -o (Join-Path $target 'images.tar')
             if ($LASTEXITCODE) { throw 'Imagearchiv fehlgeschlagen. Stack bleibt gestoppt.' }
         }
-        Invoke-SterraCompose up -d --remove-orphans
+        if (-not $NoRestart) { Invoke-SterraCompose up -d --remove-orphans }
     }
     'restore' {
         Assert-SterraStopped

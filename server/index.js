@@ -30,6 +30,8 @@ if (
     ),
   );
 const app = createApp({ config, auth });
+app.locals.updates.start().catch(() => {});
+app.locals.updates.beginPolling();
 const server = app.listen(config.port, config.bindAddress, () =>
   console.log(`SterraCode läuft auf ${config.publicUrl}`),
 );

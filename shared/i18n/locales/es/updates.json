@@ -1,0 +1,22 @@
+{
+  "title": "Actualizaciones",
+  "available": "SterraCode {{latest}} está disponible (instalado: {{installed}}).",
+  "installed": "Versión instalada: {{version}}",
+  "progress": "Actualizando SterraCode. El espacio de trabajo se volverá a conectar al terminar.",
+  "recoveryFailed": "La recuperación requiere atención. Utiliza el comando local y la guía de recuperación.",
+  "notes": "Notas de la versión",
+  "install": "Instalar actualización",
+  "takeover": "Guía de instalación y migración",
+  "incompatible": "Se requiere una migración compatible o un actualizador local más reciente.",
+  "check": "Buscar actualizaciones",
+  "checked": "Comprobación completada.",
+  "automatic": "Instalar automáticamente todas las versiones estables compatibles, incluidas las versiones principales.",
+  "hour": "Inicio del mantenimiento (0–23; una hora): ",
+  "zone": "Zona horaria (IANA): ",
+  "save": "Guardar",
+  "close": "Cerrar",
+  "unmanaged": "Esta instalación no tiene un actualizador Docker. Sigue la guía de migración antes de transferir una instalación desde el código fuente.",
+  "error": "La actualización no está disponible. Comprueba el estado y la compatibilidad del actualizador local.",
+  "maintenance": "Se está preparando una actualización. Los cambios nuevos están pausados temporalmente.",
+  "checkFailed": "El servicio de versiones no está disponible. Puedes seguir trabajando."
+}
