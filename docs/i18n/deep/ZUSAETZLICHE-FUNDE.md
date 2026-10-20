@@ -1,6 +1,6 @@
 # Zusätzliche Fundstellen des tiefen Scans
 
-1184 zusätzliche physische Ausgabetext-Fundstellen in bereits früher geprüften Dateien gegenüber 3917 früheren Prüfkandidaten. Zusätzlich 13 Ausgabetext-Fundstellen innerhalb eingebetteter Inhalte und 286 in neu hinzugekommenen Quellen. Der Vergleich verwendet Quellpfad, Zeilenbereich und Text; die Zahlen sind kein Beweis echter Übersetzungslücken.
+1185 zusätzliche physische Ausgabetext-Fundstellen in bereits früher geprüften Dateien gegenüber 3917 früheren Prüfkandidaten. Zusätzlich 13 Ausgabetext-Fundstellen innerhalb eingebetteter Inhalte und 286 in neu hinzugekommenen Quellen. Der Vergleich verwendet Quellpfad, Zeilenbereich und Text; die Zahlen sind kein Beweis echter Übersetzungslücken.
 
 ## Zusätzliche physische Quellen
 
@@ -1170,6 +1170,7 @@
 | tests/profile.test.js:86 | tests | python.loops |
 | tests/profile.test.js:88 | tests | python.magic |
 | tests/profile.test.js:89 | tests | javascript.loops |
+| tests/proposals.test.js:285 | tests | simulated interruption |
 | tests/runner-client.test.js:82 | tests | main.py |
 | tests/runner-client.test.js:82 | tests | reverse_string |
 | tests/runner-client.test.js:84 | tests | main.py |

@@ -271,10 +271,17 @@ it("groups nearby edits and detects cross-hunk introduced identifiers", () => {
 it("retries a prepared commit and recovers a pending history record after the file write", async () => {
   const { s, f, p } = await fixture();
   const request = { operationId: randomUUID(), expectedVersion: f.version };
+  const targetDirectory = await fs.realpath(
+    path.join(root, "workspaces", s.id),
+  );
   const original = fs.rename.bind(fs);
   const write = vi.spyOn(fs, "rename");
   write.mockImplementation(async (from, to) => {
-    if (to === path.join(root, "workspaces", s.id, f.path))
+    // Linux writes through a pinned /proc/self/fd directory, not the raw path.
+    if (
+      path.basename(to) === f.path &&
+      (await fs.realpath(path.dirname(to))) === targetDirectory
+    )
       throw new Error("simulated interruption");
     return original(from, to);
   });

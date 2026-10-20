@@ -6,7 +6,7 @@ Erneuter Aufruf nach dem finalen Audit: `node scripts/review-i18n.mjs`. Die Ausg
 
 ## Ergebnis
 
-- 38980 Literalquellen, 12290 Befunde und 546 einzeln referenzierte dynamische Grenzen.
+- 38981 Literalquellen, 12290 Befunde und 546 einzeln referenzierte dynamische Grenzen.
 - 0 Literalquellen ohne hinreichenden Herkunftsbeleg.
 - 0 physische Quellen mit verändertem/fehlendem Quellhash gegenüber dem Audit.
 - Auditorannahmen, offene Befunde und angenommene Ausnahmen bleiben unverändert; akzeptierte Auditbefunde: 0.
@@ -18,7 +18,7 @@ Erneuter Aufruf nach dem finalen Audit: `node scripts/review-i18n.mjs`. Die Ausg
 | technischer Vertrag | 16971 | 3440 |
 | Originaldaten | 118 | 12 |
 | internes Promptmaterial | 617 | 547 |
-| Testfixture | 14190 | 6006 |
+| Testfixture | 14191 | 6006 |
 | optionale Betriebsstufe | 2750 | 1233 |
 | Ungeklärt | 0 | 0 |
 

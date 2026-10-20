@@ -4,15 +4,15 @@
   "inputs": [
     {
       "file": "docs/i18n/deep/befunde.json",
-      "sha256": "9dc9712203e398d000562e65ee74442ee02c29b36a9593cc7e811a9468f80c69"
+      "sha256": "2931dc9b65056e25051dfea3bf876dc93307e81671716d20912f1ee841d44fab"
     },
     {
       "file": "docs/i18n/deep/coverage.json",
-      "sha256": "046ac5d4f4b05184587da3ed17e2630abd813acb556b29e48d8c482feebb39d3"
+      "sha256": "2f604df903917170262a880d6e77281503050c368be4e9bd8c31058e11f884ad"
     },
     {
       "file": "docs/i18n/deep/literale.json",
-      "sha256": "c624840ccd00c1113ee3b3b7cfec50079a26df97e8a1831ff6ae9fa783c55958"
+      "sha256": "5f06e9892fd3e0d935c73bcc0d0146ee6164ddf08738d28c9b6a242034b01f52"
     }
   ],
   "categories": {
@@ -25,13 +25,13 @@
     "operations": "optionale Betriebsstufe"
   },
   "summary": {
-    "literals": 38980,
+    "literals": 38981,
     "findings": 12290,
     "dynamicBoundaries": 546,
     "literalCategories": {
       "catalog": 3774,
       "fallback": 560,
-      "fixture": 14190,
+      "fixture": 14191,
       "operations": 2750,
       "original": 118,
       "prompt": 617,
@@ -1559,8 +1559,8 @@
     },
     {
       "file": "tests/proposals.test.js",
-      "auditSha256": "482781c4f3702412178af3cdbbd87899dcacd09eea28e2cb012c44fd4ddd0467",
-      "currentSha256": "482781c4f3702412178af3cdbbd87899dcacd09eea28e2cb012c44fd4ddd0467",
+      "auditSha256": "f34d4be35db9d57ef32cf0b6c23ba0bef50246e11f9cc56ad9a18cc88d50681c",
+      "currentSha256": "f34d4be35db9d57ef32cf0b6c23ba0bef50246e11f9cc56ad9a18cc88d50681c",
       "status": "current"
     },
     {
@@ -409126,7 +409126,7 @@
       "basis": "Quellpfad ist Teil der versionierten Test-/Browser-/Providerfixtures; keine Produktübersetzung."
     },
     {
-      "literalId": "L-4e0c4982c7b8d26fe8ab",
+      "literalId": "L-02e6b8a5c4680d78b932",
       "file": "tests/proposals.test.js",
       "line": 10,
       "column": 58,
@@ -411040,9 +411040,20 @@
       "basis": "Quellpfad ist Teil der versionierten Test-/Browser-/Providerfixtures; keine Produktübersetzung."
     },
     {
-      "literalId": "L-ff4dd9ae64018145ad68",
+      "literalId": "L-bde455752b9382f5296a",
       "file": "tests/proposals.test.js",
       "line": 275,
+      "column": 21,
+      "role": "value",
+      "owner": "anonymous.targetDirectory",
+      "excerpt": "workspaces",
+      "category": "fixture",
+      "basis": "Quellpfad ist Teil der versionierten Test-/Browser-/Providerfixtures; keine Produktübersetzung."
+    },
+    {
+      "literalId": "L-ff4dd9ae64018145ad68",
+      "file": "tests/proposals.test.js",
+      "line": 278,
       "column": 30,
       "role": "value",
       "owner": "anonymous.write",
@@ -411051,20 +411062,20 @@
       "basis": "Quellpfad ist Teil der versionierten Test-/Browser-/Providerfixtures; keine Produktübersetzung."
     },
     {
-      "literalId": "L-02e6b8a5c4680d78b932",
+      "literalId": "L-a9c6b06f62b629913009",
       "file": "tests/proposals.test.js",
-      "line": 277,
-      "column": 32,
-      "role": "value",
-      "owner": "anonymous",
-      "excerpt": "workspaces",
+      "line": 280,
+      "column": 5,
+      "role": "comment",
+      "owner": "",
+      "excerpt": " Linux writes through a pinned /proc/self/fd directory, not the raw path.",
       "category": "fixture",
       "basis": "Quellpfad ist Teil der versionierten Test-/Browser-/Providerfixtures; keine Produktübersetzung."
     },
     {
       "literalId": "L-7b6d6d651371ca3cd020",
       "file": "tests/proposals.test.js",
-      "line": 278,
+      "line": 285,
       "column": 23,
       "role": "value",
       "owner": "anonymous",
@@ -411075,7 +411086,7 @@
     {
       "literalId": "L-74e2c5d3f09257dd8f43",
       "file": "tests/proposals.test.js",
-      "line": 282,
+      "line": 289,
       "column": 50,
       "role": "value",
       "owner": "anonymous",
@@ -411086,7 +411097,7 @@
     {
       "literalId": "L-2b6d973383dde9b9d344",
       "file": "tests/proposals.test.js",
-      "line": 283,
+      "line": 290,
       "column": 21,
       "role": "value",
       "owner": "anonymous",
@@ -411097,7 +411108,7 @@
     {
       "literalId": "L-f924a2012a620569dea0",
       "file": "tests/proposals.test.js",
-      "line": 286,
+      "line": 293,
       "column": 5,
       "role": "value",
       "owner": "anonymous",
@@ -411108,7 +411119,7 @@
     {
       "literalId": "L-d0636221170edf8b242e",
       "file": "tests/proposals.test.js",
-      "line": 292,
+      "line": 299,
       "column": 5,
       "role": "value",
       "owner": "anonymous.applied",
@@ -411119,7 +411130,7 @@
     {
       "literalId": "L-b3216f6f5766f28841ac",
       "file": "tests/proposals.test.js",
-      "line": 295,
+      "line": 302,
       "column": 35,
       "role": "value",
       "owner": "anonymous.journal",
@@ -411130,7 +411141,7 @@
     {
       "literalId": "L-8101521ce92ff98479ed",
       "file": "tests/proposals.test.js",
-      "line": 295,
+      "line": 302,
       "column": 52,
       "role": "value",
       "owner": "anonymous.journal",
@@ -411141,7 +411152,7 @@
     {
       "literalId": "L-d05ddfa71b6d09bb65af",
       "file": "tests/proposals.test.js",
-      "line": 297,
+      "line": 304,
       "column": 19,
       "role": "value",
       "owner": "anonymous",
@@ -411152,7 +411163,7 @@
     {
       "literalId": "L-b5f7f43de94acad36594",
       "file": "tests/proposals.test.js",
-      "line": 300,
+      "line": 307,
       "column": 21,
       "role": "value",
       "owner": "anonymous",
@@ -411163,7 +411174,7 @@
     {
       "literalId": "L-4577e740c9be904259a7",
       "file": "tests/proposals.test.js",
-      "line": 300,
+      "line": 307,
       "column": 40,
       "role": "value",
       "owner": "anonymous",
@@ -411174,7 +411185,7 @@
     {
       "literalId": "L-bab7984deb429451033a",
       "file": "tests/proposals.test.js",
-      "line": 306,
+      "line": 313,
       "column": 5,
       "role": "value",
       "owner": "anonymous.recovered",
@@ -411185,7 +411196,7 @@
     {
       "literalId": "L-b16f1722cabdd5017154",
       "file": "tests/proposals.test.js",
-      "line": 310,
+      "line": 317,
       "column": 57,
       "role": "value",
       "owner": "anonymous",
@@ -411196,7 +411207,7 @@
     {
       "literalId": "L-9f81b3ee9d3728f0ebac",
       "file": "tests/proposals.test.js",
-      "line": 313,
+      "line": 320,
       "column": 27,
       "role": "value",
       "owner": "anonymous",
@@ -411207,7 +411218,7 @@
     {
       "literalId": "L-0e198bbfbc52f0121d6d",
       "file": "tests/proposals.test.js",
-      "line": 318,
+      "line": 325,
       "column": 4,
       "role": "value",
       "owner": "",
@@ -411218,7 +411229,7 @@
     {
       "literalId": "L-03b158b62a2ddeba8d45",
       "file": "tests/proposals.test.js",
-      "line": 327,
+      "line": 334,
       "column": 11,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411229,7 +411240,7 @@
     {
       "literalId": "L-873385b315c4ad4c867f",
       "file": "tests/proposals.test.js",
-      "line": 328,
+      "line": 335,
       "column": 16,
       "role": "value",
       "owner": "anonymous.sample",
@@ -411240,7 +411251,7 @@
     {
       "literalId": "L-e848fab56200a779ef32",
       "file": "tests/proposals.test.js",
-      "line": 328,
+      "line": 335,
       "column": 23,
       "role": "value",
       "owner": "anonymous.sample",
@@ -411251,7 +411262,7 @@
     {
       "literalId": "L-3c75527f85265815a40b",
       "file": "tests/proposals.test.js",
-      "line": 328,
+      "line": 335,
       "column": 30,
       "role": "value",
       "owner": "anonymous.sample",
@@ -411262,7 +411273,7 @@
     {
       "literalId": "L-f33990e693f53bf68108",
       "file": "tests/proposals.test.js",
-      "line": 328,
+      "line": 335,
       "column": 36,
       "role": "value",
       "owner": "anonymous.sample",
@@ -411273,7 +411284,7 @@
     {
       "literalId": "L-ec40523a6fad62a372a2",
       "file": "tests/proposals.test.js",
-      "line": 329,
+      "line": 336,
       "column": 14,
       "role": "value",
       "owner": "sample.sample",
@@ -411284,7 +411295,7 @@
     {
       "literalId": "L-e66ad97919791af12940",
       "file": "tests/proposals.test.js",
-      "line": 333,
+      "line": 340,
       "column": 7,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411295,7 +411306,7 @@
     {
       "literalId": "L-369f25bc9b86fb340952",
       "file": "tests/proposals.test.js",
-      "line": 333,
+      "line": 340,
       "column": 17,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411306,7 +411317,7 @@
     {
       "literalId": "L-58f15c4e8fcead2752d3",
       "file": "tests/proposals.test.js",
-      "line": 334,
+      "line": 341,
       "column": 7,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411317,7 +411328,7 @@
     {
       "literalId": "L-b5b583a8e5919423077b",
       "file": "tests/proposals.test.js",
-      "line": 347,
+      "line": 354,
       "column": 4,
       "role": "value",
       "owner": "",
@@ -411328,7 +411339,7 @@
     {
       "literalId": "L-8d5a637ebcff1fee4ba6",
       "file": "tests/proposals.test.js",
-      "line": 351,
+      "line": 358,
       "column": 5,
       "role": "value",
       "owner": "anonymous.p",
@@ -411339,7 +411350,7 @@
     {
       "literalId": "L-1d176f8af763f39baec5",
       "file": "tests/proposals.test.js",
-      "line": 352,
+      "line": 359,
       "column": 5,
       "role": "value",
       "owner": "anonymous.p",
@@ -411350,7 +411361,7 @@
     {
       "literalId": "L-baa296b41f36cffa1836",
       "file": "tests/proposals.test.js",
-      "line": 354,
+      "line": 361,
       "column": 7,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411361,7 +411372,7 @@
     {
       "literalId": "L-dffacc5f02d44c73da3b",
       "file": "tests/proposals.test.js",
-      "line": 354,
+      "line": 361,
       "column": 15,
       "role": "value",
       "owner": "anonymous.p.reason",
@@ -411372,7 +411383,7 @@
     {
       "literalId": "L-37048aceccb8a9091030",
       "file": "tests/proposals.test.js",
-      "line": 357,
+      "line": 364,
       "column": 31,
       "role": "value",
       "owner": "anonymous",
@@ -411383,7 +411394,7 @@
     {
       "literalId": "L-a2e1be0ae914e813b63b",
       "file": "tests/proposals.test.js",
-      "line": 357,
+      "line": 364,
       "column": 51,
       "role": "value",
       "owner": "anonymous",
@@ -411394,7 +411405,7 @@
     {
       "literalId": "L-9826d97609f83839ffa7",
       "file": "tests/proposals.test.js",
-      "line": 358,
+      "line": 365,
       "column": 29,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411405,7 +411416,7 @@
     {
       "literalId": "L-75cecdc9522fcf4b0b1b",
       "file": "tests/proposals.test.js",
-      "line": 358,
+      "line": 365,
       "column": 35,
       "role": "value",
       "owner": "anonymous.code",
@@ -411416,7 +411427,7 @@
     {
       "literalId": "L-253ea6c3a5195018f858",
       "file": "tests/proposals.test.js",
-      "line": 359,
+      "line": 366,
       "column": 54,
       "role": "value",
       "owner": "anonymous",
@@ -411427,7 +411438,7 @@
     {
       "literalId": "L-9c2819a123a32b0c8fd2",
       "file": "tests/proposals.test.js",
-      "line": 360,
+      "line": 367,
       "column": 5,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411438,7 +411449,7 @@
     {
       "literalId": "L-f61161024d855a54204e",
       "file": "tests/proposals.test.js",
-      "line": 361,
+      "line": 368,
       "column": 5,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411449,7 +411460,7 @@
     {
       "literalId": "L-09fee5b75025b47971a0",
       "file": "tests/proposals.test.js",
-      "line": 367,
+      "line": 374,
       "column": 5,
       "role": "value",
       "owner": "anonymous.next",
@@ -411460,7 +411471,7 @@
     {
       "literalId": "L-7d497676a85990465a35",
       "file": "tests/proposals.test.js",
-      "line": 371,
+      "line": 378,
       "column": 21,
       "role": "value",
       "owner": "anonymous",
@@ -411471,7 +411482,7 @@
     {
       "literalId": "L-c5b17349a101cfce8ea7",
       "file": "tests/proposals.test.js",
-      "line": 375,
+      "line": 382,
       "column": 5,
       "role": "value",
       "owner": "anonymous",
@@ -411482,7 +411493,7 @@
     {
       "literalId": "L-acad09643f45195a48c7",
       "file": "tests/proposals.test.js",
-      "line": 378,
+      "line": 385,
       "column": 53,
       "role": "value",
       "owner": "anonymous",
@@ -411493,7 +411504,7 @@
     {
       "literalId": "L-3c3d41339727b04d592a",
       "file": "tests/proposals.test.js",
-      "line": 379,
+      "line": 386,
       "column": 7,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411504,7 +411515,7 @@
     {
       "literalId": "L-b67d2cb4a58840062b8d",
       "file": "tests/proposals.test.js",
-      "line": 380,
+      "line": 387,
       "column": 7,
       "role": "syntax-key",
       "owner": "object-key",
@@ -411515,7 +411526,7 @@
     {
       "literalId": "L-38fec07e848328739a81",
       "file": "tests/proposals.test.js",
-      "line": 382,
+      "line": 389,
       "column": 29,
       "role": "syntax-key",
       "owner": "object-key",
@@ -554440,9 +554451,9 @@
       "basis": "Zuordnung der referenzierten Literalquelle; gleicher Text an anderer Stelle ist kein Beleg."
     },
     {
-      "id": "F-70cda1cd06b764d9b8b4",
+      "id": "F-f009a4fa9a0cd61638ed",
       "fingerprint": "24ae722a34456f0b7014fa2b670532c3ce6ba6000ae2edcd109b79e230d8d1eb",
-      "literalId": "L-4e0c4982c7b8d26fe8ab",
+      "literalId": "L-02e6b8a5c4680d78b932",
       "rule": "LITERAL_REVIEW",
       "severity": "info",
       "auditStatus": "open",
@@ -555090,9 +555101,9 @@
       "basis": "Zuordnung der referenzierten Literalquelle; gleicher Text an anderer Stelle ist kein Beleg."
     },
     {
-      "id": "F-b74590247204c2ee2ffc",
-      "fingerprint": "3b61416b1db880be9093ec378ac6612439456e515c62e4b03a4fe77877e56959",
-      "literalId": "L-ff4dd9ae64018145ad68",
+      "id": "F-a1ced1b9cfc6093be761",
+      "fingerprint": "9c3968aaa13b73d500e9455a690d2ad1ce38dad65e054893a286c217d399fab2",
+      "literalId": "L-bde455752b9382f5296a",
       "rule": "LITERAL_REVIEW",
       "severity": "info",
       "auditStatus": "open",
@@ -555100,9 +555111,9 @@
       "basis": "Zuordnung der referenzierten Literalquelle; gleicher Text an anderer Stelle ist kein Beleg."
     },
     {
-      "id": "F-f009a4fa9a0cd61638ed",
-      "fingerprint": "24ae722a34456f0b7014fa2b670532c3ce6ba6000ae2edcd109b79e230d8d1eb",
-      "literalId": "L-02e6b8a5c4680d78b932",
+      "id": "F-b74590247204c2ee2ffc",
+      "fingerprint": "3b61416b1db880be9093ec378ac6612439456e515c62e4b03a4fe77877e56959",
+      "literalId": "L-ff4dd9ae64018145ad68",
       "rule": "LITERAL_REVIEW",
       "severity": "info",
       "auditStatus": "open",

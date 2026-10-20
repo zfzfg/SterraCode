@@ -1,6 +1,6 @@
 # Tiefer i18n-Scan für SterraCode
 
-Geprüft: **262 physische Quelldateien** und **20 eingebettete Quellen**. Inventar: **38980 Literale/Kommentare**, ohne Deutsch- oder Mindestlängenfilter.
+Geprüft: **262 physische Quelldateien** und **20 eingebettete Quellen**. Inventar: **38981 Literale/Kommentare**, ohne Deutsch- oder Mindestlängenfilter.
 
 Befunde: **12290**, davon **1760 unterschiedliche Literalquellen mit registriertem Ausgabepfad**. Befunde können mehrere Kanäle derselben Quelle beschreiben; sie sind keine Zahl eindeutiger Übersetzungsschlüssel. 0 Befunde sind begründet akzeptiert und bleiben sichtbar.
 
@@ -42843,17 +42843,17 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-e1ff8aca5b2c3eda7823 · HARDCODED · warning
 
-Quelle: `tests/proposals.test.js:278` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:285` · Kanal: `test-fixture` · Status: `open`
 
 simulated interruption
 
 Fest eingebauter Text erreicht eine registrierte Ausgabestelle.
 
-- Ausgabe: `tests/proposals.test.js:278` — Error argument 1 (static-flow). Pfad: StringLiteral.
+- Ausgabe: `tests/proposals.test.js:285` — Error argument 1 (static-flow). Pfad: StringLiteral.
 
 ### F-973e43ccb09584503e3a · PROSE_REVIEW · warning
 
-Quelle: `tests/proposals.test.js:318` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:325` · Kanal: `test-fixture` · Status: `open`
 
 reconstructs exact targets for repeated lines, insertions and removals
 
@@ -42861,7 +42861,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-0516b17733180cfb7829 · PROSE_REVIEW · warning
 
-Quelle: `tests/proposals.test.js:347` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:354` · Kanal: `test-fixture` · Status: `open`
 
 defers creation of nested directories until acceptance and conflicts on a binary replacement
 
@@ -42869,13 +42869,13 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-36e6f6819a25b32d3497 · SCHEMA_TEXT · warning
 
-Quelle: `tests/proposals.test.js:354` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:361` · Kanal: `test-fixture` · Status: `open`
 
 Nested file
 
 Textfeld in einem Datenobjekt; tatsächliche Anzeige und fachlichen Vertrag prüfen.
 
-- Ausgabe: `tests/proposals.test.js:354` — field reason (static-flow). Pfad: StringLiteral.
+- Ausgabe: `tests/proposals.test.js:361` — field reason (static-flow). Pfad: StringLiteral.
 
 ### F-52dceb50757684e1261f · PROSE_REVIEW · warning
 
@@ -100381,7 +100381,7 @@ legacy
 
 Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inventar behalten.
 
-### F-70cda1cd06b764d9b8b4 · LITERAL_REVIEW · info
+### F-f009a4fa9a0cd61638ed · LITERAL_REVIEW · info
 
 Quelle: `tests/proposals.test.js:10` · Kanal: `test-fixture` · Status: `open`
 
@@ -100901,25 +100901,25 @@ Quelle: `tests/proposals.test.js:261` · Kanal: `test-fixture` · Status: `open`
 
 Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inventar behalten.
 
-### F-b74590247204c2ee2ffc · LITERAL_REVIEW · info
+### F-a1ced1b9cfc6093be761 · LITERAL_REVIEW · info
 
 Quelle: `tests/proposals.test.js:275` · Kanal: `test-fixture` · Status: `open`
-
-rename
-
-Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inventar behalten.
-
-### F-f009a4fa9a0cd61638ed · LITERAL_REVIEW · info
-
-Quelle: `tests/proposals.test.js:277` · Kanal: `test-fixture` · Status: `open`
 
 workspaces
 
 Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inventar behalten.
 
+### F-b74590247204c2ee2ffc · LITERAL_REVIEW · info
+
+Quelle: `tests/proposals.test.js:278` · Kanal: `test-fixture` · Status: `open`
+
+rename
+
+Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inventar behalten.
+
 ### F-d36fe4db6a0c3f50a5de · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:282` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:289` · Kanal: `test-fixture` · Status: `open`
 
 apply
 
@@ -100927,7 +100927,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-f3e006041061769770c5 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:283` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:290` · Kanal: `test-fixture` · Status: `open`
 
 interruption
 
@@ -100935,7 +100935,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-f8385e6bf89f0f86186e · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:292` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:299` · Kanal: `test-fixture` · Status: `open`
 
 apply
 
@@ -100943,7 +100943,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-2fbe53b7daa563044b7a · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:295` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:302` · Kanal: `test-fixture` · Status: `open`
 
 changes
 
@@ -100951,7 +100951,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-4e0a59252ae2ec001d2e · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:295` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:302` · Kanal: `test-fixture` · Status: `open`
 
 ${applied.changeId}.json
 
@@ -100959,7 +100959,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-cdeec7886394eef5a34f · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:297` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:304` · Kanal: `test-fixture` · Status: `open`
 
 pending
 
@@ -100967,7 +100967,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-bab98a30e0f55df00164 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:300` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:307` · Kanal: `test-fixture` · Status: `open`
 
 ${p.proposalId}.json
 
@@ -100975,7 +100975,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-efe60f9acc3962db8f4e · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:300` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:307` · Kanal: `test-fixture` · Status: `open`
 
 proposals
 
@@ -100983,7 +100983,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-49f3e3fd49c3966a8f61 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:306` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:313` · Kanal: `test-fixture` · Status: `open`
 
 apply
 
@@ -100991,7 +100991,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-5d5b4fe409670d2b66e4 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:310` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:317` · Kanal: `test-fixture` · Status: `open`
 
 applied
 
@@ -100999,7 +100999,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-4d8ec8f122e2f39daf57 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:313` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:320` · Kanal: `test-fixture` · Status: `open`
 
 applied
 
@@ -101007,7 +101007,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-2beef79c0729326974e4 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:328` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:335` · Kanal: `test-fixture` · Status: `open`
 
 b ⏎␠
 
@@ -101015,7 +101015,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-9bc2249c5f757cd54664 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:328` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:335` · Kanal: `test-fixture` · Status: `open`
 
 c ⏎␠
 
@@ -101023,7 +101023,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-f5529c0eaa94fe48a8fb · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:328` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:335` · Kanal: `test-fixture` · Status: `open`
 
 a ⏎␠
 
@@ -101031,7 +101031,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-211695eb0fe1613345c7 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:352` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:359` · Kanal: `test-fixture` · Status: `open`
 
 print(1)
 
@@ -101039,7 +101039,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-8f5a0646bddd94d63073 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:357` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:364` · Kanal: `test-fixture` · Status: `open`
 
 new
 
@@ -101047,7 +101047,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-8f95ea8c9821c0d107e9 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:357` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:364` · Kanal: `test-fixture` · Status: `open`
 
 workspaces
 
@@ -101055,7 +101055,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-cef9f3863f1cfcb15353 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:359` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:366` · Kanal: `test-fixture` · Status: `open`
 
 apply
 
@@ -101063,7 +101063,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-0031b8120d4dba757b23 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:367` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:374` · Kanal: `test-fixture` · Status: `open`
 
 print(2)
 
@@ -101071,7 +101071,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-5bdbb3407cf3e31e296a · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:371` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:378` · Kanal: `test-fixture` · Status: `open`
 
 workspaces
 
@@ -101079,7 +101079,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-6db699d0bdc93c99929a · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:375` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:382` · Kanal: `test-fixture` · Status: `open`
 
 stale
 
@@ -101087,7 +101087,7 @@ Nicht als übersetzt/strukturell belegtes Literal; bewusst im vollständigen Inv
 
 ### F-02e8ffc4e54aee3eef37 · LITERAL_REVIEW · info
 
-Quelle: `tests/proposals.test.js:378` · Kanal: `test-fixture` · Status: `open`
+Quelle: `tests/proposals.test.js:385` · Kanal: `test-fixture` · Status: `open`
 
 apply
 

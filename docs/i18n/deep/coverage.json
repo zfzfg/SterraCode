@@ -2,7 +2,7 @@
   "summary": {
     "physicalSourceFiles": 262,
     "embeddedSources": 20,
-    "literalCount": 38980,
+    "literalCount": 38981,
     "findings": 12290,
     "openFindings": 12290,
     "acceptedFindings": 0,
@@ -2268,9 +2268,9 @@
     {
       "file": "tests/proposals.test.js",
       "status": "parsed",
-      "bytes": 13321,
-      "sha256": "482781c4f3702412178af3cdbbd87899dcacd09eea28e2cb012c44fd4ddd0467",
-      "lines": 384,
+      "bytes": 13549,
+      "sha256": "f34d4be35db9d57ef32cf0b6c23ba0bef50246e11f9cc56ad9a18cc88d50681c",
+      "lines": 391,
       "parser": "babel-ast+scope+dataflow"
     },
     {
