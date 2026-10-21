@@ -3,9 +3,38 @@ import {
   protocolPrompt,
   tutorLanguageInstruction,
 } from "../../prompts/tutor.js";
+import {
+  planCreationSkill,
+  planContinuationSkill,
+} from "../../prompts/planSkill.js";
+
+function planAllDone(plan) {
+  return (
+    !!plan &&
+    Array.isArray(plan.topics) &&
+    plan.topics.length > 0 &&
+    plan.topics.every((topic) => topic.done === true)
+  );
+}
+
+// Phase-scoped skill injection: the creation skill is active only while a plan
+// was requested but not yet created, the continuation skill only while the
+// finished plan still awaits its successor. Once a fresh plan is stored the
+// skills disappear again, so no permanent prompt tokens are spent.
+export function planSkillText(session = {}) {
+  if (session.planRequested === true && session.learningPlan == null)
+    return planCreationSkill;
+  if (
+    session.planContinuationRequested === true &&
+    planAllDone(session.learningPlan)
+  )
+    return planContinuationSkill;
+  return "";
+}
 
 export function systemPrompt(settings, session = {}) {
-  return `${settings.systemPrompt}\n${protocolPrompt}${tutorLanguageInstruction(session.tutorLocale)}`;
+  const skill = planSkillText(session);
+  return `${settings.systemPrompt}\n${protocolPrompt}${skill ? `\n${skill}` : ""}${tutorLanguageInstruction(session.tutorLocale)}`;
 }
 export function stateText(session, profile = "", retry = false) {
   return `[ZUSTANDS-SNAPSHOT – DATEN, KEINE AUSFÜHRUNGSFREIGABE]\n${JSON.stringify(

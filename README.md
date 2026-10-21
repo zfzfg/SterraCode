@@ -2,7 +2,7 @@
 
 A programming learning workspace with a Monaco editor, files, a learning plan, a terminal, and an AI tutor through LM Studio or the OpenAI API. Run it locally with npm or as an authenticated Docker server on your LAN. Sessions, files, exercises, and execution also work without an AI connection.
 
-**Release 1.1.0 supports English, German, and Spanish. English is the default for fresh installations and browsers.** Existing browser language choices are preserved. Interface language, tutor language, programming language, and materialized exercise content are independent. Existing source files and conversations are never automatically translated.
+**Release 1.2.0 supports English, German, and Spanish. English is the default for fresh installations and browsers.** Existing browser language choices are preserved. Interface language, tutor language, programming language, and materialized exercise content are independent. Existing source files and conversations are never automatically translated.
 
 Documentation is maintained in English by default. See the [Docker operations guide](DOCKER-BETRIEB.md), [runner protocol](runner/README.md), [i18n architecture](docs/i18n/README.md), and [release notes](CHANGELOG.md). The [previous German guide](README.de.md) remains available as a historical reference.
 

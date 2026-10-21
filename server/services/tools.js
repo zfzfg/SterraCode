@@ -70,7 +70,7 @@ export const TOOL_DEFINITIONS = [
   ),
   tool(
     "update_learning_plan",
-    "Erstellt oder ersetzt einen Lernplan. Abgeschlossene Themen done true setzen.",
+    "Erstellt oder ersetzt einen Lernplan. Bei einer neuen Planerstellung den Plan-Leitfaden im Systemprompt befolgen; abgeschlossene Themen done true setzen und bei Änderungen erhalten.",
     {
       goal: string,
       topics: {

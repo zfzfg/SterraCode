@@ -98,6 +98,12 @@ export async function answerQuestion(sessionId, questionId, answer, optionId) {
     event.answer = answer.trim();
     event.answerMessageId = answerMessage.id;
     if (optionId !== undefined) event.answerOptionId = optionId;
+    // recognised application answers activate the phase-scoped plan skills in
+    // server/services/context/prompt.js; unrecognised options never do.
+    if (event.application?.template === "onboarding")
+      s.planRequested = optionId === "create_plan";
+    if (event.application?.template === "plan-completed")
+      s.planContinuationRequested = optionId === "continue_plan";
     if (q.event) q.event = event;
     else q.content = JSON.stringify(event);
     s.messages.push(answerMessage);
